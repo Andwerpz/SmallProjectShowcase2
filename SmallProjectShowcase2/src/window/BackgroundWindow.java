@@ -5,7 +5,9 @@ import lwjglengine.scene.Scene;
 import lwjglengine.screen.UIScreen;
 import lwjglengine.ui.UIElement;
 import lwjglengine.ui.UIFilledRectangle;
+import lwjglengine.window.AdjustableWindow;
 import lwjglengine.window.Window;
+import volumetric_clouds.VolumetricCloudsWindow;
 
 public class BackgroundWindow extends Window {
 	//for now, this window should just be to open a context menu. 
@@ -14,8 +16,6 @@ public class BackgroundWindow extends Window {
 	private final int BACKGROUND_SCENE = Scene.generateScene();
 
 	private UIScreen uiScreen;
-
-	private UIFilledRectangle testRect;
 
 	public BackgroundWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
@@ -31,9 +31,6 @@ public class BackgroundWindow extends Window {
 
 		this.uiScreen = new UIScreen();
 
-		this.testRect = new UIFilledRectangle(0, 0, 0, 100, 100, BACKGROUND_SCENE);
-		this.testRect.setContentAlignmentStyle(UIElement.ALIGN_CENTER, UIElement.ALIGN_CENTER);
-
 		this._resize();
 	}
 
@@ -41,8 +38,30 @@ public class BackgroundWindow extends Window {
 	public void handleContextMenuAction(String action) {
 		switch (action) {
 		case "Open Project Picker": {
+			int width = 400;
+			int height = 400;
+			int x = (int) this.getWindowMousePos().x;
+			int y = (int) this.getWindowMousePos().y - height;
+			ProjectPickerWindow projectPicker = new ProjectPickerWindow(x, y, width, height, this, null);
+			AdjustableWindow adjWindow = new AdjustableWindow("Project Picker", projectPicker, this);
+
+			projectPicker.addToList("Volumetric Clouds");
 			break;
 		}
+		}
+	}
+
+	@Override
+	public void handleObjects(Object[] o) {
+		String whichProject = (String) o[0];
+		int width = 400;
+		int height = 400;
+		int x = (int) this.getWindowMousePos().x;
+		int y = (int) this.getWindowMousePos().y - height;
+		switch (whichProject) {
+		case "Volumetric Clouds":
+			AdjustableWindow window = new AdjustableWindow("Volumetric Clouds", new VolumetricCloudsWindow(x, y, width, height, null), this);
+			break;
 		}
 	}
 
@@ -58,7 +77,7 @@ public class BackgroundWindow extends Window {
 
 	@Override
 	protected void _update() {
-		this.testRect.setFrameAlignmentOffset(this.getWindowMousePos().x, this.getWindowMousePos().y);
+
 	}
 
 	@Override
