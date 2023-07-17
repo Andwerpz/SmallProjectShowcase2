@@ -5,6 +5,8 @@ uniform vec3 camera_pos;
 uniform vec3 cloud_pos;
 uniform vec3 cloud_scale;
 
+uniform sampler3D tex_worley_noise;
+
 in vec3 frag_dir;
 
 //returns distance to box, and length intersection. 
@@ -30,7 +32,9 @@ void main() {
 	//color = vec4(frag_dir, 1);
 	vec2 ray_box = rayBoxDist(cloud_pos, cloud_scale, camera_pos, frag_dir);
 	if(ray_box.y != 0){
-		color = vec4(0, 0, 0, 1);
+		vec3 hit_pos = camera_pos + frag_dir * ray_box.x;
+		vec4 sampleColor = texture(tex_worley_noise, hit_pos / 3.0);
+		color = vec4(sampleColor.rgb, 1);
 	}
 } 
 

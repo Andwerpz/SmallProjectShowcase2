@@ -1,12 +1,20 @@
 package volumetric_clouds;
 
 import static org.lwjgl.opengl.GL11.glViewport;
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.*;
+import static org.lwjgl.opengl.GL14.*;
+import static org.lwjgl.opengl.GL13.*;
+import static org.lwjgl.opengl.GL30.*;
 
 import java.awt.image.BufferedImage;
+import java.text.DecimalFormat;
 
 import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Shader;
+import lwjglengine.graphics.Texture;
+import lwjglengine.graphics.Texture3D;
 import lwjglengine.main.Main;
 import lwjglengine.model.Line;
 import lwjglengine.model.ModelInstance;
@@ -17,10 +25,14 @@ import lwjglengine.scene.Scene;
 import lwjglengine.screen.PerspectiveScreen;
 import lwjglengine.screen.SkyboxCube;
 import lwjglengine.util.ShaderUtils;
+import lwjglengine.window.AdjustableWindow;
+import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
 import myutils.v10.math.Vec2;
 import myutils.v10.math.Vec3;
+import myutils.v11.file.FileUtils;
 import myutils.v11.file.JarUtils;
+
 
 public class VolumetricCloudsWindow extends Window {
 
@@ -33,6 +45,8 @@ public class VolumetricCloudsWindow extends Window {
 	private Shader cloudsShader;
 
 	private CloudBoundingBox cloudBox;
+	
+	private Texture3D worleyNoise;
 
 	public VolumetricCloudsWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
@@ -51,9 +65,9 @@ public class VolumetricCloudsWindow extends Window {
 		this.perspectiveScreen.renderSkybox(true);
 
 		BufferedImage[] skyboxSides = new BufferedImage[6];
-		String skyboxDir = "/skybox/lake/";
+		String skyboxDir = "/res/skybox/lake/";
 		for (int i = 0; i < 6; i++) {
-			skyboxSides[i] = JarUtils.loadImage(skyboxDir + Cubemap.CUBEMAP_SIDE_NAMES[i] + ".jpg");
+			skyboxSides[i] = FileUtils.loadImageRelative(skyboxDir + Cubemap.CUBEMAP_SIDE_NAMES[i] + ".jpg");
 		}
 		Cubemap skybox = new Cubemap(skyboxSides);
 		Scene.skyboxes.put(WORLD_SCENE, skybox);
@@ -64,11 +78,129 @@ public class VolumetricCloudsWindow extends Window {
 		this.pic = new PlayerInputController(new Vec3(0));
 
 		this.cloudsShader = new Shader("/volumetric_clouds/clouds.vert", "/volumetric_clouds/clouds.frag");
+		this.cloudsShader.setUniform1i("tex_worley_noise", 0);
 
-		this.cloudBox = new CloudBoundingBox(new Vec3(0, 0, -20), new Vec3(5, 1, 5));
+		this.cloudBox = new CloudBoundingBox(new Vec3(0, 0, 0), new Vec3(5, 1, 5));
 		this.cloudBox.setDrawBoundingLines(true);
+		
+		this.worleyNoise = this.generateWorleyNoise(16, 8);
+		
+		//Window w = new AdjustableWindow("Texture Viewer Window", new TextureViewerWindow(this.worleyNoise), this);
 
 		this._resize();
+	}
+	
+	private Texture3D generateWorleyNoise(int cellSize, int nrCells) {
+		int texSize = cellSize * nrCells;
+		int[] data = new int[texSize * texSize * texSize];
+		
+		float[][][] noise = new float[texSize][texSize][texSize];
+		
+		//generate points
+		//place the points one per cell
+		Vec3[][][] points = new Vec3[nrCells][nrCells][nrCells];
+		for(int i = 0; i < nrCells; i++) {
+			for(int j = 0; j < nrCells; j++) {
+				for(int k = 0; k < nrCells; k++) {
+					Vec3 point = new Vec3(i * cellSize, j * cellSize, k * cellSize);
+					point.x += (float) (Math.random() * cellSize);
+					point.y += (float) (Math.random() * cellSize);
+					point.z += (float) (Math.random() * cellSize);
+					points[i][j][k] = point;
+				}
+			}
+		}
+		
+		int[] dr = {-1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+		int[] dc = {-1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1};
+		int[] dl = {-1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1};
+		
+		//calculate distances
+		float maxDist = 0;
+		for(int i = 0; i < texSize; i++) {
+			for(int j = 0; j < texSize; j++) {
+				for(int k = 0; k < texSize; k++) {
+					Vec3 cur = new Vec3(i, j, k);
+					float minDist = (float) 1e9;
+					for(int l = 0; l < dr.length; l++) {
+						int nr = (i / cellSize) + dr[l];
+						int nc = (j / cellSize) + dc[l];
+						int nl = (k / cellSize) + dl[l];
+						int horizontalAdj = 0;
+						int verticalAdj = 0;
+						int layerAdj = 0;
+						if(nr < 0) {
+							horizontalAdj = -1;
+							nr += nrCells;
+						}
+						if(nr >= nrCells) {
+							horizontalAdj = 1;
+							nr -= nrCells;
+						}
+						if(nc < 0) {
+							verticalAdj = -1;
+							nc += nrCells;
+						}
+						if(nc >= nrCells) {
+							verticalAdj = 1;
+							nc -= nrCells;
+						}
+						if(nl < 0) {
+							layerAdj = -1;
+							nl += nrCells;
+						}
+						if(nl >= nrCells) {
+							layerAdj = 1;
+							nl -= nrCells;
+						}
+						Vec3 point = new Vec3(points[nr][nc][nl]);
+						point.x += texSize * horizontalAdj;
+						point.y += texSize * verticalAdj;
+						point.z += texSize * layerAdj;
+						
+						minDist = Math.min(minDist, point.sub(cur).lengthSq());
+					}
+					minDist = (float) Math.sqrt(minDist);
+					maxDist = Math.max(maxDist, minDist);
+					noise[i][j][k] = minDist;
+				}
+			}
+		}
+		
+		//normalize and invert
+		DecimalFormat df = new DecimalFormat("0.00");
+		for(int i = 0; i < texSize; i++) {
+			for(int j = 0; j < texSize; j++) {
+				for(int k = 0; k < texSize; k++) {
+					noise[i][j][k] /= maxDist;
+					noise[i][j][k] = 1.0f - noise[i][j][k];
+					
+					//System.out.print(df.format(noise[i][j][k]) + " ");
+				}
+				//System.out.println();
+			}
+			//System.out.println();
+		}
+		
+		//write to data
+		int ind = 0;
+		for(int depth = 0; depth < texSize; depth++) {
+			for(int row = 0; row < texSize; row++) {
+				for(int col = 0; col < texSize; col++) {
+					int color = (int) (255.0f * noise[row][col][depth]);
+					int rgb = (255 << 24) + (color << 16) + (color << 8) + (color << 0);
+					data[ind] = rgb;
+					
+					ind ++;
+				}
+			}
+		}
+		
+		Texture3D tex = new Texture3D(texSize, texSize, texSize, data);
+		
+		
+		
+		return tex;
 	}
 
 	@Override
@@ -78,6 +210,8 @@ public class VolumetricCloudsWindow extends Window {
 		Scene.removeScene(WORLD_SCENE);
 
 		this.cloudsShader.kill();
+		
+		this.worleyNoise.kill();
 	}
 
 	@Override
@@ -113,6 +247,7 @@ public class VolumetricCloudsWindow extends Window {
 		this.cloudsShader.setUniform3f("camera_pos", this.perspectiveScreen.getCamera().getPos());
 		this.cloudsShader.setUniform3f("cloud_pos", this.cloudBox.pos);
 		this.cloudsShader.setUniform3f("cloud_scale", this.cloudBox.scale);
+		this.worleyNoise.bind(GL_TEXTURE0);
 		outputBuffer.bind();
 		SkyboxCube.skyboxCube.render();
 
