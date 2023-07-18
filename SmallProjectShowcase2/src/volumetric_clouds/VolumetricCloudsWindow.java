@@ -1,6 +1,5 @@
 package volumetric_clouds;
 
-import static org.lwjgl.opengl.GL11.glViewport;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
 import static org.lwjgl.opengl.GL14.*;
@@ -33,7 +32,6 @@ import myutils.v10.math.Vec3;
 import myutils.v11.file.FileUtils;
 import myutils.v11.file.JarUtils;
 
-
 public class VolumetricCloudsWindow extends Window {
 
 	private final int WORLD_SCENE = Scene.generateScene();
@@ -47,6 +45,8 @@ public class VolumetricCloudsWindow extends Window {
 	private CloudBoundingBox cloudBox;
 	
 	private Texture3D worleyNoise;
+	
+	private DirLight sun;
 
 	public VolumetricCloudsWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
@@ -72,20 +72,18 @@ public class VolumetricCloudsWindow extends Window {
 		Cubemap skybox = new Cubemap(skyboxSides);
 		Scene.skyboxes.put(WORLD_SCENE, skybox);
 
-		Light dirLight = new DirLight(new Vec3(1), new Vec3(1), 0.3f);
-		Light.addLight(WORLD_SCENE, dirLight);
+		this.sun = new DirLight(new Vec3(1), new Vec3(1), 0.3f);
+		Light.addLight(WORLD_SCENE, sun);
 
 		this.pic = new PlayerInputController(new Vec3(0));
 
 		this.cloudsShader = new Shader("/volumetric_clouds/clouds.vert", "/volumetric_clouds/clouds.frag");
 		this.cloudsShader.setUniform1i("tex_worley_noise", 0);
 
-		this.cloudBox = new CloudBoundingBox(new Vec3(0, 0, 0), new Vec3(5, 1, 5));
+		this.cloudBox = new CloudBoundingBox(new Vec3(0, 0, 0), new Vec3(50, 10, 50));
 		this.cloudBox.setDrawBoundingLines(true);
 		
 		this.worleyNoise = this.generateWorleyNoise(16, 8);
-		
-		//Window w = new AdjustableWindow("Texture Viewer Window", new TextureViewerWindow(this.worleyNoise), this);
 
 		this._resize();
 	}
@@ -168,18 +166,13 @@ public class VolumetricCloudsWindow extends Window {
 		}
 		
 		//normalize and invert
-		DecimalFormat df = new DecimalFormat("0.00");
 		for(int i = 0; i < texSize; i++) {
 			for(int j = 0; j < texSize; j++) {
 				for(int k = 0; k < texSize; k++) {
 					noise[i][j][k] /= maxDist;
 					noise[i][j][k] = 1.0f - noise[i][j][k];
-					
-					//System.out.print(df.format(noise[i][j][k]) + " ");
 				}
-				//System.out.println();
 			}
-			//System.out.println();
 		}
 		
 		//write to data
@@ -197,9 +190,6 @@ public class VolumetricCloudsWindow extends Window {
 		}
 		
 		Texture3D tex = new Texture3D(texSize, texSize, texSize, data);
-		
-		
-		
 		return tex;
 	}
 
@@ -241,12 +231,16 @@ public class VolumetricCloudsWindow extends Window {
 
 		//probably have to first extract the direction vector for each pixel into a buffer, 
 		//so that we can compute the intersection between the view ray and the cloud bounding box. 
+		glEnable(GL_BLEND);
+		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 		this.cloudsShader.enable();
 		this.cloudsShader.setUniformMat4("pr_matrix", this.perspectiveScreen.getCamera().getProjectionMatrix());
 		this.cloudsShader.setUniformMat4("vw_matrix", this.perspectiveScreen.getCamera().getViewMatrix());
 		this.cloudsShader.setUniform3f("camera_pos", this.perspectiveScreen.getCamera().getPos());
 		this.cloudsShader.setUniform3f("cloud_pos", this.cloudBox.pos);
 		this.cloudsShader.setUniform3f("cloud_scale", this.cloudBox.scale);
+		this.cloudsShader.setUniform3f("sun_dir", this.sun.dir);
+		this.cloudsShader.setUniform3f("sun_color", this.sun.color);
 		this.worleyNoise.bind(GL_TEXTURE0);
 		outputBuffer.bind();
 		SkyboxCube.skyboxCube.render();
