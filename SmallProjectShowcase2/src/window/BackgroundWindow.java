@@ -35,6 +35,11 @@ public class BackgroundWindow extends Window {
 	}
 
 	@Override
+	public String getDefaultTitle() {
+		return "Background Window";
+	}
+
+	@Override
 	public void handleContextMenuAction(String action) {
 		switch (action) {
 		case "Open Project Picker": {

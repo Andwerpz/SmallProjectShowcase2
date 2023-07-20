@@ -5,6 +5,9 @@ uniform vec3 camera_pos;
 uniform vec3 cloud_pos;
 uniform vec3 cloud_scale;
 
+//x : main shape 
+//y : detail shape
+//z : subtract shape
 uniform sampler3D tex_worley_noise;
 
 uniform vec3 sun_dir;	//make sure that this is normalized
@@ -14,6 +17,7 @@ in vec3 frag_dir;
 
 float density_threshold = 0.5;
 float density_multiplier = 10;
+float density_offset = -1;
 
 float scale_main = 50;
 float scale_detail = 5;
@@ -21,24 +25,29 @@ float scale_detail = 5;
 int nr_samples_main = 30;
 int nr_samples_luminance = 10;
 
-float light_absorption_towards_sun = 0.5;
-float darkness_threshold = 0.6;
+float light_absorption_towards_sun = 1.45;
+float darkness_threshold = 0.15;
 
-float cloud_light_absorption = 1;
+float light_absorption_through_clouds = 0.7;
 
-vec4 phase_params = vec4(1, 1, 1, 1);
+float forward_scattering = 0.72;
+float backward_scattering = 0.33;
+float base_brightness = 1;
+float phase_factor = 0.74;
+
+float container_edge_fade_dst = 1;
+
+vec3 cloud_bounds_min = vec3(cloud_pos.x - cloud_scale.x / 2, cloud_pos.y - cloud_scale.y / 2, cloud_pos.z - cloud_scale.z / 2);
+vec3 cloud_bounds_max = vec3(cloud_pos.x + cloud_scale.x / 2, cloud_pos.y + cloud_scale.y / 2, cloud_pos.z + cloud_scale.z / 2);
 
 //returns distance to box, and length intersection. 
 //if dstInsideBox = 0, then the ray misses the box. 
 vec2 rayBoxDist(vec3 ray_origin, vec3 ray_dir) {
 	vec3 pos = cloud_pos;
 	vec3 scale = cloud_scale;
-
-	vec3 bmin = vec3(pos.x - scale.x / 2, pos.y - scale.y / 2, pos.z - scale.z / 2);
-	vec3 bmax = vec3(pos.x + scale.x / 2, pos.y + scale.y / 2, pos.z + scale.z / 2);
 	
-	vec3 t0 = (bmin - ray_origin) / ray_dir;
-	vec3 t1 = (bmax - ray_origin) / ray_dir;
+	vec3 t0 = (cloud_bounds_min - ray_origin) / ray_dir;
+	vec3 t1 = (cloud_bounds_max - ray_origin) / ray_dir;
 	vec3 tmin = min(t0, t1);
 	vec3 tmax = max(t0, t1);
 	
@@ -58,13 +67,23 @@ float sampleCloudDensity(vec3 pos) {
 	//main cloud shape
 	ans += texture(tex_worley_noise, scaled_pos / scale_main).x;
 	
+	// Calculate falloff along sides of the cloud container
+    float dst_from_edge_x = min(pos.x - cloud_bounds_min.x, cloud_bounds_max.x - pos.x);
+    float dst_from_edge_z = min(pos.z - cloud_bounds_min.z, cloud_bounds_max.z - pos.z);
+    float dst_from_edge_y = min(pos.y - cloud_bounds_min.y, cloud_bounds_max.y - pos.y);
+    float edge_weight = min(1, min(dst_from_edge_y, min(dst_from_edge_z, dst_from_edge_x)) / container_edge_fade_dst);
+    ans *= edge_weight;
+	
 	//apply density threshold
 	ans = max(0, ans - density_threshold);
 	
 	//apply density multiplier
 	ans *= density_multiplier;
 	
-	return ans;
+	//apply density offset
+	ans += density_offset;
+	
+	return max(0, ans);
 }
 
 float sampleLuminance(vec3 pos) {
@@ -91,8 +110,8 @@ float hg(float a, float g) {
 
 float phase(float a) {
     float blend = 0.5;
-    float hgBlend = hg(a, phase_params.x) * (1 - blend) + hg(a, -phase_params.y) * blend;
-    return phase_params.z + hgBlend * phase_params.w;
+    float hgBlend = hg(a, forward_scattering) * (1 - blend) + hg(a, -backward_scattering) * blend;
+    return base_brightness + hgBlend * phase_factor;
 }
 
 float random (vec2 st) {
@@ -100,8 +119,8 @@ float random (vec2 st) {
 }
 
 void main() {	
-	//color = vec4(frag_dir, 1);
-	vec2 ray_box = rayBoxDist(camera_pos, frag_dir);
+	vec3 ray_dir = normalize(frag_dir);
+	vec2 ray_box = rayBoxDist(camera_pos, ray_dir);
 	float ray_box_dist = ray_box.x;
 	float ray_box_intersect_dist = ray_box.y;
 	if(ray_box_intersect_dist == 0){
@@ -109,24 +128,29 @@ void main() {
 	}
 	
 	// Phase function makes clouds brighter around sun
-    float cos_angle = dot(frag_dir, sun_dir);
+    float cos_angle = dot(ray_dir, sun_dir);
     float phase_val = phase(cos_angle);
 	
 	//float step_size = ray_box_intersect_dist / nr_samples_main;
 	float step_size = 0.2;
-	float dist_travelled = 0;
+	float dist_travelled = random(frag_dir.xy) * step_size;	//initialize with random offset
 	
 	float transmittance = 1;
 	float light_energy = 0;
 	
 	while(dist_travelled < ray_box_intersect_dist){
-		vec3 pos = camera_pos + frag_dir * (ray_box_dist + dist_travelled);
+		vec3 pos = camera_pos + ray_dir * (ray_box_dist + dist_travelled);
 		float density = sampleCloudDensity(pos);
 		
 		if(density > 0){
 			float luminance = sampleLuminance(pos);
 			light_energy += density * step_size * transmittance * luminance * phase_val;
-			transmittance *= exp(-density * step_size * cloud_light_absorption);
+			transmittance *= exp(-density * step_size * light_absorption_through_clouds);
+		}
+		
+		//color won't change much if transmittance is very small
+		if(transmittance < 0.01){
+			break;
 		}
 		
 		dist_travelled += step_size;

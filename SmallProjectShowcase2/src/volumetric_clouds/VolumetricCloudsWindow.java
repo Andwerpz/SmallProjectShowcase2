@@ -25,6 +25,7 @@ import lwjglengine.screen.PerspectiveScreen;
 import lwjglengine.screen.SkyboxCube;
 import lwjglengine.util.ShaderUtils;
 import lwjglengine.window.AdjustableWindow;
+import lwjglengine.window.Texture3DViewerWindow;
 import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
 import myutils.v10.math.Vec2;
@@ -33,6 +34,8 @@ import myutils.v11.file.FileUtils;
 import myutils.v11.file.JarUtils;
 
 public class VolumetricCloudsWindow extends Window {
+
+	private static final int NOISE_SIZE = 128;
 
 	private final int WORLD_SCENE = Scene.generateScene();
 
@@ -43,9 +46,9 @@ public class VolumetricCloudsWindow extends Window {
 	private Shader cloudsShader;
 
 	private CloudBoundingBox cloudBox;
-	
+
 	private Texture3D worleyNoise;
-	
+
 	private DirLight sun;
 
 	public VolumetricCloudsWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
@@ -80,82 +83,149 @@ public class VolumetricCloudsWindow extends Window {
 		this.cloudsShader = new Shader("/volumetric_clouds/clouds.vert", "/volumetric_clouds/clouds.frag");
 		this.cloudsShader.setUniform1i("tex_worley_noise", 0);
 
-		this.cloudBox = new CloudBoundingBox(new Vec3(0, 0, 0), new Vec3(50, 10, 50));
+		this.cloudBox = new CloudBoundingBox(new Vec3(0, 0, 0), new Vec3(500, 10, 500));
 		this.cloudBox.setDrawBoundingLines(true);
-		
-		this.worleyNoise = this.generateWorleyNoise(16, 8);
+
+		float[][][] mainDetailNoiseFine = this.generateWorleyNoise(24);
+		float[][][] mainDetailNoiseCoarse = this.generateWorleyNoise(12);
+		float[][][] mainShapeNoise = this.generateWorleyNoise(4);
+		this.addNoise(mainDetailNoiseCoarse, mainDetailNoiseFine, 0.5f);
+		this.addNoise(mainShapeNoise, mainDetailNoiseCoarse, 0.5f);
+		this.normalizeNoise(mainShapeNoise);
+
+		float[][][] detailNoise = this.generateWorleyNoise(10);
+
+		float[][][] subtractNoise = this.generateWorleyNoise(8);
+
+		this.worleyNoise = this.generateTexture3D(mainShapeNoise, detailNoise, subtractNoise);
+
+		Window testWindow = new AdjustableWindow(new Texture3DViewerWindow(this.worleyNoise, this), this);
 
 		this._resize();
 	}
-	
-	private Texture3D generateWorleyNoise(int cellSize, int nrCells) {
-		int texSize = cellSize * nrCells;
-		int[] data = new int[texSize * texSize * texSize];
-		
-		float[][][] noise = new float[texSize][texSize][texSize];
-		
+
+	private Texture3D generateTexture3D(float[][][] red, float[][][] green, float[][][] blue) {
+		int[] data = new int[NOISE_SIZE * NOISE_SIZE * NOISE_SIZE];
+
+		//write to data
+		int ind = 0;
+		for (int depth = 0; depth < NOISE_SIZE; depth++) {
+			for (int row = 0; row < NOISE_SIZE; row++) {
+				for (int col = 0; col < NOISE_SIZE; col++) {
+					int cred = (int) (255 * red[row][col][depth]);
+					int cgreen = (int) (255 * green[row][col][depth]);
+					int cblue = (int) (255 * blue[row][col][depth]);
+					int rgb = (255 << 24) + (cred << 0) + (cgreen << 8) + (cblue << 16);
+					data[ind] = rgb;
+
+					ind++;
+				}
+			}
+		}
+
+		Texture3D tex = new Texture3D(NOISE_SIZE, NOISE_SIZE, NOISE_SIZE, data);
+		return tex;
+	}
+
+	//compresses all values to range [0, 1]. 
+	private void normalizeNoise(float[][][] a) {
+		float max = 0;
+		for (int i = 0; i < NOISE_SIZE; i++) {
+			for (int j = 0; j < NOISE_SIZE; j++) {
+				for (int k = 0; k < NOISE_SIZE; k++) {
+					max = Math.max(a[i][j][k], max);
+				}
+			}
+		}
+		for (int i = 0; i < NOISE_SIZE; i++) {
+			for (int j = 0; j < NOISE_SIZE; j++) {
+				for (int k = 0; k < NOISE_SIZE; k++) {
+					a[i][j][k] /= max;
+				}
+			}
+		}
+	}
+
+	//a += b * bCoeff
+	private void addNoise(float[][][] a, float[][][] b, float bCoeff) {
+		for (int i = 0; i < NOISE_SIZE; i++) {
+			for (int j = 0; j < NOISE_SIZE; j++) {
+				for (int k = 0; k < NOISE_SIZE; k++) {
+					a[i][j][k] += b[i][j][k] * bCoeff;
+				}
+			}
+		}
+	}
+
+	private float[][][] generateWorleyNoise(int nrCells) {
+		float[][][] noise = new float[NOISE_SIZE][NOISE_SIZE][NOISE_SIZE];
+
 		//generate points
-		//place the points one per cell
 		Vec3[][][] points = new Vec3[nrCells][nrCells][nrCells];
-		for(int i = 0; i < nrCells; i++) {
-			for(int j = 0; j < nrCells; j++) {
-				for(int k = 0; k < nrCells; k++) {
-					Vec3 point = new Vec3(i * cellSize, j * cellSize, k * cellSize);
-					point.x += (float) (Math.random() * cellSize);
-					point.y += (float) (Math.random() * cellSize);
-					point.z += (float) (Math.random() * cellSize);
+		for (int i = 0; i < nrCells; i++) {
+			for (int j = 0; j < nrCells; j++) {
+				for (int k = 0; k < nrCells; k++) {
+					Vec3 point = new Vec3(i, j, k);
+					point.x += (float) (Math.random() * 1);
+					point.y += (float) (Math.random() * 1);
+					point.z += (float) (Math.random() * 1);
 					points[i][j][k] = point;
 				}
 			}
 		}
-		
-		int[] dr = {-1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-		int[] dc = {-1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1};
-		int[] dl = {-1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1};
-		
+
+		int[] dr = { -1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+		int[] dc = { -1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1 };
+		int[] dl = { -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1 };
+
 		//calculate distances
 		float maxDist = 0;
-		for(int i = 0; i < texSize; i++) {
-			for(int j = 0; j < texSize; j++) {
-				for(int k = 0; k < texSize; k++) {
+		for (int i = 0; i < NOISE_SIZE; i++) {
+			for (int j = 0; j < NOISE_SIZE; j++) {
+				for (int k = 0; k < NOISE_SIZE; k++) {
 					Vec3 cur = new Vec3(i, j, k);
+					int cellR = (int) (cur.x / NOISE_SIZE * nrCells);
+					int cellC = (int) (cur.y / NOISE_SIZE * nrCells);
+					int cellL = (int) (cur.z / NOISE_SIZE * nrCells);
+					cur.divi(NOISE_SIZE);
+					cur.muli(nrCells);
 					float minDist = (float) 1e9;
-					for(int l = 0; l < dr.length; l++) {
-						int nr = (i / cellSize) + dr[l];
-						int nc = (j / cellSize) + dc[l];
-						int nl = (k / cellSize) + dl[l];
+					for (int l = 0; l < dr.length; l++) {
+						int nr = cellR + dr[l];
+						int nc = cellC + dc[l];
+						int nl = cellL + dl[l];
 						int horizontalAdj = 0;
 						int verticalAdj = 0;
 						int layerAdj = 0;
-						if(nr < 0) {
+						if (nr < 0) {
 							horizontalAdj = -1;
 							nr += nrCells;
 						}
-						if(nr >= nrCells) {
+						if (nr >= nrCells) {
 							horizontalAdj = 1;
 							nr -= nrCells;
 						}
-						if(nc < 0) {
+						if (nc < 0) {
 							verticalAdj = -1;
 							nc += nrCells;
 						}
-						if(nc >= nrCells) {
+						if (nc >= nrCells) {
 							verticalAdj = 1;
 							nc -= nrCells;
 						}
-						if(nl < 0) {
+						if (nl < 0) {
 							layerAdj = -1;
 							nl += nrCells;
 						}
-						if(nl >= nrCells) {
+						if (nl >= nrCells) {
 							layerAdj = 1;
 							nl -= nrCells;
 						}
 						Vec3 point = new Vec3(points[nr][nc][nl]);
-						point.x += texSize * horizontalAdj;
-						point.y += texSize * verticalAdj;
-						point.z += texSize * layerAdj;
-						
+						point.x += nrCells * horizontalAdj;
+						point.y += nrCells * verticalAdj;
+						point.z += nrCells * layerAdj;
+
 						minDist = Math.min(minDist, point.sub(cur).lengthSq());
 					}
 					minDist = (float) Math.sqrt(minDist);
@@ -164,33 +234,23 @@ public class VolumetricCloudsWindow extends Window {
 				}
 			}
 		}
-		
+
 		//normalize and invert
-		for(int i = 0; i < texSize; i++) {
-			for(int j = 0; j < texSize; j++) {
-				for(int k = 0; k < texSize; k++) {
+		for (int i = 0; i < NOISE_SIZE; i++) {
+			for (int j = 0; j < NOISE_SIZE; j++) {
+				for (int k = 0; k < NOISE_SIZE; k++) {
 					noise[i][j][k] /= maxDist;
 					noise[i][j][k] = 1.0f - noise[i][j][k];
 				}
 			}
 		}
-		
-		//write to data
-		int ind = 0;
-		for(int depth = 0; depth < texSize; depth++) {
-			for(int row = 0; row < texSize; row++) {
-				for(int col = 0; col < texSize; col++) {
-					int color = (int) (255.0f * noise[row][col][depth]);
-					int rgb = (255 << 24) + (color << 16) + (color << 8) + (color << 0);
-					data[ind] = rgb;
-					
-					ind ++;
-				}
-			}
-		}
-		
-		Texture3D tex = new Texture3D(texSize, texSize, texSize, data);
-		return tex;
+
+		return noise;
+	}
+
+	@Override
+	public String getDefaultTitle() {
+		return "Volumetric Cloud Demo";
 	}
 
 	@Override
@@ -200,7 +260,7 @@ public class VolumetricCloudsWindow extends Window {
 		Scene.removeScene(WORLD_SCENE);
 
 		this.cloudsShader.kill();
-		
+
 		this.worleyNoise.kill();
 	}
 
