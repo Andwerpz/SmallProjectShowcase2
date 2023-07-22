@@ -25,6 +25,7 @@ import lwjglengine.screen.PerspectiveScreen;
 import lwjglengine.screen.SkyboxCube;
 import lwjglengine.util.ShaderUtils;
 import lwjglengine.window.AdjustableWindow;
+import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.Texture3DViewerWindow;
 import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
@@ -35,7 +36,7 @@ import myutils.v11.file.JarUtils;
 
 public class VolumetricCloudsWindow extends Window {
 
-	private static final int NOISE_SIZE = 128;
+	private static final int NOISE_SIZE = 64;
 
 	private final int WORLD_SCENE = Scene.generateScene();
 
@@ -83,7 +84,7 @@ public class VolumetricCloudsWindow extends Window {
 		this.cloudsShader = new Shader("/volumetric_clouds/clouds.vert", "/volumetric_clouds/clouds.frag");
 		this.cloudsShader.setUniform1i("tex_worley_noise", 0);
 
-		this.cloudBox = new CloudBoundingBox(new Vec3(0, 0, 0), new Vec3(500, 10, 500));
+		this.cloudBox = new CloudBoundingBox(WORLD_SCENE, new Vec3(0, 0, 0), new Vec3(500, 10, 500));
 		this.cloudBox.setDrawBoundingLines(true);
 
 		float[][][] mainDetailNoiseFine = this.generateWorleyNoise(24);
@@ -100,6 +101,7 @@ public class VolumetricCloudsWindow extends Window {
 		this.worleyNoise = this.generateTexture3D(mainShapeNoise, detailNoise, subtractNoise);
 
 		Window testWindow = new AdjustableWindow(new Texture3DViewerWindow(this.worleyNoise, this), this);
+		Window cloudEditorWindow = new AdjustableWindow(new ObjectEditorWindow(this.cloudBox, this), this);
 
 		this._resize();
 	}
@@ -293,14 +295,38 @@ public class VolumetricCloudsWindow extends Window {
 		//so that we can compute the intersection between the view ray and the cloud bounding box. 
 		glEnable(GL_BLEND);
 		glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+
 		this.cloudsShader.enable();
+
 		this.cloudsShader.setUniformMat4("pr_matrix", this.perspectiveScreen.getCamera().getProjectionMatrix());
 		this.cloudsShader.setUniformMat4("vw_matrix", this.perspectiveScreen.getCamera().getViewMatrix());
 		this.cloudsShader.setUniform3f("camera_pos", this.perspectiveScreen.getCamera().getPos());
+
 		this.cloudsShader.setUniform3f("cloud_pos", this.cloudBox.pos);
 		this.cloudsShader.setUniform3f("cloud_scale", this.cloudBox.scale);
+
 		this.cloudsShader.setUniform3f("sun_dir", this.sun.dir);
 		this.cloudsShader.setUniform3f("sun_color", this.sun.color);
+
+		this.cloudsShader.setUniform1f("density_threshold", this.cloudBox.density_threshold);
+		this.cloudsShader.setUniform1f("density_multiplier", this.cloudBox.density_multiplier);
+		this.cloudsShader.setUniform1f("density_offset", this.cloudBox.density_offset);
+
+		this.cloudsShader.setUniform1f("scale_main_1", this.cloudBox.scale_main_1);
+		this.cloudsShader.setUniform1f("scale_main_2", this.cloudBox.scale_main_2);
+		this.cloudsShader.setUniform1f("scale_detail", this.cloudBox.scale_detail);
+		this.cloudsShader.setUniform1f("scale_subtract", this.cloudBox.scale_subtract);
+
+		this.cloudsShader.setUniform1f("light_absorption_towards_sun", this.cloudBox.light_absorption_towards_sun);
+		this.cloudsShader.setUniform1f("light_absorption_through_clouds", this.cloudBox.light_absorption_through_clouds);
+
+		this.cloudsShader.setUniform1f("darkness_threshold", this.cloudBox.darkness_threshold);
+
+		this.cloudsShader.setUniform1f("forward_scattering", this.cloudBox.forward_scattering);
+		this.cloudsShader.setUniform1f("backward_scattering", this.cloudBox.backward_scattering);
+		this.cloudsShader.setUniform1f("base_brightness", this.cloudBox.base_brightness);
+		this.cloudsShader.setUniform1f("phase_factor", this.cloudBox.phase_factor);
+
 		this.worleyNoise.bind(GL_TEXTURE0);
 		outputBuffer.bind();
 		SkyboxCube.skyboxCube.render();
@@ -366,97 +392,6 @@ public class VolumetricCloudsWindow extends Window {
 	@Override
 	protected void _keyReleased(int key) {
 		// TODO Auto-generated method stub
-
-	}
-
-	class CloudBoundingBox {
-
-		public Vec3[] baseCorners = new Vec3[] { new Vec3(-0.5f, -0.5f, -0.5f), new Vec3(-0.5f, -0.5f, 0.5f), new Vec3(0.5f, -0.5f, 0.5f), new Vec3(0.5f, -0.5f, -0.5f), new Vec3(-0.5f, 0.5f, -0.5f), new Vec3(-0.5f, 0.5f, 0.5f), new Vec3(0.5f, 0.5f, 0.5f), new Vec3(0.5f, 0.5f, -0.5f), };
-
-		public boolean drawBoundingLines = false;
-		public ModelInstance[] boundingLines = null;
-
-		public Vec3 pos; //refers to the center of the box. 
-		public Vec3 scale; //individual scaling of x y z
-
-		public CloudBoundingBox() {
-			this.init();
-		}
-
-		public CloudBoundingBox(Vec3 pos, Vec3 scale) {
-			this.init();
-			this.setPos(pos);
-			this.setScale(scale);
-		}
-
-		private void init() {
-			this.pos = new Vec3(0);
-			this.scale = new Vec3(1);
-		}
-
-		public void setPos(Vec3 pos) {
-			this.pos.set(pos);
-			this.updateBoundingLineInstances();
-		}
-
-		public void setScale(Vec3 scale) {
-			this.scale.set(scale);
-			this.updateBoundingLineInstances();
-		}
-
-		public void setDrawBoundingLines(boolean b) {
-			this.drawBoundingLines = b;
-
-			if (this.drawBoundingLines) {
-				this.updateBoundingLineInstances();
-			}
-			else {
-				//kill bounding lines
-				if (this.boundingLines != null) {
-					for (int i = 0; i < this.boundingLines.length; i++) {
-						this.boundingLines[i].kill();
-					}
-				}
-				this.boundingLines = null;
-			}
-		}
-
-		private void updateBoundingLineInstances() {
-			if (!this.drawBoundingLines) {
-				return;
-			}
-
-			if (this.boundingLines == null) {
-				this.boundingLines = new ModelInstance[12];
-				for (int i = 0; i < this.boundingLines.length; i++) {
-					this.boundingLines[i] = Line.addLine(new Vec3(0), new Vec3(0), WORLD_SCENE);
-				}
-			}
-
-			//enumerate all the corners. 
-			Vec3[] corners = new Vec3[8];
-			for (int i = 0; i < 8; i++) {
-				corners[i] = this.baseCorners[i].mul(this.scale.x, this.scale.y, this.scale.z).add(this.pos);
-			}
-
-			//bottom ring
-			this.boundingLines[0].setModelTransform(Line.generateLineModelTransform(corners[0], corners[1]));
-			this.boundingLines[1].setModelTransform(Line.generateLineModelTransform(corners[1], corners[2]));
-			this.boundingLines[2].setModelTransform(Line.generateLineModelTransform(corners[2], corners[3]));
-			this.boundingLines[3].setModelTransform(Line.generateLineModelTransform(corners[3], corners[0]));
-
-			//top ring
-			this.boundingLines[4].setModelTransform(Line.generateLineModelTransform(corners[4], corners[5]));
-			this.boundingLines[5].setModelTransform(Line.generateLineModelTransform(corners[5], corners[6]));
-			this.boundingLines[6].setModelTransform(Line.generateLineModelTransform(corners[6], corners[7]));
-			this.boundingLines[7].setModelTransform(Line.generateLineModelTransform(corners[7], corners[4]));
-
-			//connecting edges
-			this.boundingLines[8].setModelTransform(Line.generateLineModelTransform(corners[0], corners[4]));
-			this.boundingLines[9].setModelTransform(Line.generateLineModelTransform(corners[1], corners[5]));
-			this.boundingLines[10].setModelTransform(Line.generateLineModelTransform(corners[2], corners[6]));
-			this.boundingLines[11].setModelTransform(Line.generateLineModelTransform(corners[3], corners[7]));
-		}
 
 	}
 

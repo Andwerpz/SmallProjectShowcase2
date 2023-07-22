@@ -15,27 +15,29 @@ uniform vec3 sun_color;
 
 in vec3 frag_dir;
 
-float density_threshold = 0.5;
-float density_multiplier = 10;
-float density_offset = -1;
+uniform float density_threshold;
+uniform float density_multiplier;
+uniform float density_offset;
 
-float scale_main = 50;
-float scale_detail = 5;
+uniform float scale_main_1;
+uniform float scale_main_2;
+uniform float scale_detail;
+uniform float scale_subtract;
+
+uniform float light_absorption_towards_sun;
+uniform float darkness_threshold;
+
+uniform float light_absorption_through_clouds;
+
+uniform float forward_scattering;
+uniform float backward_scattering;
+uniform float base_brightness;
+uniform float phase_factor;
+
+float container_edge_fade_dst = 1;
 
 int nr_samples_main = 30;
 int nr_samples_luminance = 10;
-
-float light_absorption_towards_sun = 1.45;
-float darkness_threshold = 0.15;
-
-float light_absorption_through_clouds = 0.7;
-
-float forward_scattering = 0.72;
-float backward_scattering = 0.33;
-float base_brightness = 1;
-float phase_factor = 0.74;
-
-float container_edge_fade_dst = 1;
 
 vec3 cloud_bounds_min = vec3(cloud_pos.x - cloud_scale.x / 2, cloud_pos.y - cloud_scale.y / 2, cloud_pos.z - cloud_scale.z / 2);
 vec3 cloud_bounds_max = vec3(cloud_pos.x + cloud_scale.x / 2, cloud_pos.y + cloud_scale.y / 2, cloud_pos.z + cloud_scale.z / 2);
@@ -59,13 +61,35 @@ vec2 rayBoxDist(vec3 ray_origin, vec3 ray_dir) {
 	return vec2(dstToBox, dstInsideBox);
 }
 
+float remap(float v, float minOld, float maxOld, float minNew, float maxNew) {
+    return minNew + (v-minOld) * (maxNew - minNew) / (maxOld-minOld);
+}
+
 float sampleCloudDensity(vec3 pos) {
 	float ans = 0;
 	
 	vec3 scaled_pos = vec3(pos.x / 0.8, pos.y / 0.7, pos.z / 1);
 	
 	//main cloud shape
-	ans += texture(tex_worley_noise, scaled_pos / scale_main).x;
+	ans += texture(tex_worley_noise, scaled_pos / scale_main_1).r;
+	ans += texture(tex_worley_noise, scaled_pos / scale_main_2).r;
+	
+	//detail cloud shape
+	ans += texture(tex_worley_noise, scaled_pos / scale_detail).g * 0.2;
+	
+	//subtract from edges
+	// Subtract detail noise from base shape (weighted by inverse density so that edges get eroded more than centre)
+	float detail_subtract = texture(tex_worley_noise, scaled_pos / scale_subtract).b;
+    float one_minus_shape = 1 - ans;
+    float detailErodeWeight = one_minus_shape * one_minus_shape * one_minus_shape;
+    ans = ans - (1 - detail_subtract) * detailErodeWeight;
+	
+	//apply density threshold
+	ans = max(0, ans - density_threshold);
+	
+	if(ans == 0){
+		return 0;
+	}
 	
 	// Calculate falloff along sides of the cloud container
     float dst_from_edge_x = min(pos.x - cloud_bounds_min.x, cloud_bounds_max.x - pos.x);
@@ -73,9 +97,13 @@ float sampleCloudDensity(vec3 pos) {
     float dst_from_edge_y = min(pos.y - cloud_bounds_min.y, cloud_bounds_max.y - pos.y);
     float edge_weight = min(1, min(dst_from_edge_y, min(dst_from_edge_z, dst_from_edge_x)) / container_edge_fade_dst);
     ans *= edge_weight;
-	
-	//apply density threshold
-	ans = max(0, ans - density_threshold);
+    
+    //calculate gradient falloff from top and bottom of cloud container
+    float g_min = .2;
+    float g_max = .7;
+    float height_percent = (pos.y - cloud_bounds_min.y) / cloud_scale.y;
+    float height_gradient = clamp(remap(height_percent, 0.0, g_min, 0, 1), 0, 1) * clamp(remap(height_percent, 1, g_max, 0, 1), 0, 1);
+    ans *= height_gradient;
 	
 	//apply density multiplier
 	ans *= density_multiplier;
