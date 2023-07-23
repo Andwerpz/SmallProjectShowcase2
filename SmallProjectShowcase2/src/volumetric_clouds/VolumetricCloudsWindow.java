@@ -84,7 +84,7 @@ public class VolumetricCloudsWindow extends Window {
 		this.cloudsShader = new Shader("/volumetric_clouds/clouds.vert", "/volumetric_clouds/clouds.frag");
 		this.cloudsShader.setUniform1i("tex_worley_noise", 0);
 
-		this.cloudBox = new CloudBoundingBox(WORLD_SCENE, new Vec3(0, 0, 0), new Vec3(500, 10, 500));
+		this.cloudBox = new CloudBoundingBox(WORLD_SCENE, new Vec3(0, 0, 0), new Vec3(50, 10, 50));
 		this.cloudBox.setDrawBoundingLines(true);
 
 		float[][][] mainDetailNoiseFine = this.generateWorleyNoise(24);
@@ -311,6 +311,9 @@ public class VolumetricCloudsWindow extends Window {
 		this.cloudsShader.setUniform1f("density_threshold", this.cloudBox.density_threshold);
 		this.cloudsShader.setUniform1f("density_multiplier", this.cloudBox.density_multiplier);
 		this.cloudsShader.setUniform1f("density_offset", this.cloudBox.density_offset);
+
+		this.cloudsShader.setUniform1f("detail_multiplier", this.cloudBox.detail_multiplier);
+		this.cloudsShader.setUniform1f("subtract_multiplier", this.cloudBox.subtract_multiplier);
 
 		this.cloudsShader.setUniform1f("scale_main_1", this.cloudBox.scale_main_1);
 		this.cloudsShader.setUniform1f("scale_main_2", this.cloudBox.scale_main_2);

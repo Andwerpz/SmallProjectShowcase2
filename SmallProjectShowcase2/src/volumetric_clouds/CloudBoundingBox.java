@@ -20,6 +20,9 @@ public class CloudBoundingBox {
 	public float density_multiplier = 10;
 	public float density_offset = -6;
 
+	public float detail_multiplier = 0.2f;
+	public float subtract_multiplier = 1f;
+
 	public float scale_main_1 = 50;
 	public float scale_main_2 = 110;
 	public float scale_detail = 11;
@@ -116,6 +119,22 @@ public class CloudBoundingBox {
 		this.boundingLines[9].setModelTransform(Line.generateLineModelTransform(corners[1], corners[5]));
 		this.boundingLines[10].setModelTransform(Line.generateLineModelTransform(corners[2], corners[6]));
 		this.boundingLines[11].setModelTransform(Line.generateLineModelTransform(corners[3], corners[7]));
+	}
+
+	public float getDetail_multiplier() {
+		return detail_multiplier;
+	}
+
+	public void setDetail_multiplier(float detail_multiplier) {
+		this.detail_multiplier = detail_multiplier;
+	}
+
+	public float getSubtract_multiplier() {
+		return subtract_multiplier;
+	}
+
+	public void setSubtract_multiplier(float subtract_multiplier) {
+		this.subtract_multiplier = subtract_multiplier;
 	}
 
 	public float getDensity_threshold() {

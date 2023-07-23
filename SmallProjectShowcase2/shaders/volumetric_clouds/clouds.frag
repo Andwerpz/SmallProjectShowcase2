@@ -19,6 +19,9 @@ uniform float density_threshold;
 uniform float density_multiplier;
 uniform float density_offset;
 
+uniform float detail_multiplier;
+uniform float subtract_multiplier;
+
 uniform float scale_main_1;
 uniform float scale_main_2;
 uniform float scale_detail;
@@ -75,11 +78,11 @@ float sampleCloudDensity(vec3 pos) {
 	ans += texture(tex_worley_noise, scaled_pos / scale_main_2).r;
 	
 	//detail cloud shape
-	ans += texture(tex_worley_noise, scaled_pos / scale_detail).g * 0.2;
+	ans += texture(tex_worley_noise, scaled_pos / scale_detail).g * detail_multiplier;
 	
 	//subtract from edges
 	// Subtract detail noise from base shape (weighted by inverse density so that edges get eroded more than centre)
-	float detail_subtract = texture(tex_worley_noise, scaled_pos / scale_subtract).b;
+	float detail_subtract = texture(tex_worley_noise, scaled_pos / scale_subtract).b * subtract_multiplier;
     float one_minus_shape = 1 - ans;
     float detailErodeWeight = one_minus_shape * one_minus_shape * one_minus_shape;
     ans = ans - (1 - detail_subtract) * detailErodeWeight;
