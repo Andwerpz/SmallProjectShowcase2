@@ -252,13 +252,12 @@ public class VolumetricCloudsWindow extends Window {
 
 	@Override
 	public String getDefaultTitle() {
-		return "Volumetric Cloud Demo";
+		return "Volumetric Clouds";
 	}
 
 	@Override
 	protected void _kill() {
 		this.perspectiveScreen.kill();
-
 		Scene.removeScene(WORLD_SCENE);
 
 		this.cloudsShader.kill();

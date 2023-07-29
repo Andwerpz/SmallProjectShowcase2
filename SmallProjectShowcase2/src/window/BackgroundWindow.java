@@ -1,5 +1,6 @@
 package window;
 
+import hydraulic_terrain.HydraulicTerrainWindow;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.scene.Scene;
 import lwjglengine.screen.UIScreen;
@@ -51,6 +52,7 @@ public class BackgroundWindow extends Window {
 			AdjustableWindow adjWindow = new AdjustableWindow("Project Picker", projectPicker, this);
 
 			projectPicker.addToList("Volumetric Clouds");
+			projectPicker.addToList("Hydraulic Terrain Generation");
 			break;
 		}
 		}
@@ -64,9 +66,15 @@ public class BackgroundWindow extends Window {
 		int x = (int) this.getWindowMousePos().x;
 		int y = (int) this.getWindowMousePos().y - height;
 		switch (whichProject) {
-		case "Volumetric Clouds":
-			AdjustableWindow window = new AdjustableWindow("Volumetric Clouds", new VolumetricCloudsWindow(x, y, width, height, null), this);
+		case "Volumetric Clouds": {
+			AdjustableWindow window = new AdjustableWindow(new VolumetricCloudsWindow(x, y, width, height, null), this);
 			break;
+		}
+
+		case "Hydraulic Terrain Generation": {
+			AdjustableWindow window = new AdjustableWindow(new HydraulicTerrainWindow(null), this);
+			break;
+		}
 		}
 	}
 
