@@ -172,15 +172,19 @@ public class HydraulicTerrainWindow extends Window {
 	}
 	
 	private static Texture generateDiffuseTexture(float[][][] heightmap) {
-		Vec3 sedimentColor = new Vec3(114, 93, 76);
 		Vec3 snowColor = new Vec3(255, 255, 255);
-		Vec3 solidColor = new Vec3(58, 50, 50);
+		Vec3 sandColor = new Vec3(244, 164, 96);
+		Vec3 dirtColor = new Vec3(114, 93, 76);
+		Vec3 stoneColor = new Vec3(58, 50, 50);
+		
+		Vec3 sedimentColor = new Vec3(snowColor);
+		Vec3 solidColor = new Vec3(stoneColor);
 		
 		int[] data = new int[TERRAIN_RESOLUTION * TERRAIN_RESOLUTION];
 		for(int i = 0; i < TERRAIN_RESOLUTION; i++) {
 			for(int j = 0; j < TERRAIN_RESOLUTION; j++) {
 				float sedimentAmt = Math.max(0, sampleSediment(heightmap, i, j));
-				Vec3 curColor = MathUtils.lerp(solidColor, 0, snowColor, 1, Math.min(1, sedimentAmt));
+				Vec3 curColor = MathUtils.lerp(solidColor, 0, sedimentColor, 1, Math.min(1, sedimentAmt));
 				data[j * TERRAIN_RESOLUTION + i] = (((int) curColor.x) << 0) + (((int) curColor.y) << 8) + (((int) curColor.z) << 16) + (255 << 24);
 			}
 		}
@@ -208,11 +212,13 @@ public class HydraulicTerrainWindow extends Window {
 		float lacunarity = 3.0f;
 
 		int octaves = 4;
+		
+		float sedimentLayerThickness = 2;
 
 		for (int i = 0; i < TERRAIN_RESOLUTION; i++) {
 			for (int j = 0; j < TERRAIN_RESOLUTION; j++) {
 				noise[i][j][0] = (float) PerlinNoiseGenerator.noise(i, j, frequency, amplitude, persistence, lacunarity, octaves);
-				noise[i][j][1] = 1;
+				noise[i][j][1] = sedimentLayerThickness;
 			}
 		}
 
@@ -223,7 +229,7 @@ public class HydraulicTerrainWindow extends Window {
 	private static void applyGaussianBlur3(float[][][] heightmap) {
 		float[][][] tmp = new float[TERRAIN_RESOLUTION][TERRAIN_RESOLUTION][2];
 		
-		float[] kernel = {0.25f, 0.5f, 0.25f};
+		float[] kernel = {0.1f, 0.8f, 0.1f};
 		
 		//horizontal blur
 		for(int i = 0; i < TERRAIN_RESOLUTION; i++) {
@@ -379,8 +385,8 @@ public class HydraulicTerrainWindow extends Window {
 			carriedSediment += solidErosion + sedimentErosion - deposit;
 			
 			//finally, update position of the droplet
-			vx = friction * vx + surfaceNormal.x * speedMult;
-			vy = friction * vy + surfaceNormal.z * speedMult;
+			vx = friction * vx + (surfaceNormal.x) * speedMult;
+			vy = friction * vy + (surfaceNormal.z) * speedMult;
 			px = x;
 			py = y;
 			x += vx;
@@ -559,7 +565,7 @@ public class HydraulicTerrainWindow extends Window {
 		}
 		
 		case "btn_erode_terrain": {
-			int nrSteps = TERRAIN_RESOLUTION * TERRAIN_RESOLUTION * 4;
+			int nrSteps = TERRAIN_RESOLUTION * TERRAIN_RESOLUTION;
 			
 			System.out.print("Erosion in progress... ");
 			for(int i = 0; i < nrSteps; i++) {
