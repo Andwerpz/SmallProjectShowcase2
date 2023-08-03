@@ -8,6 +8,7 @@ import lwjglengine.ui.UIElement;
 import lwjglengine.ui.UIFilledRectangle;
 import lwjglengine.window.AdjustableWindow;
 import lwjglengine.window.Window;
+import procedural_trees.ProceduralTreesWindow;
 import volumetric_clouds.VolumetricCloudsWindow;
 
 public class BackgroundWindow extends Window {
@@ -53,6 +54,7 @@ public class BackgroundWindow extends Window {
 
 			projectPicker.addToList("Volumetric Clouds");
 			projectPicker.addToList("Hydraulic Terrain Generation");
+			projectPicker.addToList("Procedural Trees");
 			break;
 		}
 		}
@@ -61,8 +63,8 @@ public class BackgroundWindow extends Window {
 	@Override
 	public void handleObjects(Object[] o) {
 		String whichProject = (String) o[0];
-		int width = 400;
-		int height = 400;
+		int width = 800;
+		int height = 600;
 		int x = (int) this.getWindowMousePos().x;
 		int y = (int) this.getWindowMousePos().y - height;
 		switch (whichProject) {
@@ -72,7 +74,12 @@ public class BackgroundWindow extends Window {
 		}
 
 		case "Hydraulic Terrain Generation": {
-			AdjustableWindow window = new AdjustableWindow(new HydraulicTerrainWindow(null), this);
+			AdjustableWindow window = new AdjustableWindow(new HydraulicTerrainWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Procedural Trees": {
+			AdjustableWindow window = new AdjustableWindow(new ProceduralTreesWindow(x, y, width, height, null), this);
 			break;
 		}
 		}

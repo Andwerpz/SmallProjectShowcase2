@@ -48,20 +48,20 @@ public class HydraulicTerrainWindow extends Window {
 	//shader, and use a central limit to estimate the normal direction. 
 
 	//even later tho, perhaps we can use a geometry shader to get perfect normals. 
-	
+
 	//TODO 
 	// - simulate sand dunes using wind?
 
-	private int WORLD_SCENE = Scene.generateScene();
+	private final int WORLD_SCENE = Scene.generateScene();
 
 	private PerspectiveScreen perspectiveScreen;
-	
+
 	private UIScreen uiScreen;
 	private UISection uiSection;
 
 	private static final int TERRAIN_RESOLUTION = 512;
 	private float terrainScale = 0.5f;
-	
+
 	//for each (x, y) coord, store base height of solid layer, and height of sediment layer on top
 	//[x][y][0] = base solid height
 	//[x][y][1] = covering sediment height
@@ -79,8 +79,8 @@ public class HydraulicTerrainWindow extends Window {
 
 	private boolean mousePressed = false;
 
-	public HydraulicTerrainWindow(Window parentWindow) {
-		super(parentWindow);
+	public HydraulicTerrainWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
+		super(xOffset, yOffset, width, height, parentWindow);
 		this.init();
 	}
 
@@ -102,13 +102,13 @@ public class HydraulicTerrainWindow extends Window {
 		Scene.skyboxes.put(WORLD_SCENE, skybox);
 
 		this.mousePos = this.getWindowMousePos();
-		
+
 		this.uiScreen = new UIScreen();
 		this.uiSection = new UISection(0, 0, this.getWidth(), this.getHeight(), this.uiScreen);
-		
+
 		Material backgroundMaterial = new Material(this.contentDefaultMaterial);
 		backgroundMaterial.setAlpha(0.5f);
-		
+
 		UIFilledRectangle backgroundRect = this.uiSection.getBackgroundRect();
 		backgroundRect.setWidth(200);
 		backgroundRect.setHeight(105);
@@ -117,7 +117,7 @@ public class HydraulicTerrainWindow extends Window {
 		backgroundRect.setFrameAlignmentOffset(10, 10);
 		backgroundRect.setMaterial(backgroundMaterial);
 		backgroundRect.bind(this.rootUIElement);
-		
+
 		Button btnRegenerateNoise = new Button(0, 10, 100, 25, "btn_regenerate_noise", "Regenerate Terrain", 12, this.uiSection.getSelectionScene(), this.uiSection.getTextScene());
 		btnRegenerateNoise.setFrameAlignmentStyle(UIElement.FROM_CENTER_LEFT, UIElement.FROM_TOP);
 		btnRegenerateNoise.setContentAlignmentStyle(UIElement.ALIGN_CENTER, UIElement.ALIGN_TOP);
@@ -125,7 +125,7 @@ public class HydraulicTerrainWindow extends Window {
 		btnRegenerateNoise.setFillWidthMargin(10);
 		btnRegenerateNoise.getButtonText().setDoAntialiasing(false);
 		btnRegenerateNoise.bind(backgroundRect);
-		
+
 		Button btnErodeTerrain = new Button(0, 40, 100, 25, "btn_erode_terrain", "Erode Terrain", 12, this.uiSection.getSelectionScene(), this.uiSection.getTextScene());
 		btnErodeTerrain.setFrameAlignmentStyle(UIElement.FROM_CENTER_LEFT, UIElement.FROM_TOP);
 		btnErodeTerrain.setContentAlignmentStyle(UIElement.ALIGN_CENTER, UIElement.ALIGN_TOP);
@@ -133,7 +133,7 @@ public class HydraulicTerrainWindow extends Window {
 		btnErodeTerrain.setFillWidthMargin(10);
 		btnErodeTerrain.getButtonText().setDoAntialiasing(false);
 		btnErodeTerrain.bind(backgroundRect);
-		
+
 		Button btnBlurTerrain = new Button(0, 70, 100, 25, "btn_blur_terrain", "Blur Terrain", 12, this.uiSection.getSelectionScene(), this.uiSection.getTextScene());
 		btnBlurTerrain.setFrameAlignmentStyle(UIElement.FROM_CENTER_LEFT, UIElement.FROM_TOP);
 		btnBlurTerrain.setContentAlignmentStyle(UIElement.ALIGN_CENTER, UIElement.ALIGN_TOP);
@@ -141,69 +141,88 @@ public class HydraulicTerrainWindow extends Window {
 		btnBlurTerrain.setFillWidthMargin(10);
 		btnBlurTerrain.getButtonText().setDoAntialiasing(false);
 		btnBlurTerrain.bind(backgroundRect);
-		
+
 		this._resize();
 	}
-	
+
 	private void regenerateTerrainModel() {
-		if(this.terrainModel != null) {
+		if (this.terrainModel != null) {
 			this.terrainModel.kill();
 		}
-		
-		if(this.terrainTextureMaterial != null) {
+
+		if (this.terrainTextureMaterial != null) {
 			this.terrainTextureMaterial.kill();
 		}
-		
+
 		this.terrainModel = HydraulicTerrainWindow.generateTerrainModel(this.heightmap);
 		this.terrainTextureMaterial = HydraulicTerrainWindow.generateTextureMaterial(this.heightmap);
 		this.terrainModel.setTextureMaterial(this.terrainTextureMaterial);
-		
+
 		ModelInstance terrainInstance = new ModelInstance(this.terrainModel, WORLD_SCENE);
 		ModelTransform terrainTransform = new ModelTransform();
 		terrainTransform.setScale(this.terrainScale);
 		terrainInstance.setModelTransform(terrainTransform);
 	}
-	
+
 	private static TextureMaterial generateTextureMaterial(float[][][] heightmap) {
 		TextureMaterial tm = new TextureMaterial();
 		tm.setTexture(generateDiffuseTexture(heightmap), TextureMaterial.DIFFUSE);
 		tm.setTexture(generateSpecularTexture(heightmap), TextureMaterial.SPECULAR);
 		return tm;
 	}
-	
+
 	private static Texture generateDiffuseTexture(float[][][] heightmap) {
 		Vec3 snowColor = new Vec3(255, 255, 255);
 		Vec3 sandColor = new Vec3(244, 164, 96);
 		Vec3 dirtColor = new Vec3(114, 93, 76);
 		Vec3 stoneColor = new Vec3(58, 50, 50);
-		
+
 		Vec3 sedimentColor = new Vec3(snowColor);
 		Vec3 solidColor = new Vec3(stoneColor);
-		
+
 		int[] data = new int[TERRAIN_RESOLUTION * TERRAIN_RESOLUTION];
-		for(int i = 0; i < TERRAIN_RESOLUTION; i++) {
-			for(int j = 0; j < TERRAIN_RESOLUTION; j++) {
+		for (int i = 0; i < TERRAIN_RESOLUTION; i++) {
+			for (int j = 0; j < TERRAIN_RESOLUTION; j++) {
 				float sedimentAmt = Math.max(0, sampleSediment(heightmap, i, j));
 				Vec3 curColor = MathUtils.lerp(solidColor, 0, sedimentColor, 1, Math.min(1, sedimentAmt));
 				data[j * TERRAIN_RESOLUTION + i] = (((int) curColor.x) << 0) + (((int) curColor.y) << 8) + (((int) curColor.z) << 16) + (255 << 24);
 			}
 		}
-		
+
 		Texture texture = new Texture(data, TERRAIN_RESOLUTION, TERRAIN_RESOLUTION, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR);
 		texture.setWrapping(GL_CLAMP_TO_EDGE);
-		
+
 		return texture;
 	}
-	
+
 	private static Texture generateSpecularTexture(float[][][] heightmap) {
-		//for now, just set specular to 0
-		return new Texture(0, 0, 0, 0);
+		Vec3 snowColor = new Vec3(50, 50, 50);
+		Vec3 sandColor = new Vec3(0, 0, 0);
+		Vec3 dirtColor = new Vec3(0, 0, 0);
+		Vec3 stoneColor = new Vec3(0, 0, 0);
+
+		Vec3 sedimentColor = new Vec3(snowColor);
+		Vec3 solidColor = new Vec3(stoneColor);
+
+		int[] data = new int[TERRAIN_RESOLUTION * TERRAIN_RESOLUTION];
+		for (int i = 0; i < TERRAIN_RESOLUTION; i++) {
+			for (int j = 0; j < TERRAIN_RESOLUTION; j++) {
+				float sedimentAmt = Math.max(0, sampleSediment(heightmap, i, j));
+				Vec3 curColor = MathUtils.lerp(solidColor, 0, sedimentColor, 1, Math.min(1, sedimentAmt));
+				data[j * TERRAIN_RESOLUTION + i] = (((int) curColor.x) << 0) + (((int) curColor.y) << 8) + (((int) curColor.z) << 16) + (255 << 24);
+			}
+		}
+
+		Texture texture = new Texture(data, TERRAIN_RESOLUTION, TERRAIN_RESOLUTION, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR);
+		texture.setWrapping(GL_CLAMP_TO_EDGE);
+
+		return texture;
 	}
 
 	//generates a perlin noise heightmap
 	private static float[][][] generatePerlinNoise() {
 		PerlinNoiseGenerator.randomizeNoise();
-		
+
 		float[][][] noise = new float[TERRAIN_RESOLUTION][TERRAIN_RESOLUTION][2];
 
 		float frequency = 1.0f / 256.0f;
@@ -212,7 +231,7 @@ public class HydraulicTerrainWindow extends Window {
 		float lacunarity = 3.0f;
 
 		int octaves = 4;
-		
+
 		float sedimentLayerThickness = 2;
 
 		for (int i = 0; i < TERRAIN_RESOLUTION; i++) {
@@ -224,17 +243,17 @@ public class HydraulicTerrainWindow extends Window {
 
 		return noise;
 	}
-	
+
 	//applies a two pass gaussian filter of size 3
 	private static void applyGaussianBlur3(float[][][] heightmap) {
 		float[][][] tmp = new float[TERRAIN_RESOLUTION][TERRAIN_RESOLUTION][2];
-		
-		float[] kernel = {0.1f, 0.8f, 0.1f};
-		
+
+		float[] kernel = { 0.1f, 0.8f, 0.1f };
+
 		//horizontal blur
-		for(int i = 0; i < TERRAIN_RESOLUTION; i++) {
-			for(int j = 0; j < TERRAIN_RESOLUTION; j++) {
-				for(int k = 0; k < 3; k++) {
+		for (int i = 0; i < TERRAIN_RESOLUTION; i++) {
+			for (int j = 0; j < TERRAIN_RESOLUTION; j++) {
+				for (int k = 0; k < 3; k++) {
 					int r = i;
 					int c = j + k - 1;
 					c = MathUtils.clamp(0, TERRAIN_RESOLUTION - 1, c);
@@ -243,13 +262,13 @@ public class HydraulicTerrainWindow extends Window {
 				}
 			}
 		}
-		
+
 		//vertical blur
-		for(int i = 0; i < TERRAIN_RESOLUTION; i++) {
-			for(int j = 0; j < TERRAIN_RESOLUTION; j++) {
+		for (int i = 0; i < TERRAIN_RESOLUTION; i++) {
+			for (int j = 0; j < TERRAIN_RESOLUTION; j++) {
 				heightmap[i][j][0] = 0;
 				heightmap[i][j][1] = 0;
-				for(int k = 0; k < 3; k++) {
+				for (int k = 0; k < 3; k++) {
 					int r = i + k - 1;
 					r = MathUtils.clamp(0, TERRAIN_RESOLUTION - 1, r);
 					int c = j;
@@ -266,13 +285,13 @@ public class HydraulicTerrainWindow extends Window {
 		int c = MathUtils.clamp(0, TERRAIN_RESOLUTION - 1, Math.round(z));
 		return heightmap[r][c][0] + heightmap[r][c][1];
 	}
-	
+
 	private static float sampleSolid(float[][][] heightmap, float x, float z) {
 		int r = MathUtils.clamp(0, TERRAIN_RESOLUTION - 1, Math.round(x));
 		int c = MathUtils.clamp(0, TERRAIN_RESOLUTION - 1, Math.round(z));
 		return heightmap[r][c][0];
 	}
-	
+
 	private static float sampleSediment(float[][][] heightmap, float x, float z) {
 		int r = MathUtils.clamp(0, TERRAIN_RESOLUTION - 1, Math.round(x));
 		int c = MathUtils.clamp(0, TERRAIN_RESOLUTION - 1, Math.round(z));
@@ -283,107 +302,107 @@ public class HydraulicTerrainWindow extends Window {
 	private static Vec3 sampleNormal(float[][][] heightmap, float x, float z) {
 		int r = MathUtils.clamp(1, TERRAIN_RESOLUTION - 2, Math.round(x));
 		int c = MathUtils.clamp(1, TERRAIN_RESOLUTION - 2, Math.round(z));
-		
+
 		Vec3 center = new Vec3(r, sampleHeight(heightmap, r, c), c);
 		Vec3 up = center.sub(new Vec3(r - 1, sampleHeight(heightmap, r - 1, c), c));
 		Vec3 down = center.sub(new Vec3(r + 1, sampleHeight(heightmap, r + 1, c), c));
 		Vec3 left = center.sub(new Vec3(r, sampleHeight(heightmap, r, c - 1), c - 1));
 		Vec3 right = center.sub(new Vec3(r, sampleHeight(heightmap, r, c + 1), c + 1));
-		
+
 		Vec3 normal = new Vec3(0);
 		normal.addi(left.cross(up));
 		normal.addi(down.cross(left));
 		normal.addi(right.cross(down));
 		normal.addi(up.cross(right));
-		
+
 		normal.normalize();
-		
+
 		return normal;
 	}
-	
+
 	private static void incrementSediment(float[][][] heightmap, float x, float z, float increment) {
 		int r = MathUtils.clamp(0, TERRAIN_RESOLUTION - 1, Math.round(x));
 		int c = MathUtils.clamp(0, TERRAIN_RESOLUTION - 1, Math.round(z));
 		heightmap[r][c][1] += increment;
 	}
-	
+
 	private static void incrementSolid(float[][][] heightmap, float x, float z, float increment) {
 		int r = MathUtils.clamp(0, TERRAIN_RESOLUTION - 1, Math.round(x));
 		int c = MathUtils.clamp(0, TERRAIN_RESOLUTION - 1, Math.round(z));
 		heightmap[r][c][0] += increment;
 	}
-	
+
 	private static void performSnowballErosion(float[][][] heightmap) {
 		float epsilon = 0.01f;
-		
+
 		float solidErosionRate = 0.15f;
-		
+
 		float sedimentErosionRate = 3f;
 		float sedimentDepositionRate = 0.5f;
-		
+
 		float friction = 0.7f;
 		float speedMult = 1;
-		
+
 		float x = (float) (Math.random() * TERRAIN_RESOLUTION);
 		float y = (float) (Math.random() * TERRAIN_RESOLUTION);
 		x = MathUtils.clamp(1, TERRAIN_RESOLUTION - 1, x);
 		y = MathUtils.clamp(1, TERRAIN_RESOLUTION - 1, y);
-		
+
 		//velocity
 		float vx = 0;
 		float vy = 0;
-		
+
 		//previous x, y
 		float px = x;
 		float py = y;
-		
+
 		//the amount of carried sediment
-		float carriedSediment = 0;	
-		
+		float carriedSediment = 0;
+
 		int maxIterations = TERRAIN_RESOLUTION;
-		
-		for(int i = 0; i < maxIterations; i++) {
+
+		for (int i = 0; i < maxIterations; i++) {
 			//get surface normal of terrain 
 			Vec3 surfaceNormal = sampleNormal(heightmap, x, y);
-			
+
 			//if surface normal is flat, then we can stop
-			if(Math.abs(1.0 - surfaceNormal.y) <= epsilon) {
+			if (Math.abs(1.0 - surfaceNormal.y) <= epsilon) {
 				break;
 			}
-			
+
 			//first, calculate erosion amt
-			float sedimentErosion = (1 - surfaceNormal.y) * sedimentErosionRate; 
+			float sedimentErosion = (1 - surfaceNormal.y) * sedimentErosionRate;
 			float solidErosion = 0;
 			float pSedimentAmt = sampleSediment(heightmap, px, py);
-			
+
 			//factor in eroding solid layer
-			if(sedimentErosion > pSedimentAmt) {
+			if (sedimentErosion > pSedimentAmt) {
 				sedimentErosion = pSedimentAmt;
 				solidErosion = (1 - pSedimentAmt / sedimentErosionRate) * solidErosionRate;
 			}
-			
+
 			//can't erode previous location to a lower height than the current one
 			float heightDiff = sampleHeight(heightmap, px, py) - sampleHeight(heightmap, x, y);
 			sedimentErosion = Math.min(heightDiff, sedimentErosion);
 			heightDiff -= sedimentErosion;
 			solidErosion = Math.min(heightDiff, solidErosion);
-			
+
 			//next, calculate what we deposit
 			float depositCoeff = surfaceNormal.y;
-			
+
 			//make sure that we can't deposit sediment on steep slopes
-			if(depositCoeff < 0.3) {
+			if (depositCoeff < 0.3) {
 				depositCoeff = 0;
 			}
-			
+
 			float deposit = carriedSediment * sedimentDepositionRate * depositCoeff;
-			
+
 			//update the heightmap
 			incrementSolid(heightmap, px, py, -solidErosion);
 			incrementSediment(heightmap, px, py, deposit - sedimentErosion);
-			
+
 			carriedSediment += solidErosion + sedimentErosion - deposit;
-			
+
 			//finally, update position of the droplet
 			vx = friction * vx + (surfaceNormal.x) * speedMult;
 			vy = friction * vy + (surfaceNormal.z) * speedMult;
@@ -391,9 +410,9 @@ public class HydraulicTerrainWindow extends Window {
 			py = y;
 			x += vx;
 			y += vy;
-			
+
 			//we fell off the edge
-			if(x < 0 || x > TERRAIN_RESOLUTION - 1 || y < 0 || y > TERRAIN_RESOLUTION - 1) {
+			if (x < 0 || x > TERRAIN_RESOLUTION - 1 || y < 0 || y > TERRAIN_RESOLUTION - 1) {
 				break;
 			}
 		}
@@ -420,8 +439,8 @@ public class HydraulicTerrainWindow extends Window {
 			int ptr = 0;
 			for (int i = 0; i < TERRAIN_RESOLUTION; i++) {
 				for (int j = 0; j < TERRAIN_RESOLUTION; j++) {
-					uvs[ptr++] = i * (1.0f / (float) TERRAIN_RESOLUTION);
-					uvs[ptr++] = j * (1.0f / (float) TERRAIN_RESOLUTION);
+					uvs[ptr++] = i * (1.0f / TERRAIN_RESOLUTION);
+					uvs[ptr++] = j * (1.0f / TERRAIN_RESOLUTION);
 				}
 			}
 		}
@@ -452,14 +471,14 @@ public class HydraulicTerrainWindow extends Window {
 	protected void _kill() {
 		this.perspectiveScreen.kill();
 		Scene.removeScene(WORLD_SCENE);
-		
+
 		this.uiScreen.kill();
-		
-		if(this.terrainModel != null) {
+
+		if (this.terrainModel != null) {
 			this.terrainModel.kill();
 		}
-		
-		if(this.terrainTextureMaterial != null) {
+
+		if (this.terrainTextureMaterial != null) {
 			this.terrainTextureMaterial.kill();
 		}
 	}
@@ -486,15 +505,15 @@ public class HydraulicTerrainWindow extends Window {
 			if (this.mousePressed) {
 				this.cameraYRot += dx * 0.01f;
 				this.cameraXRot -= dy * 0.01f;
-				
+
 				this.cameraXRot = (float) MathUtils.clamp(-Math.PI / 2.0 + 0.01f, Math.PI / 2.0 - 0.01f, this.cameraXRot);
-				
+
 				this.cameraFacing = new Vec3(0, 0, -1).rotateX(this.cameraXRot).rotateY(this.cameraYRot);
 			}
 
 			this.mousePos.set(nextMouse);
 		}
-		
+
 		//ui updates
 		this.uiSection.update();
 
@@ -508,7 +527,7 @@ public class HydraulicTerrainWindow extends Window {
 	protected void renderContent(Framebuffer outputBuffer) {
 		this.perspectiveScreen.setWorldScene(WORLD_SCENE);
 		this.perspectiveScreen.render(outputBuffer);
-		
+
 		this.uiSection.render(outputBuffer, this.getWindowMousePos());
 	}
 
@@ -545,8 +564,8 @@ public class HydraulicTerrainWindow extends Window {
 	@Override
 	protected void _mousePressed(int button) {
 		this.uiSection.mousePressed(button);
-		if(this.uiSection.sectionHovered()) {
-			
+		if (this.uiSection.sectionHovered()) {
+
 		}
 		else {
 			this.mousePressed = true;
@@ -557,18 +576,18 @@ public class HydraulicTerrainWindow extends Window {
 	protected void _mouseReleased(int button) {
 		this.mousePressed = false;
 		this.uiSection.mouseReleased(button);
-		switch(Input.getClicked(this.uiSection.getSelectionScene())) {
+		switch (Input.getClicked(this.uiSection.getSelectionScene())) {
 		case "btn_regenerate_noise": {
 			this.heightmap = HydraulicTerrainWindow.generatePerlinNoise();
 			this.regenerateTerrainModel();
 			break;
 		}
-		
+
 		case "btn_erode_terrain": {
 			int nrSteps = TERRAIN_RESOLUTION * TERRAIN_RESOLUTION;
-			
+
 			System.out.print("Erosion in progress... ");
-			for(int i = 0; i < nrSteps; i++) {
+			for (int i = 0; i < nrSteps; i++) {
 				HydraulicTerrainWindow.performSnowballErosion(this.heightmap);
 			}
 			System.out.println(" DONE");
@@ -576,7 +595,7 @@ public class HydraulicTerrainWindow extends Window {
 			this.regenerateTerrainModel();
 			break;
 		}
-		
+
 		case "btn_blur_terrain": {
 			HydraulicTerrainWindow.applyGaussianBlur3(this.heightmap);
 			this.regenerateTerrainModel();
@@ -588,12 +607,11 @@ public class HydraulicTerrainWindow extends Window {
 	@Override
 	protected void _mouseScrolled(float wheelOffset, float smoothOffset) {
 		this.cameraDist += smoothOffset * 2.5f;
-		
 	}
 
 	@Override
 	protected void _keyPressed(int key) {
-		switch(key) {
+		switch (key) {
 		}
 	}
 
