@@ -6,6 +6,7 @@ import static org.lwjgl.opengl.GL30.*;
 import static org.lwjgl.opengl.GL31.*;
 import static org.lwjgl.opengl.GL33.*;
 
+import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -14,6 +15,7 @@ import org.lwjgl.glfw.GLFW;
 
 import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
+import lwjglengine.graphics.Material;
 import lwjglengine.model.Line;
 import lwjglengine.model.Model;
 import lwjglengine.model.ModelInstance;
@@ -49,6 +51,8 @@ public class ProceduralTreesWindow extends Window {
 
 	private Tree tree;
 
+	private Model groundModel;
+
 	public ProceduralTreesWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
 		this.init();
@@ -73,12 +77,65 @@ public class ProceduralTreesWindow extends Window {
 
 		this.mousePos = this.getWindowMousePos();
 
+		this.groundModel = createGroundModel();
+		Material groundMaterial = new Material(Color.WHITE);
+		groundMaterial.setSpecular(new Vec3(0));
+		ModelInstance groundModelInstance = new ModelInstance(this.groundModel, WORLD_SCENE);
+		groundModelInstance.setMaterial(groundMaterial);
+
 		this._resize();
+	}
+
+	private static Model createGroundModel() {
+		ArrayList<Float> vertices = new ArrayList<>();
+		ArrayList<Float> uvs = new ArrayList<>();
+		ArrayList<Integer> indices = new ArrayList<>();
+
+		vertices.add((float) -100);
+		vertices.add((float) 0);
+		vertices.add((float) -100);
+
+		vertices.add((float) 100);
+		vertices.add((float) 0);
+		vertices.add((float) -100);
+
+		vertices.add((float) 100);
+		vertices.add((float) 0);
+		vertices.add((float) 100);
+
+		vertices.add((float) -100);
+		vertices.add((float) 0);
+		vertices.add((float) 100);
+
+		uvs.add((float) 0);
+		uvs.add((float) 0);
+
+		uvs.add((float) 1);
+		uvs.add((float) 0);
+
+		uvs.add((float) 1);
+		uvs.add((float) 1);
+
+		uvs.add((float) 0);
+		uvs.add((float) 1);
+
+		indices.add(0);
+		indices.add(2);
+		indices.add(1);
+
+		indices.add(0);
+		indices.add(3);
+		indices.add(2);
+
+		VertexArray va = new VertexArray(vertices, uvs, indices, GL_TRIANGLES);
+		return new Model(va);
 	}
 
 	@Override
 	protected void _kill() {
 		this.tree.kill();
+
+		this.groundModel.kill();
 
 		this.perspectiveScreen.kill();
 		Scene.removeScene(WORLD_SCENE);
@@ -195,7 +252,8 @@ public class ProceduralTreesWindow extends Window {
 
 		public float baseSplitLength = 2;
 		public float splitRatio = 0.6f;
-		public float spread = 0.7f;
+		public float spread = 1f;
+		public float directedness = 1f;
 
 		public Model cylinderModel;
 		public float taper = Math.max(splitRatio, 1.0f - splitRatio); //how much narrower the top of the cylinder is compared to the bottom
@@ -203,11 +261,19 @@ public class ProceduralTreesWindow extends Window {
 		public int nrGrowthIterationsLeft = 100;
 		public float feedAmt = 0.05f;
 
+		public Model leafModel;
+
 		public Tree(Vec3 rootPos, Vec3 dir) {
 			this.cylinderModel = this.createCylinderModel(10);
 
 			this.branches = new ArrayList<Branch>();
 			this.root = new Branch(rootPos, dir);
+		}
+
+		public Model createLeafModel() {
+			//just a cube for now
+
+			return null;
 		}
 
 		public Model createCylinderModel(int nrPoints) {
@@ -298,13 +364,22 @@ public class ProceduralTreesWindow extends Window {
 
 		//returns the average direction from this position to leaf nodes
 		private Vec3 avgLeafDir(Branch branch) {
-			Vec3 avgLeafDir = new Vec3((float) Math.random(), (float) Math.random(), (float) Math.random()).sub(new Vec3(0.5f)).normalize();
+			if (branch == this.root) {
+				Vec3 randomVec = new Vec3((float) Math.random(), (float) Math.random(), (float) Math.random()).sub(new Vec3(0.5f)).normalize();
+				return randomVec;
+			}
+
+			Vec3 avgLeafDir = new Vec3(0);
 			Vec3 endPos = branch.getEndPos();
 
 			for (Branch b : this.branches) {
 				if (b.isLeaf) {
 					Vec3 toLeaf = new Vec3(endPos, b.getEndPos()).normalize();
-					avgLeafDir.add(toLeaf);
+					Vec3 randomVec = new Vec3((float) Math.random(), (float) Math.random(), (float) Math.random()).sub(new Vec3(0.5f)).normalize();
+					toLeaf.muli(directedness);
+					randomVec.muli(1.0f - directedness);
+					avgLeafDir.addi(toLeaf);
+					avgLeafDir.addi(randomVec);
 				}
 			}
 
@@ -410,11 +485,6 @@ public class ProceduralTreesWindow extends Window {
 					//grow yourself
 					this.area += feed * passRatio / this.length;
 					feed -= feed * passRatio;
-
-					//prevent over-branching
-					if (feed < 1e-5) {
-						return;
-					}
 
 					//grow children
 					this.childA.grow(feed * splitRatio);
