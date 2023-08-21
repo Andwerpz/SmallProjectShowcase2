@@ -335,7 +335,7 @@ public class HydraulicTerrainWindow extends Window {
 	private static void performSnowballErosion(float[][][] heightmap) {
 		float epsilon = 0.01f;
 
-		float solidErosionRate = 0.15f;
+		float solidErosionRate = 0.02f;
 
 		float sedimentErosionRate = 3f;
 		float sedimentDepositionRate = 0.5f;

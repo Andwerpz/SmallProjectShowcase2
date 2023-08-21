@@ -1,21 +1,33 @@
 package window;
 
+import java.awt.Color;
+import java.awt.Font;
+
 import hydraulic_terrain.HydraulicTerrainWindow;
 import lwjglengine.graphics.Framebuffer;
+import lwjglengine.graphics.Material;
 import lwjglengine.scene.Scene;
 import lwjglengine.screen.UIScreen;
+import lwjglengine.ui.Text;
 import lwjglengine.ui.UIElement;
 import lwjglengine.ui.UIFilledRectangle;
 import lwjglengine.window.AdjustableWindow;
+import lwjglengine.window.TextEditorWindow;
 import lwjglengine.window.Window;
 import procedural_trees.ProceduralTreesWindow;
+import sum_of_sines_water.SumOfSinesWaterWindow;
 import volumetric_clouds.VolumetricCloudsWindow;
 
 public class BackgroundWindow extends Window {
 	//for now, this window should just be to open a context menu. 
 	//perhaps we can modify the background later. 
 
+	//PROJECT IDEAS:
+	// - FFT Water
+	// - Dynamic Skybox Shader
+
 	private final int BACKGROUND_SCENE = Scene.generateScene();
+	private final int TEXT_SCENE = Scene.generateScene();
 
 	private UIScreen uiScreen;
 
@@ -26,10 +38,23 @@ public class BackgroundWindow extends Window {
 
 	private void init() {
 		this.setContextMenuRightClick(true);
-		this.setContextMenuActions(new String[] { "Open Project Picker" });
+		this.setContextMenuActions(new String[] { "Open Project Picker", "Readme" });
 
 		this.setFillWidth(true);
 		this.setFillHeight(true);
+
+		UIFilledRectangle backgroundRect = new UIFilledRectangle(0, 0, 0, this.getWidth(), this.getHeight(), BACKGROUND_SCENE);
+		backgroundRect.setFillWidth(true);
+		backgroundRect.setFillHeight(true);
+		backgroundRect.setMaterial(new Material(Color.BLACK));
+		backgroundRect.bind(this.rootUIElement);
+
+		Text promptText = new Text(0, 0, "Right click to open the context menu", new Font("Consolas", Font.PLAIN, 36), this.contentDefaultMaterial, TEXT_SCENE);
+		promptText.setFrameAlignmentStyle(UIElement.FROM_CENTER_LEFT, UIElement.FROM_CENTER_TOP);
+		promptText.setContentAlignmentStyle(UIElement.ALIGN_CENTER, UIElement.ALIGN_CENTER);
+		promptText.setBackgroundColor(Color.BLACK);
+		promptText.setDrawBackground(true);
+		promptText.bind(backgroundRect);
 
 		this.uiScreen = new UIScreen();
 
@@ -43,18 +68,28 @@ public class BackgroundWindow extends Window {
 
 	@Override
 	public void handleContextMenuAction(String action) {
+		int width = 400;
+		int height = 300;
+		int x = (int) this.getWindowMousePos().x;
+		int y = (int) this.getWindowMousePos().y - height;
+
 		switch (action) {
 		case "Open Project Picker": {
-			int width = 400;
-			int height = 400;
-			int x = (int) this.getWindowMousePos().x;
-			int y = (int) this.getWindowMousePos().y - height;
 			ProjectPickerWindow projectPicker = new ProjectPickerWindow(x, y, width, height, this, null);
 			AdjustableWindow adjWindow = new AdjustableWindow("Project Picker", projectPicker, this);
 
 			projectPicker.addToList("Volumetric Clouds");
 			projectPicker.addToList("Hydraulic Terrain Generation");
 			projectPicker.addToList("Procedural Trees");
+			projectPicker.addToList("Sum of Sines Water");
+			break;
+		}
+
+		case "Readme": {
+			String readmeText = "This is a collection of small projects that may or may not be finished.\nTo open a project, double click it in the project picker.\nWindows can be nested and un-nested by holding Control while dragging them.\nWindows can be resized by dragging close to the outside of their edges.\nIf a window locks your cursor, you can usually press Escape to unlock it.";
+			TextEditorWindow textEditor = new TextEditorWindow(x, y, 800, height, null);
+			textEditor.appendTextAtCursor(readmeText);
+			AdjustableWindow adjWindow = new AdjustableWindow("Readme", textEditor, this);
 			break;
 		}
 		}
@@ -82,12 +117,20 @@ public class BackgroundWindow extends Window {
 			AdjustableWindow window = new AdjustableWindow(new ProceduralTreesWindow(x, y, width, height, null), this);
 			break;
 		}
+
+		case "Sum of Sines Water": {
+			AdjustableWindow window = new AdjustableWindow(new SumOfSinesWaterWindow(x, y, width, height, null), this);
+			break;
+		}
 		}
 	}
 
 	@Override
 	protected void _kill() {
 		Scene.removeScene(BACKGROUND_SCENE);
+		Scene.removeScene(TEXT_SCENE);
+
+		this.uiScreen.kill();
 	}
 
 	@Override
@@ -103,6 +146,8 @@ public class BackgroundWindow extends Window {
 	@Override
 	protected void renderContent(Framebuffer outputBuffer) {
 		this.uiScreen.setUIScene(BACKGROUND_SCENE);
+		this.uiScreen.render(outputBuffer);
+		this.uiScreen.setUIScene(TEXT_SCENE);
 		this.uiScreen.render(outputBuffer);
 	}
 
