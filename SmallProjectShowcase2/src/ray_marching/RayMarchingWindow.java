@@ -1,25 +1,79 @@
 package ray_marching;
 
+import static org.lwjgl.opengl.GL11.GL_BLEND;
+import static org.lwjgl.opengl.GL11.GL_COLOR_BUFFER_BIT;
+import static org.lwjgl.opengl.GL11.GL_CULL_FACE;
+import static org.lwjgl.opengl.GL11.GL_DEPTH_BUFFER_BIT;
+import static org.lwjgl.opengl.GL11.glClear;
+import static org.lwjgl.opengl.GL11.glDisable;
+import static org.lwjgl.opengl.GL11.glViewport;
+import static org.lwjgl.opengl.GL13.GL_TEXTURE0;
+
+import java.awt.image.BufferedImage;
+
+import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
+import lwjglengine.graphics.Shader;
+import lwjglengine.main.Main;
+import lwjglengine.player.Camera;
+import lwjglengine.player.PlayerInputController;
+import lwjglengine.scene.Scene;
+import lwjglengine.screen.SkyboxCube;
 import lwjglengine.window.Window;
+import myutils.v10.math.Mat4;
+import myutils.v10.math.Vec3;
+import myutils.v11.file.FileUtils;
 
 public class RayMarchingWindow extends Window {
 
-	public RayMarchingWindow(Window parentWindow) {
-		super(parentWindow);
-		// TODO Auto-generated constructor stub
+	private static final float FOV = (float) Math.toRadians(90f); //vertical fov
+	private static final float NEAR = 0.1f;
+	private static final float FAR = 400f;
+
+	private PlayerInputController pc;
+	private Camera camera;
+
+	private Cubemap skybox;
+
+	private Shader shader;
+
+	private Vec3 lightDir;
+
+	public RayMarchingWindow(int x, int y, int width, int height, Window parentWindow) {
+		super(x, y, width, height, parentWindow);
+		this.init();
+	}
+
+	private void init() {
+		this.setLockCursorOnSelect(true);
+		this.setDeselectOnEscPressed(true);
+
+		this.pc = new PlayerInputController(new Vec3(0, 0, 0));
+		this.camera = new Camera(FOV, this.getWidth(), this.getHeight(), NEAR, FAR);
+
+		BufferedImage[] skyboxSides = new BufferedImage[6];
+		String skyboxDir = "/res/skybox/lake/";
+		for (int i = 0; i < 6; i++) {
+			skyboxSides[i] = FileUtils.loadImageRelative(skyboxDir + Cubemap.CUBEMAP_SIDE_NAMES[i] + ".jpg");
+		}
+		this.skybox = new Cubemap(skyboxSides);
+
+		this.shader = new Shader("/ray_marching/skybox.vert", "/ray_marching/skybox.frag");
+
+		this.lightDir = new Vec3(1, 1, 1);
+		this.lightDir.normalize();
 	}
 
 	@Override
 	protected void _kill() {
-		// TODO Auto-generated method stub
+		this.skybox.kill();
 
+		this.shader.kill();
 	}
 
 	@Override
 	protected void _resize() {
-		// TODO Auto-generated method stub
-
+		this.camera.setProjectionMatrix(Mat4.perspective(FOV, this.getWidth(), this.getHeight(), NEAR, FAR));
 	}
 
 	@Override
@@ -29,14 +83,31 @@ public class RayMarchingWindow extends Window {
 
 	@Override
 	protected void _update() {
-		// TODO Auto-generated method stub
+		if (this.isSelected()) {
+			this.pc.update();
 
+			this.camera.setPos(this.pc.getPos());
+			this.camera.setFacing(this.pc.getFacing());
+		}
 	}
 
 	@Override
 	protected void renderContent(Framebuffer outputBuffer) {
-		// TODO Auto-generated method stub
+		glViewport(0, 0, this.getWidth(), this.getHeight());
 
+		outputBuffer.bind();
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glDisable(GL_CULL_FACE);
+		glDisable(GL_BLEND);
+		this.shader.enable();
+		this.shader.setUniformMat4("vw_matrix", this.camera.getViewMatrix());
+		this.shader.setUniformMat4("pr_matrix", this.camera.getProjectionMatrix());
+		this.shader.setUniform3f("camera_pos", this.camera.getPos());
+		this.shader.setUniform3f("light_dir", this.lightDir);
+		this.skybox.bind(GL_TEXTURE0);
+		SkyboxCube.skyboxCube.render();
+
+		glViewport(0, 0, Main.windowWidth, Main.windowHeight);
 	}
 
 	@Override

@@ -15,6 +15,7 @@ import lwjglengine.window.AdjustableWindow;
 import lwjglengine.window.TextEditorWindow;
 import lwjglengine.window.Window;
 import procedural_trees.ProceduralTreesWindow;
+import ray_marching.RayMarchingWindow;
 import sum_of_sines_water.SumOfSinesWaterWindow;
 import volumetric_clouds.VolumetricCloudsWindow;
 
@@ -82,6 +83,7 @@ public class BackgroundWindow extends Window {
 			projectPicker.addToList("Hydraulic Terrain Generation");
 			projectPicker.addToList("Procedural Trees");
 			projectPicker.addToList("Sum of Sines Water");
+			projectPicker.addToList("Ray Marching");
 			break;
 		}
 
@@ -120,6 +122,11 @@ public class BackgroundWindow extends Window {
 
 		case "Sum of Sines Water": {
 			AdjustableWindow window = new AdjustableWindow(new SumOfSinesWaterWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Ray Marching": {
+			AdjustableWindow window = new AdjustableWindow(new RayMarchingWindow(x, y, width, height, null), this);
 			break;
 		}
 		}
