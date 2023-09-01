@@ -138,7 +138,7 @@ mat3 calc_TBN() {
 void main() {
 	mat3 TBN = calc_TBN();
 	mat3 invTBN = transpose(TBN);
-
+	
 	//parallax mapping done in tangent space
 	vec3 tangentViewPos = TBN * view_pos;	
 	vec3 tangentFragPos = TBN * frag_pos;
@@ -171,6 +171,7 @@ void main() {
     gPosition.rgb = frag_pos;
     gPosition.a = gl_FragCoord.z;
     gSpecular.rgb = scaleWithMaterial(texture(tex_specular, texCoords).rgba, frag_material_specular.rgba).rgb;
+    gSpecular.rgb = mix(vec3(0), gSpecular.rgb, fresnel);
     gSpecular.a = frag_material_shininess;
     gNormal.rgb = normalize(normal);
     gColorID = vec4(frag_colorID / 255, 1);

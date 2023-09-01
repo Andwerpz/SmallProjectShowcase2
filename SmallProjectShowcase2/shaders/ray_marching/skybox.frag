@@ -11,20 +11,33 @@ float dist_limit = 400;
 float hit_threshold = 0.001;
 float normal_espilon = 0.0001;
 
-float DE(vec3 z){
-	float r;
-    int n = 0;
-    float Scale = 1;
-    vec3 Offset = vec3(0);
-    int Iterations = 1;
-    while (n < Iterations) {
-       if(z.x+z.y<0) z.xy = -z.yx; // fold 1
-       if(z.x+z.z<0) z.xz = -z.zx; // fold 2
-       if(z.y+z.z<0) z.zy = -z.yz; // fold 3	
-       z = z*Scale - Offset*(Scale-1.0);
-       n++;
-    }
-    return (length(z) ) * pow(Scale, -float(n));
+float Power = 8;
+float Bailout = 200;
+int Iterations = 100;
+
+float DE(vec3 pos){
+	vec3 z = pos;
+	float dr = 1.0;
+	float r = 0.0;
+	for (int i = 0; i < Iterations ; i++) {
+		r = length(z);
+		if (r > Bailout) break;
+		
+		// convert to polar coordinates
+		float theta = acos(z.z/r);
+		float phi = atan(z.y,z.x);
+		dr =  pow( r, Power-1.0)*Power*dr + 1.0;
+		
+		// scale and rotate the point
+		float zr = pow( r,Power);
+		theta = theta*Power;
+		phi = phi*Power;
+		
+		// convert back to cartesian coordinates
+		z = zr*vec3(sin(theta)*cos(phi), sin(phi)*sin(theta), cos(theta));
+		z+=pos;
+	}
+	return 0.5*log(r)*r/dr;
 }
 
 //sample along the 3 axis to get the change. 
@@ -70,7 +83,7 @@ void main() {
 		float diffuse = dot(hit_normal, light_dir);
 		
 		vec3 reflect_dir = frag_dir - 2 * (dot(frag_dir, hit_normal) * hit_normal);
-		float fresnel = pow(1.0 - dot(reflect_dir, hit_normal), 3);
+		float fresnel = pow(1.0 - dot(reflect_dir, hit_normal), 5);
 		vec3 reflect_color = texture(skybox, reflect_dir).rgb;
 		
 		float specular = fresnel * dot(reflect_dir, light_dir);
@@ -79,8 +92,8 @@ void main() {
 		vec3 specular_color = vec3(1);
 		
 		color = vec4(diffuse_color * (diffuse * (1 - ambient) + ambient), 1);
-		color.rgb += specular_color * specular;
-		color.rgb += reflect_color * fresnel;
+		//color.rgb += specular_color * specular;
+		//color.rgb += reflect_color * fresnel;
 	}	
 } 
 

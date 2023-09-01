@@ -16,6 +16,8 @@ import lwjglengine.player.PlayerInputController;
 import lwjglengine.scene.DirLight;
 import lwjglengine.scene.Light;
 import lwjglengine.scene.Scene;
+import lwjglengine.window.AdjustableWindow;
+import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
 import myutils.v10.math.Vec3;
 import myutils.v10.math.Vec4;
@@ -108,6 +110,10 @@ public class SumOfSinesWaterWindow extends Window {
 
 		DirLight sun = new DirLight(new Vec3(0, -0.3f, 1), new Vec3(1), 0.4f);
 		Light.addLight(WORLD_SCENE, sun);
+
+		//windows to look at water textures
+		AdjustableWindow waterHeightViewer = new AdjustableWindow("Water Height Map", new TextureViewerWindow(this.worldScreen.getWaterHeightMap()), this);
+		AdjustableWindow waterNormalViewer = new AdjustableWindow("Water Normal Map", new TextureViewerWindow(this.worldScreen.getWaterNormalMap()), this);
 
 		this._resize();
 	}

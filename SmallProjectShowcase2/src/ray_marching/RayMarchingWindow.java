@@ -86,7 +86,7 @@ public class RayMarchingWindow extends Window {
 		if (this.isSelected()) {
 			this.pc.update();
 
-			this.camera.setPos(this.pc.getPos());
+			this.camera.setPos(this.pc.getPos().mul(0.1f));
 			this.camera.setFacing(this.pc.getFacing());
 		}
 	}
