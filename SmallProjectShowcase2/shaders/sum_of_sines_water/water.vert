@@ -16,16 +16,8 @@ uniform mat4 vw_matrix;	//view
 uniform bool enableTexScaling;
 uniform float texScaleFactor;
 
-uniform float time;
-uniform float theta[32];
-uniform float speed[32];
-
-uniform float u_amplitude;
-uniform float u_period;
-uniform int nr_sums;
-
-uniform float period_mult;
-uniform float amplitude_mult;
+uniform sampler2D tex_water_height;
+uniform float water_scale;
 
 out vec3 frag_pos;
 out vec2 frag_uv;
@@ -38,32 +30,14 @@ out vec3 frag_colorID;
 
 out mat4 frag_md_matrix;
 
+float sample_height() {
+	return texture(tex_water_height, uv).y * water_scale;
+}
+
 void main() {	
 	frag_md_matrix = md_matrix;
 
-	float x = pos.x;
-	float z = pos.z;
-	float y = 0;
-	
-	float period = u_period;
-	float amplitude = u_amplitude;
-	
-	float pdx = 0;
-	float pdz = 0;
-	
-	for(int i = 0; i < nr_sums; i++){
-		x += pdx;
-		z += pdz;
-		
-		y += amplitude * sin((x * sin(theta[i]) + z * cos(theta[i])) / period + time * speed[i]);
-		pdx = (amplitude / period) * cos(time * speed[i] + (x * sin(theta[i]) + z * cos(theta[i])) / period) * sin(theta[i]);
-		pdz = (amplitude / period) * cos(time * speed[i] + (x * sin(theta[i]) + z * cos(theta[i])) / period) * cos(theta[i]);
-		
-		period *= period_mult;
-		amplitude *= amplitude_mult;
-	}
-
-	vec3 adj_pos = vec3(pos.x, y, pos.z);
+	vec3 adj_pos = vec3(pos.x, sample_height(), pos.z);
 	
     gl_Position = pr_matrix * vw_matrix * md_matrix * vec4(adj_pos, 1.0);
     frag_pos = vec3(md_matrix * vec4(adj_pos, 1.0));

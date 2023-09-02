@@ -4,9 +4,51 @@ layout (location = 1) out vec4 out_normal;
 
 in vec2 frag_uv;
 
+uniform float time;
+uniform int nr_sums;
+
+uniform float theta[32];
+uniform float speed[32];
+
+uniform float u_amplitude;
+uniform float u_period;
+
+uniform float period_mult;
+uniform float amplitude_mult;
+
+float domain_warp_coeff = 0.4;
+
 void main() {
-	out_height = vec4(frag_uv, 0, 1);
-	out_normal = vec4(0, frag_uv, 1);
+	float x = frag_uv.x;
+	float z = frag_uv.y;
+	float y = 0;
+	
+	float dx = 0;
+	float dz = 0;
+	
+	float period = u_period;
+	float amplitude = u_amplitude;
+	
+	float pdx = 0;
+	float pdz = 0;
+	
+	for(int i = 0; i < nr_sums; i++){
+		y += amplitude * sin((x * sin(theta[i]) + z * cos(theta[i])) / period + time * speed[i]);
+		pdx = (amplitude / period) * cos(time * speed[i] + (x * sin(theta[i]) + z * cos(theta[i])) / period) * sin(theta[i]);
+		pdz = (amplitude / period) * cos(time * speed[i] + (x * sin(theta[i]) + z * cos(theta[i])) / period) * cos(theta[i]);
+		
+		dx += pdx;
+		dz += pdz;
+		
+		x -= pdx * domain_warp_coeff;
+		z -= pdz * domain_warp_coeff;
+		
+		period *= period_mult;
+		amplitude *= amplitude_mult;
+	}
+
+	out_height.rgba = vec4(vec3(x, y, z), 1);
+	out_normal.rgba = vec4(vec3(dx, dz, 1), 1);
 }
 
 

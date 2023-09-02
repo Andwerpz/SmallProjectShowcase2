@@ -67,8 +67,8 @@ public class SumOfSinesWaterWindow extends Window {
 					vertices.add((float) j - (waterResolution - 1) / 2);
 					vertexIndices[i][j] = ptr++;
 
-					uvs.add((float) i);
-					uvs.add((float) j);
+					uvs.add((float) i / (waterResolution - 1));
+					uvs.add((float) j / (waterResolution - 1));
 				}
 			}
 

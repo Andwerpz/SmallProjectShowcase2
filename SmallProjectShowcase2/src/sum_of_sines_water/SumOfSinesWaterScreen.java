@@ -64,18 +64,32 @@ public class SumOfSinesWaterScreen extends Screen {
 	private Shader waterGeometryShader;
 	private float waterTime = 0f;
 
-	private int nrSums = 8;
+	private int nrSums = 1;
 
 	private Shader waterTextureShader; //responsible for creating the water texture. 
 
-	private static int waterTextureResolution = 256; //resolution of the water texture should remain fixed. 
+	private static int waterTextureResolution = 1024; //resolution of the water texture should remain fixed. 
 	private Framebuffer waterBuffer; //height and normal of the water. 
 	private Texture waterHeightMap; //R: water height
 	private Texture waterNormalMap; //RGB: normal
 
 	public SumOfSinesWaterScreen() {
-		this.waterGeometryShader = new Shader("/sum_of_sines_water/water.vert", "/sum_of_sines_water/water.frag");
 		this.waterTextureShader = new Shader("/sum_of_sines_water/water_texture.vert", "/sum_of_sines_water/water_texture.frag");
+		this.waterTextureShader.setUniform1f("u_amplitude", 0.01f);
+		this.waterTextureShader.setUniform1f("u_period", 0.2f);
+		this.waterTextureShader.setUniform1i("nr_sums", this.nrSums);
+
+		this.waterTextureShader.setUniform1f("period_mult", 1 / 1.18f);
+		this.waterTextureShader.setUniform1f("amplitude_mult", 0.78f);
+		{
+			float speed = 0.5f;
+			for (int i = 0; i < 32; i++) {
+				float theta = (float) (Math.random() * Math.PI * 2);
+				this.waterTextureShader.setUniform1f("theta[" + i + "]", theta);
+				this.waterTextureShader.setUniform1f("speed[" + i + "]", speed);
+				speed *= 1.07;
+			}
+		}
 
 		this.waterBuffer = new Framebuffer(waterTextureResolution, waterTextureResolution);
 		this.waterHeightMap = new Texture(GL_RGBA32F, waterTextureResolution, waterTextureResolution, GL_RGBA, GL_FLOAT);
@@ -87,31 +101,19 @@ public class SumOfSinesWaterScreen extends Screen {
 		this.waterBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 });
 		this.waterBuffer.isComplete();
 
+		this.waterGeometryShader = new Shader("/sum_of_sines_water/water.vert", "/sum_of_sines_water/water.frag");
 		this.waterGeometryShader.setUniform1i("tex_diffuse", 0);
 		this.waterGeometryShader.setUniform1i("tex_specular", 1);
 		this.waterGeometryShader.setUniform1i("tex_normal", 2);
 		this.waterGeometryShader.setUniform1i("tex_displacement", 3);
+		this.waterGeometryShader.setUniform1i("skybox", 4);
+		this.waterGeometryShader.setUniform1i("tex_water_height", 5);
+		this.waterGeometryShader.setUniform1i("tex_water_normal", 6);
+
 		this.waterGeometryShader.setUniform1i("enableParallaxMapping", 0);
 		this.waterGeometryShader.setUniform1i("enableTexScaling", 1);
 
-		this.waterGeometryShader.setUniform1f("u_amplitude", 1.2f);
-		this.waterGeometryShader.setUniform1f("u_period", 16);
-		this.waterGeometryShader.setUniform1i("nr_sums", this.nrSums);
-
-		this.waterGeometryShader.setUniform1f("period_mult", 1 / 1.08f);
-		this.waterGeometryShader.setUniform1f("amplitude_mult", 0.85f);
-		this.waterGeometryShader.setUniform1f("speed_mult", 1.1f);
-
-		this.waterGeometryShader.setUniform1i("skybox", 4);
-
-		float speed = 1;
-		for (int i = 0; i < 32; i++) {
-			float theta = (float) (Math.random() * Math.PI * 2);
-			this.waterGeometryShader.setUniform1f("theta[" + i + "]", theta);
-
-			this.waterGeometryShader.setUniform1f("speed[" + i + "]", speed);
-			speed *= 1.07;
-		}
+		this.waterGeometryShader.setUniform1f("water_scale", 256);
 	}
 
 	public Texture getWaterHeightMap() {
@@ -258,8 +260,19 @@ public class SumOfSinesWaterScreen extends Screen {
 	protected void _render(Framebuffer outputBuffer) {
 		// -- WATER TEXTURE -- : render out water properties to texture
 		glViewport(0, 0, waterTextureResolution, waterTextureResolution);
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LESS);
+		glEnable(GL_CULL_FACE);
+		glCullFace(GL_BACK);
+		glPolygonMode(GL_FRONT, GL_FILL);
+		glDisable(GL_BLEND);
+		glClearDepth(1); // maximum value
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		this.waterBuffer.bind();
 		this.waterTextureShader.enable();
+		this.waterTime += Main.getDeltaSeconds();
+		this.waterTextureShader.setUniform1f("time", this.waterTime);
+		this.waterTextureShader.setUniform1i("nr_sums", this.nrSums);
 		screenQuad.render();
 		glViewport(0, 0, this.screenWidth, this.screenHeight);
 
@@ -276,11 +289,12 @@ public class SumOfSinesWaterScreen extends Screen {
 		Texture.bindingEnabled = true;
 
 		this.waterGeometryShader.enable();
-		this.waterTime += Main.getDeltaSeconds();
+		Scene.skyboxes.get(this.world_scene).bind(GL_TEXTURE4);
+		this.waterHeightMap.bind(GL_TEXTURE5);
+		this.waterNormalMap.bind(GL_TEXTURE6);
+
 		this.waterGeometryShader.setUniform1f("time", this.waterTime);
 		this.waterGeometryShader.setUniform1i("nr_sums", this.nrSums);
-
-		Scene.skyboxes.get(this.world_scene).bind(GL_TEXTURE4);
 
 		this.setCameraFOV(this.worldFOV);
 		this.setShaderCameraUniforms(this.waterGeometryShader, this.camera);

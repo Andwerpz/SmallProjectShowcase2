@@ -21,23 +21,12 @@ uniform sampler2D tex_normal;
 uniform sampler2D tex_displacement;
 uniform bool enableParallaxMapping;
 
-uniform float time;
-uniform float theta[32];
-uniform float speed[32];
-
-uniform float u_amplitude;
-uniform float u_period;
-uniform float u_speed;
-uniform int nr_sums;
-
-uniform float period_mult;
-uniform float amplitude_mult;
-uniform float speed_mult;
+uniform sampler2D tex_water_normal;
+uniform float water_scale;
 
 uniform samplerCube skybox;
 
-vec2 ParallaxMapping(vec2 texCoords, vec3 viewDir)
-{ 
+vec2 ParallaxMapping(vec2 texCoords, vec3 viewDir) { 
 	float height_scale = 0.2;
     //float height =  texture(tex_displacement, texCoords).r;    
     //vec2 p = viewDir.xy / viewDir.z * (height * height_scale);
@@ -90,36 +79,11 @@ vec4 scaleWithMaterial(vec4 color, vec4 material) {
 	return ans;
 }
 
-//calculate the TBN matrix here to get pixel perfect normals. 
-mat3 calc_TBN() {
-	//sample from sum of sines
-	float x = frag_pos.x;
-	float z = frag_pos.z;
+mat3 sample_TBN() {
+	vec3 sample_normal = texture(tex_water_normal, frag_uv).rgb;
+	float dx = sample_normal.x;
+	float dz = sample_normal.y;
 	
-	float dx = 0;
-	float dz = 0;
-	
-	float period = u_period;
-	float amplitude = u_amplitude;
-	
-	float pdx = 0;
-	float pdz = 0;
-	
-	for(int i = 0; i < nr_sums; i++){
-		x += pdx;
-		z += pdz;
-		
-		pdx = (amplitude / period) * cos(time * speed[i] + (x * sin(theta[i]) + z * cos(theta[i])) / period) * sin(theta[i]);
-		pdz = (amplitude / period) * cos(time * speed[i] + (x * sin(theta[i]) + z * cos(theta[i])) / period) * cos(theta[i]);
-		
-		dx += pdx;
-		dz += pdz;
-		
-		period *= period_mult;
-		amplitude *= amplitude_mult;
-	}
-	
-	//compute the tangent and the bitangent, then the normal is just the cross product between the two. 
 	vec3 adj_tangent = normalize(vec3(0, dz, 1));
 	vec3 adj_bitangent = normalize(vec3(1, dx, 0));
 	vec3 adj_normal = cross(adj_tangent, adj_bitangent);
@@ -136,7 +100,7 @@ mat3 calc_TBN() {
 }
 
 void main() {
-	mat3 TBN = calc_TBN();
+	mat3 TBN = sample_TBN();
 	mat3 invTBN = transpose(TBN);
 	
 	//parallax mapping done in tangent space
