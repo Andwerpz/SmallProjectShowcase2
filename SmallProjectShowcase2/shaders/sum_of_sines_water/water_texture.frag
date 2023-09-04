@@ -7,8 +7,8 @@ in vec2 frag_uv;
 uniform float time;
 uniform int nr_sums;
 
-uniform float theta[32];
-uniform float speed[32];
+uniform float theta[128];
+uniform float speed[128];
 
 uniform float u_amplitude;
 uniform float u_period;
@@ -16,7 +16,7 @@ uniform float u_period;
 uniform float period_mult;
 uniform float amplitude_mult;
 
-float domain_warp_coeff = 0.4;
+uniform float domain_warp_coeff;
 
 void main() {
 	float x = frag_uv.x;
@@ -48,7 +48,7 @@ void main() {
 	}
 
 	out_height.rgba = vec4(vec3(x, y, z), 1);
-	out_normal.rgba = vec4(vec3(dx, dz, 1), 1);
+	out_normal.rgba = vec4(vec3(dx, dz, 0), 1);
 }
 
 

@@ -17,6 +17,7 @@ import lwjglengine.scene.DirLight;
 import lwjglengine.scene.Light;
 import lwjglengine.scene.Scene;
 import lwjglengine.window.AdjustableWindow;
+import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
 import myutils.v10.math.Vec3;
@@ -25,7 +26,7 @@ import myutils.v11.file.FileUtils;
 
 public class SumOfSinesWaterWindow extends Window {
 
-	private static int waterResolution = 256;
+	private static int waterResolution = 512;
 	private Model waterModel;
 
 	private final int WORLD_SCENE = Scene.generateScene();
@@ -94,7 +95,7 @@ public class SumOfSinesWaterWindow extends Window {
 		waterTransform.setTranslation(new Vec3(0.01f));
 		waterInstance.setModelTransform(waterTransform);
 
-		Material waterMaterial = new Material(new Vec3(0, 84, 147).mul(1.0f / 255.0f));
+		Material waterMaterial = new Material(new Vec3(6, 66, 115).mul(1.0f / 255.0f));
 		waterMaterial.setSpecular(new Vec3(0.7f));
 		waterMaterial.setShininess(256);
 		waterInstance.setMaterial(waterMaterial);
@@ -108,18 +109,24 @@ public class SumOfSinesWaterWindow extends Window {
 		this.worldScreen.getCamera().setFacing(this.pic.getFacing());
 		this.worldScreen.getCamera().setPos(this.pic.getPos());
 
-		DirLight sun = new DirLight(new Vec3(0, -0.3f, 1), new Vec3(1), 0.4f);
+		DirLight sun = new DirLight(new Vec3(0, -0.6f, 1), new Vec3(1), 0.4f);
 		Light.addLight(WORLD_SCENE, sun);
+		this.worldScreen.setSun(sun);
 
 		//windows to look at water textures
 		AdjustableWindow waterHeightViewer = new AdjustableWindow("Water Height Map", new TextureViewerWindow(this.worldScreen.getWaterHeightMap()), this);
 		AdjustableWindow waterNormalViewer = new AdjustableWindow("Water Normal Map", new TextureViewerWindow(this.worldScreen.getWaterNormalMap()), this);
+
+		//control panel for the water
+		AdjustableWindow waterAttributesPanel = new AdjustableWindow("Water Attributes", new ObjectEditorWindow(this.worldScreen.getWaterAttributes()), this);
 
 		this._resize();
 	}
 
 	@Override
 	protected void _kill() {
+		this.worldScreen.kill();
+
 		this.waterModel.kill();
 
 		Scene.removeScene(WORLD_SCENE);
@@ -203,16 +210,6 @@ public class SumOfSinesWaterWindow extends Window {
 	@Override
 	protected void _keyPressed(int key) {
 		switch (key) {
-		case GLFW.GLFW_KEY_Z: {
-			this.worldScreen.setNrSums(this.worldScreen.getNrSums() - 1);
-			break;
-		}
-
-		case GLFW.GLFW_KEY_X: {
-			this.worldScreen.setNrSums(this.worldScreen.getNrSums() + 1);
-			break;
-		}
-
 		case GLFW.GLFW_KEY_R: {
 			this.worldScreen.generateTheta();
 			break;
