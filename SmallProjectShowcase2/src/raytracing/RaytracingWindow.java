@@ -18,6 +18,8 @@ import lwjglengine.graphics.Material;
 import lwjglengine.main.Main;
 import lwjglengine.player.PlayerInputController;
 import lwjglengine.scene.Scene;
+import lwjglengine.window.AdjustableWindow;
+import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.Window;
 import myutils.v10.math.Vec3;
 import myutils.v10.math.Vec4;
@@ -131,6 +133,8 @@ public class RaytracingWindow extends Window {
 		//big ball
 		//this.raytracingScreen.addSphere(new Vec3(0, 50, 0), 30, sphereMaterial);
 
+		AdjustableWindow optionsWindow = new AdjustableWindow("Raytracing Options", new ObjectEditorWindow(this.raytracingScreen.getOptions()), this);
+		
 		this._resize();
 	}
 

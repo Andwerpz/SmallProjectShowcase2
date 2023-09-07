@@ -66,8 +66,6 @@ public class RaytracingScreen extends Screen {
 
 	private int raytracingScene;
 
-	private float fov;
-
 	private ArrayList<Sphere> spheres;
 	private ArrayList<Triangle> triangles;
 
@@ -76,36 +74,11 @@ public class RaytracingScreen extends Screen {
 
 	private int numRenderedFrames;
 
-	private int maxBounceCount;
-	private int numRaysPerPixel;
-
-	private float blurStrength; //good to keep around 1 to 5 for antialiasing
-
-	private float defocusStrength;
-	private float focusDist;
-
-	private float ambientStrength;
-	private float sunStrength;
-	private Vec3 sunDir;
-
-	//more bounces have drastically diminishing returns along with drastically increasing render times
-	private static int previewMaxBounceCount = 5;
-	private static int renderMaxBounceCount = 10;
-
-	//increase number of rays per pixel while rendering to speed it up?
-	//downside is lower fps
-	private static int previewNumRaysPerPixel = 1;
-	private static int renderNumRaysPerPixel = 20;
-
-	private float exposure;
-	private float gamma;
-
-	//smudging bright areas with gaussian blur
-	private float bloomThreshold; //how bright does a pixel have to be to be blurred?
-
 	private Shader raytracingExtractBloomShader;
 	private Shader raytracingHDRShader;
 	private Shader raytracingGeometryShader;
+	
+	private RaytracingOptions options = new RaytracingOptions();
 
 	public RaytracingScreen() {
 		this.raytracingExtractBloomShader = new Shader("/raytracing/raytracing_extract_bloom.vert", "/raytracing/raytracing_extract_bloom.frag");
@@ -115,25 +88,152 @@ public class RaytracingScreen extends Screen {
 		this.raytracingGeometryShader.setUniform1i("render_tex_0", 0);
 		this.raytracingGeometryShader.setUniform1i("skybox_tex", 1);
 
-		this.fov = 90f;
-
 		this.numRenderedFrames = 0;
-
-		this.blurStrength = 3f;
-
-		this.defocusStrength = 0f;
-		this.focusDist = 30f;
-
-		this.ambientStrength = 1;
-		this.sunStrength = 1000;
-		this.sunDir = new Vec3(1, 1, 0.4f);
-
-		this.exposure = 1;
-		this.gamma = 1;
-
-		this.bloomThreshold = 2.5f;
+	}
+	
+	public RaytracingOptions getOptions() {
+		return this.options;
 	}
 
+	public class RaytracingOptions {
+		private float fov = 90f;	//in degrees
+
+		private float blurStrength = 3f; //good to keep around 1 to 5 for antialiasing
+		private float defocusStrength = 0f;
+		private float focusDist = 30f;
+
+		private float ambientStrength = 1;
+		private float sunStrength = 1000;
+		private Vec3 sunDir = new Vec3(1, 1, 0.4f);
+
+		//more bounces have drastically diminishing returns along with drastically increasing render times
+		private int previewMaxBounceCount = 5;
+		private int renderMaxBounceCount = 10;
+
+		//increase number of rays per pixel while rendering to speed it up?
+		//downside is lower fps
+		private int previewNumRaysPerPixel = 1;
+		private int renderNumRaysPerPixel = 20;
+
+		private float exposure = 1;
+		private float gamma = 1;
+
+		//smudging bright areas with gaussian blur
+		private float bloomThreshold = 2.5f; //how bright does a pixel have to be to be blurred?
+		
+		public float getFov() {
+			return fov;
+		}
+
+		public void setFov(float fov) {
+			this.fov = fov;
+		}
+
+		public float getBlurStrength() {
+			return blurStrength;
+		}
+
+		public void setBlurStrength(float blurStrength) {
+			this.blurStrength = blurStrength;
+		}
+
+		public float getDefocusStrength() {
+			return defocusStrength;
+		}
+
+		public void setDefocusStrength(float defocusStrength) {
+			this.defocusStrength = defocusStrength;
+		}
+
+		public float getFocusDist() {
+			return focusDist;
+		}
+
+		public void setFocusDist(float focusDist) {
+			this.focusDist = focusDist;
+		}
+
+		public float getAmbientStrength() {
+			return ambientStrength;
+		}
+
+		public void setAmbientStrength(float ambientStrength) {
+			this.ambientStrength = ambientStrength;
+		}
+
+		public float getSunStrength() {
+			return sunStrength;
+		}
+
+		public void setSunStrength(float sunStrength) {
+			this.sunStrength = sunStrength;
+		}
+
+		public Vec3 getSunDir() {
+			return sunDir;
+		}
+
+		public void setSunDir(Vec3 sunDir) {
+			this.sunDir = sunDir;
+		}
+
+		public int getPreviewMaxBounceCount() {
+			return previewMaxBounceCount;
+		}
+
+		public void setPreviewMaxBounceCount(int previewMaxBounceCount) {
+			this.previewMaxBounceCount = previewMaxBounceCount;
+		}
+
+		public int getRenderMaxBounceCount() {
+			return renderMaxBounceCount;
+		}
+
+		public void setRenderMaxBounceCount(int renderMaxBounceCount) {
+			this.renderMaxBounceCount = renderMaxBounceCount;
+		}
+
+		public int getPreviewNumRaysPerPixel() {
+			return previewNumRaysPerPixel;
+		}
+
+		public void setPreviewNumRaysPerPixel(int previewNumRaysPerPixel) {
+			this.previewNumRaysPerPixel = previewNumRaysPerPixel;
+		}
+
+		public int getRenderNumRaysPerPixel() {
+			return renderNumRaysPerPixel;
+		}
+
+		public void setRenderNumRaysPerPixel(int renderNumRaysPerPixel) {
+			this.renderNumRaysPerPixel = renderNumRaysPerPixel;
+		}
+
+		public float getExposure() {
+			return exposure;
+		}
+
+		public void setExposure(float exposure) {
+			this.exposure = exposure;
+		}
+
+		public float getGamma() {
+			return gamma;
+		}
+
+		public void setGamma(float gamma) {
+			this.gamma = gamma;
+		}
+
+		public float getBloomThreshold() {
+			return bloomThreshold;
+		}
+
+		public void setBloomThreshold(float bloomThreshold) {
+			this.bloomThreshold = bloomThreshold;
+		}
+	}
+	
 	public void setRaytracingScene(int scene) {
 		this.raytracingScene = scene;
 	}
@@ -213,7 +313,7 @@ public class RaytracingScreen extends Screen {
 			cameraFacing = this.camera.getFacing();
 		}
 
-		this.camera = new Camera((float) Math.toRadians(this.fov), this.screenWidth, this.screenHeight, 0.1f, 200f);
+		this.camera = new Camera((float) Math.toRadians(90f), this.screenWidth, this.screenHeight, 0.1f, 200f);
 		this.camera.setPos(cameraPos);
 		this.camera.setFacing(cameraFacing);
 
@@ -236,7 +336,7 @@ public class RaytracingScreen extends Screen {
 	}
 
 	public void incrementExposure(float inc) {
-		this.exposure += inc;
+		this.options.exposure += inc;
 	}
 
 	private void buildObjectBuffers() {
@@ -321,19 +421,19 @@ public class RaytracingScreen extends Screen {
 		this.raytracingGeometryShader.setUniform3f("camera_pos", this.camera.getPos());
 		this.raytracingGeometryShader.setUniform1i("numSpheres", this.spheres.size());
 		this.raytracingGeometryShader.setUniform1i("numTriangles", this.triangles.size());
-		this.raytracingGeometryShader.setUniform1i("maxBounceCount", this.maxBounceCount);
-		this.raytracingGeometryShader.setUniform1i("numRaysPerPixel", this.numRaysPerPixel);
+		this.raytracingGeometryShader.setUniform1i("maxBounceCount", this.renderMode == RENDER_MODE_PREVIEW? this.options.previewMaxBounceCount : this.options.renderMaxBounceCount);
+		this.raytracingGeometryShader.setUniform1i("numRaysPerPixel", this.renderMode == RENDER_MODE_PREVIEW? this.options.previewNumRaysPerPixel : this.options.renderNumRaysPerPixel);
 		this.raytracingGeometryShader.setUniform1i("numRenderedFrames", this.numRenderedFrames);
 		this.raytracingGeometryShader.setUniform1i("windowWidth", this.screenWidth);
 		this.raytracingGeometryShader.setUniform1i("windowHeight", this.screenHeight);
-		this.raytracingGeometryShader.setUniform1f("blurStrength", this.blurStrength); //for antialiasing
-		this.raytracingGeometryShader.setUniform1f("defocusStrength", this.defocusStrength);
-		this.raytracingGeometryShader.setUniform1f("focusDist", this.focusDist);
+		this.raytracingGeometryShader.setUniform1f("blurStrength", this.options.blurStrength); //for antialiasing
+		this.raytracingGeometryShader.setUniform1f("defocusStrength", this.options.defocusStrength);
+		this.raytracingGeometryShader.setUniform1f("focusDist", this.options.focusDist);
 		this.raytracingGeometryShader.setUniform3f("cameraRight", cameraRight);
 		this.raytracingGeometryShader.setUniform3f("cameraUp", cameraUp);
-		this.raytracingGeometryShader.setUniform3f("sunDir", this.sunDir.normalize());
-		this.raytracingGeometryShader.setUniform1f("sunStrength", this.sunStrength);
-		this.raytracingGeometryShader.setUniform1f("ambientStrength", this.ambientStrength);
+		this.raytracingGeometryShader.setUniform3f("sunDir", this.options.sunDir.normalize());
+		this.raytracingGeometryShader.setUniform1f("sunStrength", this.options.sunStrength);
+		this.raytracingGeometryShader.setUniform1f("ambientStrength", this.options.ambientStrength);
 	}
 
 	@Override
@@ -436,7 +536,7 @@ public class RaytracingScreen extends Screen {
 		glEnable(GL_BLEND);
 		this.outputColorMap.bind(GL_TEXTURE0);
 		this.raytracingExtractBloomShader.enable();
-		this.raytracingExtractBloomShader.setUniform1f("bloomThreshold", this.bloomThreshold);
+		this.raytracingExtractBloomShader.setUniform1f("bloomThreshold", this.options.bloomThreshold);
 		screenQuad.render();
 
 		Shader.GAUSSIAN_BLUR.enable();
@@ -464,8 +564,8 @@ public class RaytracingScreen extends Screen {
 		this.outputColorMap.bind(GL_TEXTURE0);
 		this.postprocessBloomMap.bind(GL_TEXTURE1);
 		this.raytracingHDRShader.enable();
-		this.raytracingHDRShader.setUniform1f("exposure", this.exposure);
-		this.raytracingHDRShader.setUniform1f("gamma", this.gamma);
+		this.raytracingHDRShader.setUniform1f("exposure", this.options.exposure);
+		this.raytracingHDRShader.setUniform1f("gamma", this.options.gamma);
 		screenQuad.render();
 
 		//render to output
@@ -481,19 +581,6 @@ public class RaytracingScreen extends Screen {
 
 	public void setRenderMode(int renderMode) {
 		this.renderMode = renderMode;
-
-		switch (this.renderMode) {
-		case RENDER_MODE_DISPLAY_PREV_RENDER:
-		case RENDER_MODE_PREVIEW:
-			this.maxBounceCount = previewMaxBounceCount;
-			this.numRaysPerPixel = previewNumRaysPerPixel;
-			break;
-
-		case RENDER_MODE_RENDER:
-			this.maxBounceCount = renderMaxBounceCount;
-			this.numRaysPerPixel = renderNumRaysPerPixel;
-			break;
-		}
 	}
 
 	public int getRenderMode() {
