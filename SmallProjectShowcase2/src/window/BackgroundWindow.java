@@ -6,6 +6,7 @@ import java.awt.Font;
 import hydraulic_terrain.HydraulicTerrainWindow;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
+import lwjglengine.main.Main;
 import lwjglengine.scene.Scene;
 import lwjglengine.screen.UIScreen;
 import lwjglengine.ui.Text;
@@ -14,6 +15,7 @@ import lwjglengine.ui.UIFilledRectangle;
 import lwjglengine.window.AdjustableWindow;
 import lwjglengine.window.TextEditorWindow;
 import lwjglengine.window.Window;
+import pbr_rendering.PBRRenderingWindow;
 import procedural_trees.ProceduralTreesWindow;
 import ray_marching.RayMarchingWindow;
 import raytracing.RaytracingWindow;
@@ -25,8 +27,9 @@ public class BackgroundWindow extends Window {
 	//perhaps we can modify the background later. 
 
 	//PROJECT IDEAS:
-	// - FFT Water
+	// - Actual FFT Water
 	// - Dynamic Skybox Shader
+	// - 3D Model Animations
 
 	private final int BACKGROUND_SCENE = Scene.generateScene();
 	private final int TEXT_SCENE = Scene.generateScene();
@@ -73,7 +76,7 @@ public class BackgroundWindow extends Window {
 		int width = 400;
 		int height = 300;
 		int x = (int) this.getWindowMousePos().x;
-		int y = (int) this.getWindowMousePos().y - height;
+		int y = (int) (Main.windowHeight - this.getWindowMousePos().y);
 
 		switch (action) {
 		case "Open Project Picker": {
@@ -86,6 +89,7 @@ public class BackgroundWindow extends Window {
 			projectPicker.addToList("Sum of Sines Water");
 			projectPicker.addToList("Ray Marching");
 			projectPicker.addToList("Raytracing");
+			projectPicker.addToList("PBR Rendering");
 			break;
 		}
 
@@ -105,7 +109,7 @@ public class BackgroundWindow extends Window {
 		int width = 800;
 		int height = 600;
 		int x = (int) this.getWindowMousePos().x;
-		int y = (int) this.getWindowMousePos().y - height;
+		int y = (int) (Main.windowHeight - this.getWindowMousePos().y);
 		switch (whichProject) {
 		case "Volumetric Clouds": {
 			AdjustableWindow window = new AdjustableWindow(new VolumetricCloudsWindow(x, y, width, height, null), this);
@@ -134,6 +138,11 @@ public class BackgroundWindow extends Window {
 
 		case "Raytracing": {
 			AdjustableWindow window = new AdjustableWindow(new RaytracingWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "PBR Rendering": {
+			AdjustableWindow window = new AdjustableWindow(new PBRRenderingWindow(x, y, width, height, null), this);
 			break;
 		}
 		}

@@ -27,6 +27,7 @@ import lwjglengine.scene.Scene;
 import lwjglengine.screen.Screen;
 import lwjglengine.screen.SkyboxCube;
 import lwjglengine.util.BufferUtils;
+import myutils.v10.math.Mat4;
 import myutils.v10.math.Vec3;
 
 public class RaytracingScreen extends Screen {
@@ -77,7 +78,7 @@ public class RaytracingScreen extends Screen {
 	private Shader raytracingExtractBloomShader;
 	private Shader raytracingHDRShader;
 	private Shader raytracingGeometryShader;
-	
+
 	private RaytracingOptions options = new RaytracingOptions();
 
 	public RaytracingScreen() {
@@ -90,13 +91,13 @@ public class RaytracingScreen extends Screen {
 
 		this.numRenderedFrames = 0;
 	}
-	
+
 	public RaytracingOptions getOptions() {
 		return this.options;
 	}
 
 	public class RaytracingOptions {
-		private float fov = 90f;	//in degrees
+		private float fov = 90f; //in degrees
 
 		private float blurStrength = 3f; //good to keep around 1 to 5 for antialiasing
 		private float defocusStrength = 0f;
@@ -120,7 +121,7 @@ public class RaytracingScreen extends Screen {
 
 		//smudging bright areas with gaussian blur
 		private float bloomThreshold = 2.5f; //how bright does a pixel have to be to be blurred?
-		
+
 		public float getFov() {
 			return fov;
 		}
@@ -233,7 +234,7 @@ public class RaytracingScreen extends Screen {
 			this.bloomThreshold = bloomThreshold;
 		}
 	}
-	
+
 	public void setRaytracingScene(int scene) {
 		this.raytracingScene = scene;
 	}
@@ -412,6 +413,7 @@ public class RaytracingScreen extends Screen {
 	}
 
 	private void setRaytracingShaderUniforms() {
+		this.camera.setProjectionMatrix(Mat4.perspective((float) Math.toRadians(this.options.fov), this.screenWidth, this.screenHeight, 0.1f, 200f));
 		Vec3 cameraRight = this.camera.getFacing().cross(this.camera.getUp());
 		Vec3 cameraUp = this.camera.getFacing().cross(cameraRight);
 
@@ -421,8 +423,8 @@ public class RaytracingScreen extends Screen {
 		this.raytracingGeometryShader.setUniform3f("camera_pos", this.camera.getPos());
 		this.raytracingGeometryShader.setUniform1i("numSpheres", this.spheres.size());
 		this.raytracingGeometryShader.setUniform1i("numTriangles", this.triangles.size());
-		this.raytracingGeometryShader.setUniform1i("maxBounceCount", this.renderMode == RENDER_MODE_PREVIEW? this.options.previewMaxBounceCount : this.options.renderMaxBounceCount);
-		this.raytracingGeometryShader.setUniform1i("numRaysPerPixel", this.renderMode == RENDER_MODE_PREVIEW? this.options.previewNumRaysPerPixel : this.options.renderNumRaysPerPixel);
+		this.raytracingGeometryShader.setUniform1i("maxBounceCount", this.renderMode == RENDER_MODE_PREVIEW ? this.options.previewMaxBounceCount : this.options.renderMaxBounceCount);
+		this.raytracingGeometryShader.setUniform1i("numRaysPerPixel", this.renderMode == RENDER_MODE_PREVIEW ? this.options.previewNumRaysPerPixel : this.options.renderNumRaysPerPixel);
 		this.raytracingGeometryShader.setUniform1i("numRenderedFrames", this.numRenderedFrames);
 		this.raytracingGeometryShader.setUniform1i("windowWidth", this.screenWidth);
 		this.raytracingGeometryShader.setUniform1i("windowHeight", this.screenHeight);
