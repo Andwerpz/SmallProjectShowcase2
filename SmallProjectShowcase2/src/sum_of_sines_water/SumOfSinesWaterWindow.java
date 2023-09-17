@@ -97,7 +97,7 @@ public class SumOfSinesWaterWindow extends Window {
 
 		Material waterMaterial = new Material(new Vec3(6, 66, 115).mul(1.0f / 255.0f));
 		waterMaterial.setSpecular(new Vec3(0.7f));
-		waterMaterial.setShininess(256);
+		waterMaterial.setSpecularExponent(256);
 		waterInstance.setMaterial(waterMaterial);
 
 		this.worldScreen = new SumOfSinesWaterScreen();
@@ -109,7 +109,7 @@ public class SumOfSinesWaterWindow extends Window {
 		this.worldScreen.getCamera().setFacing(this.pic.getFacing());
 		this.worldScreen.getCamera().setPos(this.pic.getPos());
 
-		DirLight sun = new DirLight(new Vec3(0, -0.6f, 1), new Vec3(1), 0.4f);
+		DirLight sun = new DirLight(new Vec3(0.3, -0.6f, 1), new Vec3(1), 0.4f);
 		Light.addLight(WORLD_SCENE, sun);
 		this.worldScreen.setSun(sun);
 

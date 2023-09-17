@@ -18,7 +18,7 @@ struct Material {
 	vec4 diffuse;
 	vec4 specular;
 	vec4 emissive;
-	vec4 attr;	//x = shininess, y = smoothness, z = specularProbability
+	vec4 attr;	//x = shininess, y = roughness, z = specularProbability
 };
 
 struct HitInfo {
@@ -226,12 +226,12 @@ vec3 traceRay(Ray ray) {
 			vec3 specularDir = reflect(ray.dir, hit.hitNormal);
 			
 			Material m = hit.hitMaterial;
-			float smoothness = m.attr.y;
+			float roughness = m.attr.y;
 			float specularProbability = m.attr.z;
 			
 			bool isSpecularBounce = specularProbability >= randomValue();
 			
-			ray.dir = mix(diffuseDir, specularDir, smoothness * float(isSpecularBounce));
+			ray.dir = mix(diffuseDir, specularDir, (1.0 - roughness) * float(isSpecularBounce));
 			
 			vec3 emittedLight = m.emissive.xyz * m.emissive.w;
 			incomingLight += emittedLight * rayColor;

@@ -73,7 +73,7 @@ public class RaytracingWindow extends Window {
 		for (int i = 0; i < edgeSize; i++) {
 			for (int j = 0; j < edgeSize; j++) {
 				Material m = new Material(new Vec3(Math.random(), Math.random(), Math.random()));
-				m.setSmoothness((1.0f / (edgeSize - 1)) * i);
+				m.setRoughness((1.0f / (edgeSize - 1)) * i);
 				m.setSpecularProbability((1.0f / (edgeSize - 1)) * j);
 
 				this.raytracingScreen.addSphere(new Vec3(i * (radius * 2 + gap) - edgeLength / 2.0f, 5, j * (radius * 2 + gap) - edgeLength / 2.0f), radius, m);
@@ -87,7 +87,7 @@ public class RaytracingWindow extends Window {
 		Material redMaterial = new Material(Color.RED);
 		Material sphereMaterial = new Material(Color.WHITE);
 
-		sphereMaterial.setSmoothness(1f);
+		sphereMaterial.setRoughness(0f);
 		sphereMaterial.setSpecularProbability(0.3f);
 
 		Vec3 v0 = new Vec3(-50, 0, -50);
@@ -134,7 +134,7 @@ public class RaytracingWindow extends Window {
 		//this.raytracingScreen.addSphere(new Vec3(0, 50, 0), 30, sphereMaterial);
 
 		AdjustableWindow optionsWindow = new AdjustableWindow("Raytracing Options", new ObjectEditorWindow(this.raytracingScreen.getOptions()), this);
-		
+
 		this._resize();
 	}
 

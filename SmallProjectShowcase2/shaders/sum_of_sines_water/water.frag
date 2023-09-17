@@ -160,7 +160,7 @@ void main() {
 	//reflections in water from skybox
 	vec3 frag_dir = normalize(frag_pos - view_pos);
 	vec3 reflect_dir = frag_dir - 2 * (dot(frag_dir, normal) * normal);
-	float fresnel = pow(1.0 - dot(reflect_dir, normal), 5);
+	float fresnel = pow(clamp(1.0 - dot(reflect_dir, normal), 0.0, 1.0), 5.0);
 	//vec3 reflect_color = texture(skybox, reflect_dir).rgb;
 	vec3 reflect_color = extra_cheap_atmosphere(normalize(reflect_dir), sun_dir * -1);
 	
