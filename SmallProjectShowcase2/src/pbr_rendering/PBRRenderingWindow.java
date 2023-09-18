@@ -1,23 +1,48 @@
 package pbr_rendering;
 
+import org.lwjgl.stb.STBImage;
+
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.*;
+import static org.lwjgl.opengl.GL13.*;
+import static org.lwjgl.opengl.GL30.*;
+import static org.lwjgl.opengl.GL31.*;
+import static org.lwjgl.opengl.GL32.*;
+import static org.lwjgl.opengl.GL33.*;
+import static org.lwjgl.opengl.GL42.glTexStorage2D;
+import static org.lwjgl.opengl.GL46.*;
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.*;
+import static org.lwjgl.opengl.GL14.*;
+import static org.lwjgl.opengl.GL13.*;
+import static org.lwjgl.opengl.GL30.*;
+
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Field;
+import java.nio.ByteBuffer;
+import java.nio.FloatBuffer;
 import java.util.HashMap;
 
 import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
+import lwjglengine.graphics.Shader;
 import lwjglengine.graphics.Texture;
 import lwjglengine.model.Model;
 import lwjglengine.model.ModelInstance;
+import lwjglengine.player.Camera;
 import lwjglengine.player.PlayerInputController;
 import lwjglengine.scene.DirLight;
 import lwjglengine.scene.Light;
 import lwjglengine.scene.Scene;
+import lwjglengine.screen.SkyboxCube;
+import lwjglengine.util.BufferUtils;
 import lwjglengine.window.AdjustableWindow;
 import lwjglengine.window.FileExplorerWindow;
 import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
+import myutils.v10.file.SystemUtils;
 import myutils.v10.math.Vec3;
 import myutils.v11.file.FileUtils;
 
@@ -36,6 +61,39 @@ public class PBRRenderingWindow extends Window {
 	private PlayerInputController pic;
 	private float cameraDistFromCenter = 1f;
 
+	public static Texture loadHDRTexture(String path) throws IOException {
+		STBImage.stbi_set_flip_vertically_on_load(true);
+
+		byte[] data = FileUtils.convertFileToByteArray(FileUtils.loadFile(path));
+		ByteBuffer dataBuffer = BufferUtils.createByteBuffer(data);
+
+		int[] w = new int[1];
+		int[] h = new int[1];
+		int[] nrComponents = new int[1];
+
+		if (!STBImage.stbi_info_from_memory(dataBuffer, w, h, nrComponents)) {
+			throw new IOException("Failed to read image information: " + STBImage.stbi_failure_reason());
+		}
+
+		ByteBuffer image = STBImage.stbi_load_from_memory(dataBuffer, w, h, nrComponents, 3);
+
+		if (image == null) {
+			throw new IOException("Failed to load image: " + STBImage.stbi_failure_reason());
+		}
+
+		int texID = glGenTextures();
+		glBindTexture(GL_TEXTURE_2D, texID);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, w[0], h[0], 0, GL_RGB, GL_UNSIGNED_BYTE, image);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+		STBImage.stbi_image_free(image);
+
+		return new Texture(texID);
+	}
+
 	public PBRRenderingWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
 		this.init();
@@ -45,15 +103,10 @@ public class PBRRenderingWindow extends Window {
 		this.pbrScreen = new PBRRenderingScreen();
 		this.pbrScreen.setWorldScene(WORLD_SCENE);
 
-		BufferedImage[] skyboxSides = new BufferedImage[6];
-		String skyboxDir = "/res/skybox/lake/";
-		for (int i = 0; i < 6; i++) {
-			skyboxSides[i] = FileUtils.loadImageRelative(skyboxDir + Cubemap.CUBEMAP_SIDE_NAMES[i] + ".jpg");
-		}
-		Cubemap skybox = new Cubemap(skyboxSides);
-		Scene.skyboxes.put(WORLD_SCENE, skybox);
+		//skybox
+		this.setHDRSkybox(FileUtils.loadFile(SystemUtils.getWorkingDirectory() + "/res/hdr_radiance/thatch_chapel_4k.hdr"));
 
-		DirLight sun = new DirLight(new Vec3(0.3, -0.6f, 1), new Vec3(23.47, 21.31, 20.79), 0.03f);
+		DirLight sun = new DirLight(new Vec3(0.3, -0.6f, 1), new Vec3(23.47, 21.31, 20.79).mul(0.01f), 0);
 		Light.addLight(WORLD_SCENE, sun);
 
 		this.pic = new PlayerInputController(new Vec3(0, 0, -1));
@@ -84,7 +137,7 @@ public class PBRRenderingWindow extends Window {
 
 		//enable context menu
 		this.setContextMenuRightClick(true);
-		String[] contextMenuActions = new String[] { "Load .obj File" };
+		String[] contextMenuActions = new String[] { "Load File" };
 		this.setContextMenuActions(contextMenuActions);
 
 		this._resize();
@@ -94,9 +147,9 @@ public class PBRRenderingWindow extends Window {
 	@Override
 	public void handleContextMenuAction(String action) {
 		switch (action) {
-		case "Load .obj File": {
+		case "Load File": {
 			FileExplorerWindow fileExplorer = new FileExplorerWindow(this);
-			AdjustableWindow fileExplorerAdj = new AdjustableWindow("Select .obj File", fileExplorer, this);
+			AdjustableWindow fileExplorerAdj = new AdjustableWindow("Select File", fileExplorer, this);
 			fileExplorer.setSingleEntrySelection(true);
 			break;
 		}
@@ -110,8 +163,31 @@ public class PBRRenderingWindow extends Window {
 			return;
 		}
 
-		//size of array should be exactly 1
-		this.setModel(f[0]);
+		//see what type of file it is
+		String fileExt = FileUtils.getFileExtension(f[0]);
+		switch (fileExt) {
+		case "obj": {
+			this.setModel(f[0]);
+			break;
+		}
+
+		case "hdr": {
+			this.setHDRSkybox(f[0]);
+			break;
+		}
+		}
+	}
+
+	public void setHDRSkybox(File file) {
+		//import hdr radiance map into texture, and then use texture to create cubemap
+		try {
+			Texture hdrTexture = loadHDRTexture(file.getAbsolutePath());
+			this.pbrScreen.setSkybox(hdrTexture);
+			hdrTexture.kill();
+		}
+		catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	public void setModel(File file) {

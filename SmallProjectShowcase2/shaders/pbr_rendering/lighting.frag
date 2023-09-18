@@ -13,6 +13,8 @@ uniform sampler2D tex_normal;
 uniform sampler2D tex_diffuse;
 uniform sampler2D tex_attr;	//R: roughness, G: metalness
 
+uniform samplerCube tex_irradiance;
+
 //directional shadows
 uniform float shadowMapNear;	// >= near
 uniform float shadowMapFar;	// < far
@@ -134,6 +136,10 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 } 
 
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+} 
+
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
     float a      = roughness*roughness;
     float a2     = a*a;
@@ -197,6 +203,8 @@ void main() {
     if(light.type == DIR_LIGHT) {
     	attenuation = 1;
     }
+	float shadow = calcShadow(frag_pos);
+	//attenuation *= (1.0 - shadow);
     vec3 radiance = light.color * attenuation;        
     
     // cook-torrance brdf
@@ -220,16 +228,22 @@ void main() {
     float NdotL = max(dot(frag_normal, to_light), 0.0);                
     vec3 light_out = (kD * frag_color / PI + specular) * radiance * NdotL; 
     
-    //ambient light
-    vec3 ambient = vec3(light.ambientIntensity) * frag_color;
-	vec3 final_color = ambient + light_out;
+    vec3 final_color = light_out;
+    
+    //-- AMBIENT LIGHTING & GAMMA CORRECTION -- 
+    //this should really be in another shader, because we only want to do this step once
+    {
+    	kS = fresnelSchlickRoughness(max(dot(frag_normal, to_camera), 0.0), F0, frag_roughness); 
+		kD = vec3(1.0) - kS;
+		vec3 irradiance = texture(tex_irradiance, frag_normal).rgb;
+		vec3 diffuse    = irradiance * frag_color;
+		vec3 ambient    = kD * diffuse; 
+		final_color += ambient;
+    }
     
     //gamma correction
     final_color = final_color / (final_color + vec3(1.0));
 	final_color = pow(final_color, vec3(1.0 / 2.2)); 
-    
-	//test if frag is in shadow
-	float shadow = calcShadow(frag_pos);
     
 	lColor = vec4(final_color, 1);
 	//lColor = vec4(1, 1, 1, 1);

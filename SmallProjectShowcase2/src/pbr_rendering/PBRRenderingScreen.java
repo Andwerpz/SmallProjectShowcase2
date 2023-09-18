@@ -1,22 +1,8 @@
 package pbr_rendering;
 
-import static org.lwjgl.opengl.GL13.GL_TEXTURE0;
-import static org.lwjgl.opengl.GL13.GL_TEXTURE1;
-import static org.lwjgl.opengl.GL13.GL_TEXTURE2;
-import static org.lwjgl.opengl.GL13.GL_TEXTURE3;
-import static org.lwjgl.opengl.GL13.GL_TEXTURE4;
-import static org.lwjgl.opengl.GL13.GL_TEXTURE5;
-import static org.lwjgl.opengl.GL13.GL_TEXTURE6;
-import static org.lwjgl.opengl.GL13.GL_TEXTURE_CUBE_MAP_POSITIVE_X;
-import static org.lwjgl.opengl.GL30.GL_COLOR_ATTACHMENT0;
-import static org.lwjgl.opengl.GL30.GL_COLOR_ATTACHMENT1;
-import static org.lwjgl.opengl.GL30.GL_COLOR_ATTACHMENT2;
-import static org.lwjgl.opengl.GL30.GL_COLOR_ATTACHMENT3;
-import static org.lwjgl.opengl.GL30.GL_COLOR_ATTACHMENT4;
-import static org.lwjgl.opengl.GL30.GL_DEPTH_ATTACHMENT;
-import static org.lwjgl.opengl.GL30.GL_RGBA16F;
-import static org.lwjgl.opengl.GL30.GL_RGBA32F;
 import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL30.*;
+import static org.lwjgl.opengl.GL13.*;
 
 import java.util.ArrayList;
 
@@ -35,6 +21,9 @@ import myutils.v10.math.Mat4;
 import myutils.v10.math.Vec3;
 
 public class PBRRenderingScreen extends Screen {
+
+	//TODO don't gamma correct in the lighting shader, layer it on top of the skybox, which is also going to be hdr, 
+	//and then gamma correct. 
 
 	//i'm just going to reinterpret blinn-phong textures into the pbr pipeline
 	//note that ambient occlusion is missing, i'm planning to just do screen space AO. 
@@ -69,6 +58,11 @@ public class PBRRenderingScreen extends Screen {
 
 	private Texture skyboxColorMap; // RGB: color
 
+	//we'll kill this when we kill the screen. 
+	//this should be an hdr skybox. 
+	private Cubemap skyboxCubemap = null;
+	private Cubemap irradianceCubemap = null;
+
 	private int worldScene;
 
 	private float worldFOV = 90f;
@@ -99,6 +93,7 @@ public class PBRRenderingScreen extends Screen {
 		this.lightingShader.setUniform1i("shadowMap", 4);
 		this.lightingShader.setUniform1i("shadowBackfaceMap", 5);
 		this.lightingShader.setUniform1i("shadowCubemap", 6);
+		this.lightingShader.setUniform1i("tex_irradiance", 7);
 	}
 
 	@Override
@@ -179,8 +174,118 @@ public class PBRRenderingScreen extends Screen {
 		this.worldScene = scene;
 	}
 
+	public static Cubemap convertEquirectangularToCubemap(Texture equirectangularMap) {
+		Shader mappingShader = new Shader("/pbr_rendering/equirectangular_mapping.vert", "/pbr_rendering/equirectangular_mapping.frag");
+		mappingShader.setUniform1i("equirectangularMap", 0);
+
+		int cubemapRes = 512;
+		Cubemap cubemap = new Cubemap(GL_RGBA16F, GL_RGBA, GL_FLOAT, cubemapRes);
+		Framebuffer captureFBO = new Framebuffer(cubemapRes, cubemapRes);
+
+		Vec3[][] camVectors = new Vec3[][] { { new Vec3(1, 0, 0), new Vec3(0, -1, 0) }, // -x
+				{ new Vec3(-1, 0, 0), new Vec3(0, -1, 0) }, // +x
+				{ new Vec3(0, 1, 0), new Vec3(0, 0, 1) }, // -y
+				{ new Vec3(0, -1, 0), new Vec3(0, 0, -1) }, // +y
+				{ new Vec3(0, 0, 1), new Vec3(0, -1, 0) }, // -z
+				{ new Vec3(0, 0, -1), new Vec3(0, -1, 0) }, // +z
+		};
+
+		Camera cubemapCamera = new Camera((float) Math.toRadians(90), 1f, 1f, 0.1f, 50f); // aspect ratio of 1
+		cubemapCamera.setPos(new Vec3(0));
+
+		glViewport(0, 0, cubemapRes, cubemapRes);
+		glEnable(GL_DEPTH_TEST);
+		glDisable(GL_BLEND);
+		glDisable(GL_CULL_FACE);
+		for (int i = 0; i < 6; i++) {
+			cubemapCamera.setFacing(camVectors[i][0]);
+			cubemapCamera.setUp(camVectors[i][1]);
+			mappingShader.enable();
+			mappingShader.setUniformMat4("pr_matrix", cubemapCamera.getProjectionMatrix());
+			mappingShader.setUniformMat4("vw_matrix", cubemapCamera.getViewMatrix());
+
+			captureFBO.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, cubemap.getID());
+			captureFBO.bind();
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			equirectangularMap.bind(GL_TEXTURE0);
+			SkyboxCube.skyboxCube.render();
+		}
+
+		captureFBO.unbindTextureAtBuffer(GL_COLOR_ATTACHMENT0);
+		captureFBO.kill();
+		mappingShader.kill();
+
+		return cubemap;
+	}
+
+	public static Cubemap generateIrradianceMap(Cubemap environmentMap) {
+		Shader mappingShader = new Shader("/pbr_rendering/irradiance_mapping.vert", "/pbr_rendering/irradiance_mapping.frag");
+		mappingShader.setUniform1i("environmentMap", 0);
+
+		int cubemapRes = 32;
+		Cubemap irradianceCubemap = new Cubemap(GL_RGBA16F, GL_RGBA, GL_FLOAT, cubemapRes);
+		Framebuffer captureFBO = new Framebuffer(cubemapRes, cubemapRes);
+
+		Vec3[][] camVectors = new Vec3[][] { { new Vec3(1, 0, 0), new Vec3(0, -1, 0) }, // -x
+				{ new Vec3(-1, 0, 0), new Vec3(0, -1, 0) }, // +x
+				{ new Vec3(0, 1, 0), new Vec3(0, 0, 1) }, // -y
+				{ new Vec3(0, -1, 0), new Vec3(0, 0, -1) }, // +y
+				{ new Vec3(0, 0, 1), new Vec3(0, -1, 0) }, // -z
+				{ new Vec3(0, 0, -1), new Vec3(0, -1, 0) }, // +z
+		};
+
+		Camera cubemapCamera = new Camera((float) Math.toRadians(90), 1f, 1f, 0.1f, 50f); // aspect ratio of 1
+		cubemapCamera.setPos(new Vec3(0));
+
+		glViewport(0, 0, cubemapRes, cubemapRes);
+		glEnable(GL_DEPTH_TEST);
+		glDisable(GL_BLEND);
+		glDisable(GL_CULL_FACE);
+		for (int i = 0; i < 6; i++) {
+			cubemapCamera.setFacing(camVectors[i][0]);
+			cubemapCamera.setUp(camVectors[i][1]);
+			mappingShader.enable();
+			mappingShader.setUniformMat4("pr_matrix", cubemapCamera.getProjectionMatrix());
+			mappingShader.setUniformMat4("vw_matrix", cubemapCamera.getViewMatrix());
+
+			captureFBO.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, irradianceCubemap.getID());
+			captureFBO.bind();
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			environmentMap.bind(GL_TEXTURE0);
+			SkyboxCube.skyboxCube.render();
+		}
+
+		captureFBO.unbindTextureAtBuffer(GL_COLOR_ATTACHMENT0);
+		captureFBO.kill();
+		mappingShader.kill();
+
+		return irradianceCubemap;
+	}
+
+	public void setSkybox(Texture hdrEquirectangularMap) {
+		Cubemap environmentMap = convertEquirectangularToCubemap(hdrEquirectangularMap);
+		this.setSkybox(environmentMap);
+	}
+
+	public void setSkybox(Cubemap skybox) {
+		if (this.skyboxCubemap != null) {
+			this.skyboxCubemap.kill();
+			this.irradianceCubemap.kill();
+			this.skyboxCubemap = null;
+			this.irradianceCubemap = null;
+		}
+
+		this.skyboxCubemap = skybox;
+		this.irradianceCubemap = generateIrradianceMap(skybox);
+	}
+
 	@Override
 	protected void _render(Framebuffer outputBuffer) {
+		if (this.skyboxCubemap == null) {
+			System.err.println("PBRRenderingScreen : Must have skybox to render");
+			return;
+		}
+
 		// -- GEOMETRY -- : render 3d perspective to geometry buffer
 		geometryBuffer.bind();
 		glEnable(GL_DEPTH_TEST);
@@ -216,6 +321,7 @@ public class PBRRenderingScreen extends Screen {
 		this.shadowDepthMap.bind(GL_TEXTURE4);
 		this.shadowBackfaceMap.bind(GL_TEXTURE5);
 		this.shadowCubemap.bind(GL_TEXTURE6);
+		this.irradianceCubemap.bind(GL_TEXTURE7);
 
 		this.lightingShader.setUniform3f("view_pos", this.camera.getPos());
 
@@ -378,7 +484,7 @@ public class PBRRenderingScreen extends Screen {
 		Texture.bindingEnabled = true;
 
 		// -- SKYBOX --
-		if (Scene.skyboxes.containsKey(this.worldScene)) {
+		if (this.skyboxCubemap != null) {
 			skyboxBuffer.bind();
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 			glDisable(GL_CULL_FACE);
@@ -386,11 +492,8 @@ public class PBRRenderingScreen extends Screen {
 			Shader.SKYBOX.enable();
 			Shader.SKYBOX.setUniformMat4("vw_matrix", this.camera.getViewMatrix());
 			Shader.SKYBOX.setUniformMat4("pr_matrix", this.camera.getProjectionMatrix());
-			Scene.skyboxes.get(this.worldScene).bind(GL_TEXTURE0);
+			this.skyboxCubemap.bind(GL_TEXTURE0);
 			SkyboxCube.skyboxCube.render();
-		}
-		else {
-			System.err.println("PerspectiveScreen : NO SKYBOX ENTRY FOR SCENE " + this.worldScene);
 		}
 
 		// -- RENDER TO OUTPUT --
@@ -414,6 +517,10 @@ public class PBRRenderingScreen extends Screen {
 		this.lightingBuffer.kill();
 		this.shadowBuffer.kill();
 		this.skyboxBuffer.kill();
+
+		if (this.skyboxCubemap != null) {
+			this.skyboxCubemap.kill();
+		}
 
 		this.geometryShader.kill();
 		this.lightingShader.kill();
