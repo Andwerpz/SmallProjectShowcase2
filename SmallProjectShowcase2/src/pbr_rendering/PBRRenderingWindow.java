@@ -36,10 +36,12 @@ import lwjglengine.player.PlayerInputController;
 import lwjglengine.scene.DirLight;
 import lwjglengine.scene.Light;
 import lwjglengine.scene.Scene;
+import lwjglengine.screen.ScreenQuad;
 import lwjglengine.screen.SkyboxCube;
 import lwjglengine.util.BufferUtils;
 import lwjglengine.window.AdjustableWindow;
 import lwjglengine.window.FileExplorerWindow;
+import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
 import myutils.v10.file.SystemUtils;
@@ -50,7 +52,7 @@ public class PBRRenderingWindow extends Window {
 
 	private final int WORLD_SCENE = Scene.generateScene();
 
-	private static String[] displayTextureList = new String[] { "geometryPositionMap", "geometryColorMap", "geometryNormalMap", "geometryAttrMap" };
+	private static String[] displayTextureList = new String[] { "geometryPositionMap", "geometryColorMap", "geometryNormalMap", "geometryAttrMap", "lightingColorMap", "postprocessColorMap" };
 	private HashMap<String, Field> displayTextureFields;
 	private HashMap<String, TextureViewerWindow> displayWindows;
 
@@ -103,10 +105,15 @@ public class PBRRenderingWindow extends Window {
 		this.pbrScreen = new PBRRenderingScreen();
 		this.pbrScreen.setWorldScene(WORLD_SCENE);
 
+		//control panel for render settings
+		{
+			AdjustableWindow adjWindow = new AdjustableWindow("Render Settings", new ObjectEditorWindow(this.pbrScreen.getRenderSettings()), this);
+		}
+
 		//skybox
 		this.setHDRSkybox(FileUtils.loadFile(SystemUtils.getWorkingDirectory() + "/res/hdr_radiance/thatch_chapel_4k.hdr"));
 
-		DirLight sun = new DirLight(new Vec3(0.3, -0.6f, 1), new Vec3(23.47, 21.31, 20.79).mul(0.01f), 0);
+		DirLight sun = new DirLight(new Vec3(0.3, -0.6f, 1), new Vec3(23.47, 21.31, 20.79).mul(0.5f), 0);
 		Light.addLight(WORLD_SCENE, sun);
 
 		this.pic = new PlayerInputController(new Vec3(0, 0, -1));

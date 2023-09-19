@@ -13,8 +13,6 @@ uniform sampler2D tex_normal;
 uniform sampler2D tex_diffuse;
 uniform sampler2D tex_attr;	//R: roughness, G: metalness
 
-uniform samplerCube tex_irradiance;
-
 //directional shadows
 uniform float shadowMapNear;	// >= near
 uniform float shadowMapFar;	// < far
@@ -187,7 +185,7 @@ void main() {
 		discard;
 	}
 	
-	//check if fragment isn't rendered?
+	//check if fragment isn't rendered
 	if(texture(tex_position, frag_uv).w == 0.0){
 		discard;
 	}
@@ -205,47 +203,37 @@ void main() {
     }
 	float shadow = calcShadow(frag_pos);
 	//attenuation *= (1.0 - shadow);
-    vec3 radiance = light.color * attenuation;        
-    
-    // cook-torrance brdf
-    float NDF = DistributionGGX(frag_normal, halfway_dir, frag_roughness);        
-    float G   = GeometrySmith(frag_normal, to_camera, to_light, frag_roughness);   
-    
-    //non-metallic surfaces look good with F0 at 0.04, if surface is metallic, we can raise it. 
-    vec3 F0 = vec3(0.04);
+	
+	//non-metallic surfaces look good with F0 at 0.04, if surface is metallic, we can raise it. 
+	vec3 F0 = vec3(0.04);
 	F0 = mix(F0, frag_color, frag_metalness);   
-    vec3 F = fresnelSchlick(max(dot(halfway_dir, to_camera), 0.0), F0);       
+	
+	vec3 final_color = vec3(0);
+	
+	//-- COLOR DUE TO LIGHT SOURCE --
+	{
+    	vec3 radiance = light.color * attenuation;        
     
-    vec3 kS = F;	//specular contribution
-    vec3 kD = vec3(1.0) - kS;	//diffuse contribution
-    kD *= 1.0 - frag_metalness;	  //if a surface is metallic, then diffuse light gets absorbed
+    	// cook-torrance BRDF
+    	float NDF = DistributionGGX(frag_normal, halfway_dir, frag_roughness);        
+    	float G   = GeometrySmith(frag_normal, to_camera, to_light, frag_roughness);   
+    	
+    	vec3 F = fresnelSchlick(max(dot(halfway_dir, to_camera), 0.0), F0);       
+    	vec3 kS = F;	//specular contribution
+    	vec3 kD = vec3(1.0) - kS;	//diffuse contribution
+    	kD *= 1.0 - frag_metalness;	  //if a surface is metallic, then diffuse light gets absorbed
     
-    vec3 numerator    = NDF * G * F;
-    float denominator = 4.0 * max(dot(frag_normal, to_camera), 0.0) * max(dot(frag_normal, to_light), 0.0) + 0.0001;
-    vec3 specular     = numerator / denominator;  
+    	vec3 numerator    = NDF * G * F;
+    	float denominator = 4.0 * max(dot(frag_normal, to_camera), 0.0) * max(dot(frag_normal, to_light), 0.0) + 0.0001;
+   		vec3 specular     = numerator / denominator;  
         
-    // add to outgoing radiance Lo
-    float NdotL = max(dot(frag_normal, to_light), 0.0);                
-    vec3 light_out = (kD * frag_color / PI + specular) * radiance * NdotL; 
+    	// add to outgoing radiance Lo
+    	float NdotL = max(dot(frag_normal, to_light), 0.0);                
+    	vec3 light_out = (kD * frag_color / PI + specular) * radiance * NdotL; 
     
-    vec3 final_color = light_out;
-    
-    //-- AMBIENT LIGHTING & GAMMA CORRECTION -- 
-    //this should really be in another shader, because we only want to do this step once
-    {
-    	kS = fresnelSchlickRoughness(max(dot(frag_normal, to_camera), 0.0), F0, frag_roughness); 
-		kD = vec3(1.0) - kS;
-		vec3 irradiance = texture(tex_irradiance, frag_normal).rgb;
-		vec3 diffuse    = irradiance * frag_color;
-		vec3 ambient    = kD * diffuse; 
-		final_color += ambient;
+    	final_color += light_out;
     }
     
-    //gamma correction
-    final_color = final_color / (final_color + vec3(1.0));
-	final_color = pow(final_color, vec3(1.0 / 2.2)); 
-    
 	lColor = vec4(final_color, 1);
-	//lColor = vec4(1, 1, 1, 1);
 } 
 

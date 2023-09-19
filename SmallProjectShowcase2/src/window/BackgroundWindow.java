@@ -30,6 +30,8 @@ public class BackgroundWindow extends Window {
 	// - Actual FFT Water
 	// - Dynamic Skybox Shader
 	// - 3D Model Animations
+	// - Vector Art Rendering; https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-25-rendering-vector-art-gpu
+	// - LaTeX math renderer
 
 	private final int BACKGROUND_SCENE = Scene.generateScene();
 	private final int TEXT_SCENE = Scene.generateScene();
