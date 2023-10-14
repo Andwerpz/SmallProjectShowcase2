@@ -2,7 +2,7 @@ package volumetric_clouds;
 
 import lwjglengine.model.Line;
 import lwjglengine.model.ModelInstance;
-import myutils.v10.math.Vec3;
+import myutils.math.Vec3;
 
 public class CloudBoundingBox {
 

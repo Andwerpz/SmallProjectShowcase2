@@ -21,8 +21,8 @@ import lwjglengine.screen.PerspectiveScreen;
 import lwjglengine.screen.Screen;
 import lwjglengine.screen.ScreenQuad;
 import lwjglengine.screen.SkyboxCube;
-import myutils.v10.math.Mat4;
-import myutils.v10.math.Vec3;
+import myutils.math.Mat4;
+import myutils.math.Vec3;
 
 public class PBRRenderingScreen extends Screen {
 	//TODO 

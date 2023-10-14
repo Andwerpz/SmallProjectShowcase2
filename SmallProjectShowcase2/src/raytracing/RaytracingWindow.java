@@ -21,9 +21,9 @@ import lwjglengine.scene.Scene;
 import lwjglengine.window.AdjustableWindow;
 import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.Window;
-import myutils.v10.math.Vec3;
-import myutils.v10.math.Vec4;
-import myutils.v11.file.FileUtils;
+import myutils.file.FileUtils;
+import myutils.math.Vec3;
+import myutils.math.Vec4;
 
 public class RaytracingWindow extends Window {
 

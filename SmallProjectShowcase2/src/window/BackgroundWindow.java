@@ -20,6 +20,7 @@ import procedural_trees.ProceduralTreesWindow;
 import ray_marching.RayMarchingWindow;
 import raytracing.RaytracingWindow;
 import sum_of_sines_water.SumOfSinesWaterWindow;
+import vector_art.VectorArtWindow;
 import volumetric_clouds.VolumetricCloudsWindow;
 
 public class BackgroundWindow extends Window {
@@ -30,8 +31,11 @@ public class BackgroundWindow extends Window {
 	// - Actual FFT Water
 	// - Dynamic Skybox Shader
 	// - 3D Model Animations
-	// - Vector Art Rendering; https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-25-rendering-vector-art-gpu
-	// - LaTeX math renderer
+	// - Vector Art Rendering
+	//    - trying to create a svg renderer is probably too hard; they have too many features.
+	//    - https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-25-rendering-vector-art-gpu
+	//	  - www.polygontriangulation.com/2018/07/triangulation-algorithm.html
+	//    - LaTeX math renderer
 
 	private final int BACKGROUND_SCENE = Scene.generateScene();
 	private final int TEXT_SCENE = Scene.generateScene();
@@ -92,6 +96,7 @@ public class BackgroundWindow extends Window {
 			projectPicker.addToList("Ray Marching");
 			projectPicker.addToList("Raytracing");
 			projectPicker.addToList("PBR Rendering");
+			projectPicker.addToList("Vector Art");
 			break;
 		}
 
@@ -145,6 +150,11 @@ public class BackgroundWindow extends Window {
 
 		case "PBR Rendering": {
 			AdjustableWindow window = new AdjustableWindow(new PBRRenderingWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Vector Art": {
+			AdjustableWindow window = new AdjustableWindow(new VectorArtWindow(x, y, width, height, null), this);
 			break;
 		}
 		}

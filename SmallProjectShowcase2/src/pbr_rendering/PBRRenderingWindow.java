@@ -27,6 +27,7 @@ import java.util.HashMap;
 
 import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
+import lwjglengine.graphics.Material;
 import lwjglengine.graphics.Shader;
 import lwjglengine.graphics.Texture;
 import lwjglengine.model.Model;
@@ -44,9 +45,10 @@ import lwjglengine.window.FileExplorerWindow;
 import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
-import myutils.v10.file.SystemUtils;
-import myutils.v10.math.Vec3;
-import myutils.v11.file.FileUtils;
+import myutils.file.FileUtils;
+import myutils.file.SystemUtils;
+import myutils.math.Mat4;
+import myutils.math.Vec3;
 
 public class PBRRenderingWindow extends Window {
 
@@ -113,7 +115,7 @@ public class PBRRenderingWindow extends Window {
 		//skybox
 		this.setHDRSkybox(FileUtils.loadFile(SystemUtils.getWorkingDirectory() + "/res/hdr_radiance/thatch_chapel_4k.hdr"));
 
-		DirLight sun = new DirLight(new Vec3(0.3, -0.6f, 1), new Vec3(23.47, 21.31, 20.79).mul(0.5f), 0);
+		DirLight sun = new DirLight(new Vec3(0.3, -0.6f, 1), new Vec3(23.47, 21.31, 20.79).mul(0.1f), 0);
 		Light.addLight(WORLD_SCENE, sun);
 
 		this.pic = new PlayerInputController(new Vec3(0, 0, -1));
@@ -146,6 +148,33 @@ public class PBRRenderingWindow extends Window {
 		this.setContextMenuRightClick(true);
 		String[] contextMenuActions = new String[] { "Load File" };
 		this.setContextMenuActions(contextMenuActions);
+
+		//initial sphere scene
+		this.model = Model.loadModelFile(FileUtils.loadFileRelative("/res/sphere/sphere.obj"));
+		{
+			int sideAmt = 7;
+			float sphereRadius = 1;
+			float sphereScale = 0.33f;
+			float attrInc = 1.0f / (sideAmt - 1);
+			float posBase = -(sphereRadius * 3) * (sideAmt - 1) / 2.0f;
+			float posInc = (sphereRadius * 3);
+			for (int i = 0; i < sideAmt; i++) {
+				for (int j = 0; j < sideAmt; j++) {
+					Material material = Material.defaultMaterial();
+					material.setRoughness(i * attrInc);
+					material.setMetalness(j * attrInc);
+
+					//material.setDiffuse(new Vec3(Math.random(), Math.random(), Math.random()));
+					material.setDiffuse(new Vec3(1, 1, 1));
+
+					Mat4 mat4 = Mat4.translate(posBase + i * posInc, posBase + j * posInc, 0);
+					mat4.muli(Mat4.scale(sphereScale));
+
+					ModelInstance instance = new ModelInstance(this.model, mat4, WORLD_SCENE);
+					instance.setMaterial(material);
+				}
+			}
+		}
 
 		this._resize();
 
@@ -218,7 +247,9 @@ public class PBRRenderingWindow extends Window {
 	protected void _kill() {
 		this.pbrScreen.kill();
 
-		this.model.kill();
+		if (this.model != null) {
+			this.model.kill();
+		}
 
 		Scene.removeScene(WORLD_SCENE);
 	}

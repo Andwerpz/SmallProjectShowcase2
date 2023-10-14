@@ -34,12 +34,12 @@ import lwjglengine.ui.UIElement;
 import lwjglengine.ui.UIFilledRectangle;
 import lwjglengine.ui.UISection;
 import lwjglengine.window.Window;
-import myutils.v10.math.MathUtils;
-import myutils.v10.math.PerlinNoiseGenerator;
-import myutils.v10.math.Vec2;
-import myutils.v10.math.Vec3;
-import myutils.v10.misc.Pair;
-import myutils.v11.file.FileUtils;
+import myutils.file.FileUtils;
+import myutils.math.MathUtils;
+import myutils.math.PerlinNoiseGenerator;
+import myutils.math.Vec2;
+import myutils.math.Vec3;
+import myutils.misc.Pair;
 
 public class HydraulicTerrainWindow extends Window {
 	//for now, just generate a new vertex array 
@@ -236,7 +236,9 @@ public class HydraulicTerrainWindow extends Window {
 
 		for (int i = 0; i < TERRAIN_RESOLUTION; i++) {
 			for (int j = 0; j < TERRAIN_RESOLUTION; j++) {
-				noise[i][j][0] = (float) PerlinNoiseGenerator.noise(i, j, frequency, amplitude, persistence, lacunarity, octaves);
+				float x = (float) (i + PerlinNoiseGenerator.noise(i, j, frequency, amplitude, persistence, lacunarity, octaves));
+				float y = (float) (j + PerlinNoiseGenerator.noise(-j, i, frequency, amplitude, persistence, lacunarity, octaves));
+				noise[i][j][0] = (float) PerlinNoiseGenerator.noise(x, y, frequency, amplitude, persistence, lacunarity, octaves);
 				noise[i][j][1] = sedimentLayerThickness;
 			}
 		}

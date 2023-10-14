@@ -29,10 +29,10 @@ import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.Texture3DViewerWindow;
 import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
-import myutils.v10.math.Vec2;
-import myutils.v10.math.Vec3;
-import myutils.v11.file.FileUtils;
-import myutils.v11.file.JarUtils;
+import myutils.file.FileUtils;
+import myutils.file.JarUtils;
+import myutils.math.Vec2;
+import myutils.math.Vec3;
 
 public class VolumetricCloudsWindow extends Window {
 

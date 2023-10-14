@@ -20,9 +20,9 @@ import lwjglengine.player.PlayerInputController;
 import lwjglengine.scene.Scene;
 import lwjglengine.screen.SkyboxCube;
 import lwjglengine.window.Window;
-import myutils.v10.math.Mat4;
-import myutils.v10.math.Vec3;
-import myutils.v11.file.FileUtils;
+import myutils.file.FileUtils;
+import myutils.math.Mat4;
+import myutils.math.Vec3;
 
 public class RayMarchingWindow extends Window {
 

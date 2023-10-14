@@ -20,9 +20,9 @@ import lwjglengine.scene.Light;
 import lwjglengine.scene.Scene;
 import lwjglengine.screen.Screen;
 import lwjglengine.screen.SkyboxCube;
-import myutils.v10.math.Mat4;
-import myutils.v10.math.MathUtils;
-import myutils.v10.math.Vec3;
+import myutils.math.Mat4;
+import myutils.math.MathUtils;
+import myutils.math.Vec3;
 
 public class SumOfSinesWaterScreen extends Screen {
 	// renders the scene with a perspective projection matrix.

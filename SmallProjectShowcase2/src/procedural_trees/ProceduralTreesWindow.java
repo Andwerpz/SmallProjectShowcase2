@@ -27,12 +27,12 @@ import lwjglengine.scene.Light;
 import lwjglengine.scene.Scene;
 import lwjglengine.screen.PerspectiveScreen;
 import lwjglengine.window.Window;
-import myutils.v10.math.Mat4;
-import myutils.v10.math.MathUtils;
-import myutils.v10.math.Quaternion;
-import myutils.v10.math.Vec2;
-import myutils.v10.math.Vec3;
-import myutils.v11.file.FileUtils;
+import myutils.file.FileUtils;
+import myutils.math.Mat4;
+import myutils.math.MathUtils;
+import myutils.math.Quaternion;
+import myutils.math.Vec2;
+import myutils.math.Vec3;
 
 public class ProceduralTreesWindow extends Window {
 

@@ -27,8 +27,8 @@ import lwjglengine.scene.Scene;
 import lwjglengine.screen.Screen;
 import lwjglengine.screen.SkyboxCube;
 import lwjglengine.util.BufferUtils;
-import myutils.v10.math.Mat4;
-import myutils.v10.math.Vec3;
+import myutils.math.Mat4;
+import myutils.math.Vec3;
 
 public class RaytracingScreen extends Screen {
 	//raytracing, wowee, very nice
