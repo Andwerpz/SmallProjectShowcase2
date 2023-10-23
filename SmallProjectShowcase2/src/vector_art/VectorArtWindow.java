@@ -1,12 +1,17 @@
 package vector_art;
 
+import java.awt.Color;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.List;
 
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
 import lwjglengine.input.Button;
 import lwjglengine.input.Input;
+import lwjglengine.model.Line;
+import lwjglengine.model.ModelInstance;
+import lwjglengine.scene.Scene;
 import lwjglengine.screen.UIScreen;
 import lwjglengine.ui.UIElement;
 import lwjglengine.ui.UIFilledRectangle;
@@ -19,9 +24,13 @@ import myutils.file.FileUtils;
 import myutils.file.xml.XMLNode;
 import myutils.file.xml.XMLReader;
 import myutils.file.xml.svg.SVGElement;
+import myutils.file.xml.svg.SVGPath;
 import myutils.file.xml.svg.SVGReader;
+import myutils.math.Vec2;
 
 public class VectorArtWindow extends Window {
+
+	private final int VECTOR_SCENE = Scene.generateScene();
 
 	private UIScreen uiScreen;
 	private UISection uiSection;
@@ -62,7 +71,6 @@ public class VectorArtWindow extends Window {
 
 	@Override
 	public void handleFiles(File[] files) {
-		System.err.println("Got file");
 		if (files.length != 1) {
 			return;
 		}
@@ -70,11 +78,26 @@ public class VectorArtWindow extends Window {
 		File f = files[0];
 		System.err.println(FileUtils.getFileExtension(f));
 		if (FileUtils.getFileExtension(f).equals("svg")) {
-			System.err.println("Parsing SVG");
+			Scene.clearScene(VECTOR_SCENE);
+			System.out.println("Parsing SVG");
 			ArrayList<SVGElement> elements = SVGReader.parseStringAsSVG(FileUtils.readFileToString(f));
+
+			//just draw all the bezier curves
 			for (SVGElement e : elements) {
+				System.out.println("Printing Path");
 				System.out.println(e);
+				SVGPath p = (SVGPath) e;
+				List<Vec2[]> cubicCurves = p.getCubicCurves();
+				for (Vec2[] v : cubicCurves) {
+					for (int i = 0; i < 4; i++) {
+						Vec2 v0 = v[i];
+						Vec2 v1 = v[(i + 1) % 4];
+						ModelInstance line = Line.addLine(v0, v1, VECTOR_SCENE);
+						line.setMaterial(new Material(Color.WHITE));
+					}
+				}
 			}
+
 		}
 	}
 
@@ -82,6 +105,8 @@ public class VectorArtWindow extends Window {
 	protected void _kill() {
 		this.uiScreen.kill();
 		this.uiSection.kill();
+
+		Scene.removeScene(VECTOR_SCENE);
 	}
 
 	@Override
@@ -101,6 +126,9 @@ public class VectorArtWindow extends Window {
 
 	@Override
 	protected void renderContent(Framebuffer outputBuffer) {
+		this.uiScreen.setUIScene(VECTOR_SCENE);
+		this.uiScreen.render(outputBuffer);
+
 		this.uiSection.render(outputBuffer, this.getWindowMousePos());
 	}
 
