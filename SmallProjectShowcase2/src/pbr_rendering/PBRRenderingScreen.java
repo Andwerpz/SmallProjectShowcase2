@@ -21,6 +21,7 @@ import lwjglengine.screen.PerspectiveScreen;
 import lwjglengine.screen.Screen;
 import lwjglengine.screen.ScreenQuad;
 import lwjglengine.screen.SkyboxCube;
+import lwjglengine.util.ShaderUtils;
 import myutils.math.Mat4;
 import myutils.math.Vec3;
 
@@ -87,7 +88,7 @@ public class PBRRenderingScreen extends Screen {
 		this.camera.setPos(cameraPos);
 		this.camera.setFacing(cameraFacing);
 
-		this.geometryShader = new Shader("/pbr_rendering/geometry.vert", "/pbr_rendering/geometry.frag");
+		this.geometryShader = ShaderUtils.createShader("/pbr_rendering/geometry.vert", "/pbr_rendering/geometry.frag");
 		this.geometryShader.setUniform1i("tex_diffuse", 0);
 		this.geometryShader.setUniform1i("tex_roughness", 1);
 		this.geometryShader.setUniform1i("tex_metalness", 2);
@@ -96,7 +97,7 @@ public class PBRRenderingScreen extends Screen {
 		this.geometryShader.setUniform1i("enableParallaxMapping", 0);
 		this.geometryShader.setUniform1i("enableTexScaling", 1);
 
-		this.lightingShader = new Shader("/pbr_rendering/lighting.vert", "/pbr_rendering/lighting.frag");
+		this.lightingShader = ShaderUtils.createShader("/pbr_rendering/lighting.vert", "/pbr_rendering/lighting.frag");
 		this.lightingShader.setUniform1i("tex_position", 0);
 		this.lightingShader.setUniform1i("tex_normal", 1);
 		this.lightingShader.setUniform1i("tex_diffuse", 2);
@@ -105,7 +106,7 @@ public class PBRRenderingScreen extends Screen {
 		this.lightingShader.setUniform1i("shadowBackfaceMap", 5);
 		this.lightingShader.setUniform1i("shadowCubemap", 6);
 
-		this.ambientShader = new Shader("/pbr_rendering/ambient.vert", "/pbr_rendering/ambient.frag");
+		this.ambientShader = ShaderUtils.createShader("/pbr_rendering/ambient.vert", "/pbr_rendering/ambient.frag");
 		this.ambientShader.setUniform1i("tex_position", 0);
 		this.ambientShader.setUniform1i("tex_normal", 1);
 		this.ambientShader.setUniform1i("tex_diffuse", 2);
@@ -118,7 +119,7 @@ public class PBRRenderingScreen extends Screen {
 		this.ambientShader.setUniform1i("brdfLUT", 9);
 		this.ambientShader.setUniform1i("tex_lit_color", 10);
 
-		this.postprocessShader = new Shader("/pbr_rendering/postprocess.vert", "/pbr_rendering/postprocess.frag");
+		this.postprocessShader = ShaderUtils.createShader("/pbr_rendering/postprocess.vert", "/pbr_rendering/postprocess.frag");
 		this.postprocessShader.setUniform1i("tex_color", 0);
 
 		this.brdfTexture = generateBRDF();
@@ -239,7 +240,7 @@ public class PBRRenderingScreen extends Screen {
 	}
 
 	public static Texture generateBRDF() {
-		Shader brdfShader = new Shader("/pbr_rendering/brdf.vert", "/pbr_rendering/brdf.frag");
+		Shader brdfShader = ShaderUtils.createShader("/pbr_rendering/brdf.vert", "/pbr_rendering/brdf.frag");
 		int resolution = 512;
 
 		int texID = glGenTextures();
@@ -270,7 +271,7 @@ public class PBRRenderingScreen extends Screen {
 	}
 
 	public static Cubemap convertEquirectangularToCubemap(Texture equirectangularMap) {
-		Shader mappingShader = new Shader("/pbr_rendering/equirectangular_mapping.vert", "/pbr_rendering/equirectangular_mapping.frag");
+		Shader mappingShader = ShaderUtils.createShader("/pbr_rendering/equirectangular_mapping.vert", "/pbr_rendering/equirectangular_mapping.frag");
 		mappingShader.setUniform1i("equirectangularMap", 0);
 
 		int cubemapRes = 512;
@@ -314,7 +315,7 @@ public class PBRRenderingScreen extends Screen {
 	}
 
 	public static Cubemap generateIrradianceMap(Cubemap environmentMap) {
-		Shader mappingShader = new Shader("/pbr_rendering/irradiance_mapping.vert", "/pbr_rendering/irradiance_mapping.frag");
+		Shader mappingShader = ShaderUtils.createShader("/pbr_rendering/irradiance_mapping.vert", "/pbr_rendering/irradiance_mapping.frag");
 		mappingShader.setUniform1i("environmentMap", 0);
 
 		int cubemapRes = 32;
@@ -358,7 +359,7 @@ public class PBRRenderingScreen extends Screen {
 	}
 
 	public static Cubemap generatePrefilterMap(Cubemap environmentMap) {
-		Shader prefilterShader = new Shader("/pbr_rendering/prefiltering.vert", "/pbr_rendering/prefiltering.frag");
+		Shader prefilterShader = ShaderUtils.createShader("/pbr_rendering/prefiltering.vert", "/pbr_rendering/prefiltering.frag");
 		prefilterShader.setUniform1i("environmentMap", 0);
 
 		//generate custom cubemap with mipmaps

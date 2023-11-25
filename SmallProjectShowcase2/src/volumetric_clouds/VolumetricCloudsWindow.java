@@ -81,7 +81,7 @@ public class VolumetricCloudsWindow extends Window {
 
 		this.pic = new PlayerInputController(new Vec3(0));
 
-		this.cloudsShader = new Shader("/volumetric_clouds/clouds.vert", "/volumetric_clouds/clouds.frag");
+		this.cloudsShader = ShaderUtils.createShader("/volumetric_clouds/clouds.vert", "/volumetric_clouds/clouds.frag");
 		this.cloudsShader.setUniform1i("tex_worley_noise", 0);
 
 		this.cloudBox = new CloudBoundingBox(WORLD_SCENE, new Vec3(0, 0, 0), new Vec3(50, 10, 50));

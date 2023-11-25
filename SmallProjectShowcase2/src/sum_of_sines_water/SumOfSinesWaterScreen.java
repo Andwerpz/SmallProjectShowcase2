@@ -20,6 +20,7 @@ import lwjglengine.scene.Light;
 import lwjglengine.scene.Scene;
 import lwjglengine.screen.Screen;
 import lwjglengine.screen.SkyboxCube;
+import lwjglengine.util.ShaderUtils;
 import myutils.math.Mat4;
 import myutils.math.MathUtils;
 import myutils.math.Vec3;
@@ -80,7 +81,7 @@ public class SumOfSinesWaterScreen extends Screen {
 	public SumOfSinesWaterScreen() {
 		this.waterAttributes = new WaterAttributes();
 
-		this.waterTextureShader = new Shader("/sum_of_sines_water/water_texture.vert", "/sum_of_sines_water/water_texture.frag");
+		this.waterTextureShader = ShaderUtils.createShader("/sum_of_sines_water/water_texture.vert", "/sum_of_sines_water/water_texture.frag");
 
 		{
 			float speed = 0.5f;
@@ -102,7 +103,7 @@ public class SumOfSinesWaterScreen extends Screen {
 		this.waterBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 });
 		this.waterBuffer.isComplete();
 
-		this.waterGeometryShader = new Shader("/sum_of_sines_water/water.vert", "/sum_of_sines_water/water.frag");
+		this.waterGeometryShader = ShaderUtils.createShader("/sum_of_sines_water/water.vert", "/sum_of_sines_water/water.frag");
 		this.waterGeometryShader.setUniform1i("tex_diffuse", 0);
 		this.waterGeometryShader.setUniform1i("tex_specular", 1);
 		this.waterGeometryShader.setUniform1i("tex_shininess", 2);
@@ -117,7 +118,7 @@ public class SumOfSinesWaterScreen extends Screen {
 
 		this.waterGeometryShader.setUniform1f("water_scale", 512);
 
-		this.waterAtmosphereShader = new Shader("/sum_of_sines_water/water_atmosphere.vert", "/sum_of_sines_water/water_atmosphere.frag");
+		this.waterAtmosphereShader = ShaderUtils.createShader("/sum_of_sines_water/water_atmosphere.vert", "/sum_of_sines_water/water_atmosphere.frag");
 	}
 
 	public class WaterAttributes {

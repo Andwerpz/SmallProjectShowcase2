@@ -27,6 +27,7 @@ import lwjglengine.scene.Scene;
 import lwjglengine.screen.Screen;
 import lwjglengine.screen.SkyboxCube;
 import lwjglengine.util.BufferUtils;
+import lwjglengine.util.ShaderUtils;
 import myutils.math.Mat4;
 import myutils.math.Vec3;
 
@@ -82,9 +83,9 @@ public class RaytracingScreen extends Screen {
 	private RaytracingOptions options = new RaytracingOptions();
 
 	public RaytracingScreen() {
-		this.raytracingExtractBloomShader = new Shader("/raytracing/raytracing_extract_bloom.vert", "/raytracing/raytracing_extract_bloom.frag");
-		this.raytracingHDRShader = new Shader("/raytracing/raytracing_hdr.vert", "/raytracing/raytracing_hdr.frag");
-		this.raytracingGeometryShader = new Shader("/raytracing/raytracing.vert", "/raytracing/raytracing.frag");
+		this.raytracingExtractBloomShader = ShaderUtils.createShader("/raytracing/raytracing_extract_bloom.vert", "/raytracing/raytracing_extract_bloom.frag");
+		this.raytracingHDRShader = ShaderUtils.createShader("/raytracing/raytracing_hdr.vert", "/raytracing/raytracing_hdr.frag");
+		this.raytracingGeometryShader = ShaderUtils.createShader("/raytracing/raytracing.vert", "/raytracing/raytracing.frag");
 
 		this.raytracingGeometryShader.setUniform1i("render_tex_0", 0);
 		this.raytracingGeometryShader.setUniform1i("skybox_tex", 1);

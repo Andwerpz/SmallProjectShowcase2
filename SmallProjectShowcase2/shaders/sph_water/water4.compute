@@ -1,0 +1,144 @@
+#version 430 core
+
+layout (local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(rgba32f, binding = 0) uniform image1D predictedPosLUTTexture;
+layout(rgba32f, binding = 1) uniform image1D densityTexture;
+layout(rgba32f, binding = 2) uniform image1D posvelTexture;
+
+uniform float delta_time;
+
+uniform int nr_particles;
+uniform float smoothing_radius;
+uniform int LUT_P1;
+uniform int LUT_P2;
+uniform int LUT_P3;
+uniform int LUT_P4;
+uniform int LUT_P5;
+
+uniform float water_mass;
+uniform float density_smoothing_kernel_volume;
+uniform float near_density_smoothing_kernel_volume;
+
+uniform float target_density;
+uniform float pressure_multiplier;
+uniform float near_pressure_multiplier;
+
+uniform vec2 mouse_pos;
+uniform bool mouse_pressed;
+uniform float interaction_radius;
+uniform float interaction_strength;
+
+int computeHash(int x, int y) {
+	x += LUT_P4;
+	y += LUT_P5;
+	return abs(x * LUT_P1 + y * LUT_P2 + LUT_P3) % nr_particles;
+}
+int computeHash(vec2 pos) {
+	int hash_x = int(pos.x / smoothing_radius);
+	int hash_y = int(pos.y / smoothing_radius);
+	return computeHash(hash_x, hash_y);
+}	
+
+float densitySmoothingKernelSlope(float dist) {
+	return -3.0 * pow(max(0.0, smoothing_radius - dist), 2.0) * water_mass;
+}
+
+float nearDensitySmoothingKernelSlope(float dist) {
+	return -6.0 * pow(max(0.0, smoothing_radius - dist), 5.0) * water_mass;
+}
+
+const int dx[9] = int[9](-1, -1, -1, 0, 0, 0, 1, 1, 1);
+const int dy[9] = int[9](-1, 0, 1, -1, 0, 1, -1, 0, 1);
+
+vec2 calculatePressure(float density, float near_density) {
+	float density_error = density - target_density;
+	float pressure = density_error * pressure_multiplier;
+	float near_pressure = near_density * near_pressure_multiplier;
+	return vec2(pressure, near_pressure);
+}
+
+vec2 calculateSharedPressure(vec2 d1, vec2 d2) {
+	vec2 p1 = calculatePressure(d1.x, d1.y);
+	vec2 p2 = calculatePressure(d2.x, d2.y);
+	return vec2((p1.x + p2.x) / 2.0, (p1.y + p2.y) / 2.0);
+}
+
+vec2 calculatePressureForce(int ind, vec2 pos, vec2 density) {
+	vec2 pressure_force = vec2(0);
+	int hash_x = int(pos.x / smoothing_radius);
+	int hash_y = int(pos.y / smoothing_radius);
+	for(int i = 0; i < 9; i++){
+		int nx = hash_x + dx[i];
+		int ny = hash_y + dy[i];
+		int nhash = computeHash(nx, ny);
+		int start_ind = int(imageLoad(predictedPosLUTTexture, nhash).w);
+		for(int j = start_ind; j < nr_particles; j++){
+			if(j == ind) {
+				continue;
+			}
+			vec4 lut = imageLoad(predictedPosLUTTexture, j);
+			vec2 cpos = lut.xy;
+			int chash = int(lut.z);
+			if(chash != nhash) {
+				break;
+			}
+			float dist = distance(pos, cpos);
+			vec2 dir = pos - cpos;
+			if(dist < 0.001) {
+				dir.x = 1;
+				dir.y = 0;
+			}
+			else {
+				dir /= dist;
+			}
+			float density_slope = densitySmoothingKernelSlope(dist);
+			float near_density_slope = nearDensitySmoothingKernelSlope(dist);
+			vec2 cdensity = imageLoad(densityTexture, j).xy;
+			vec2 shared_pressure = calculateSharedPressure(density, cdensity);
+			pressure_force -= dir * ((shared_pressure.x * density_slope / density.x) + (shared_pressure.y * near_density_slope / density.y));
+		}
+	}
+	return pressure_force;
+}
+
+vec2 calculateInteractionForce(vec2 pos, vec2 vel) {
+	vec2 interaction_force = vec2(0);
+	if(!mouse_pressed) {
+		return interaction_force;
+	}
+	float dist = distance(mouse_pos, pos);
+	if(dist > interaction_radius) {
+		return interaction_force;
+	}
+	vec2 dir = mouse_pos - pos;
+	dir /= dist;
+	float strength = max(0.0, 1.0 - (dist / interaction_radius));
+	strength *= interaction_strength;
+	interaction_force -= vel;
+	interaction_force += dir * strength;
+	return interaction_force;
+}
+
+void main() {
+	int texelCoord = int(gl_GlobalInvocationID.x);
+	
+	vec4 predictedPosLUT = imageLoad(predictedPosLUTTexture, texelCoord);
+	vec2 predicted_pos = predictedPosLUT.xy;
+	vec4 density_viscosity = imageLoad(densityTexture, texelCoord);
+	
+	vec2 density = density_viscosity.xy;
+	vec2 viscosity_force = density_viscosity.zw;
+	
+	vec4 posvel = imageLoad(posvelTexture, texelCoord);
+	vec2 pos = posvel.xy;
+	vec2 vel = posvel.zw;
+	
+	vec2 pressure_force = calculatePressureForce(texelCoord, predicted_pos, density);
+	vec2 interaction_force = calculateInteractionForce(pos, vel);
+	vec2 force = pressure_force + interaction_force + viscosity_force;
+	
+	vel += force * delta_time / water_mass;
+	
+	imageStore(posvelTexture, texelCoord, vec4(pos, vel));
+}

@@ -1,0 +1,75 @@
+#version 430 core
+
+layout (local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(rgba32f, binding = 0) uniform image1D posvelTexture;
+layout(rgba32f, binding = 1) uniform image1D predictedPosLUTTexture;
+
+uniform float delta_time;
+uniform float predict_delta_time;
+uniform vec2 bounds_min;
+uniform vec2 bounds_max;
+uniform vec2 gravity;
+uniform float boundary_damping;
+
+uniform int nr_particles;
+uniform float smoothing_radius;
+uniform int LUT_P1;
+uniform int LUT_P2;
+uniform int LUT_P3;
+uniform int LUT_P4;
+uniform int LUT_P5;
+
+int computeHash(int x, int y) {
+	x += LUT_P4;
+	y += LUT_P5;
+	return abs(x * LUT_P1 + y * LUT_P2 + LUT_P3) % nr_particles;
+}
+
+int computeHash(vec2 pos) {
+	int hash_x = int(pos.x / smoothing_radius);
+	int hash_y = int(pos.y / smoothing_radius);
+	return computeHash(hash_x, hash_y);
+}	
+
+void main() {
+	int texelCoord = int(gl_GlobalInvocationID.x);
+	vec4 posvel = imageLoad(posvelTexture, texelCoord);
+	vec2 pos = posvel.rg;
+	vec2 vel = posvel.ba;
+	
+	//update position
+	pos += vel * delta_time;
+	
+	//gravity
+	vel += gravity * delta_time;
+	
+	//boundary collisions
+	{
+		if (pos.x < bounds_min.x) {
+			pos.x = bounds_min.x;
+			vel.x *= -boundary_damping;
+		}
+		if (pos.x > bounds_max.x) {
+			pos.x = bounds_max.x;
+			vel.x *= -boundary_damping;
+		}
+		if (pos.y < bounds_min.y) {
+			pos.y = bounds_min.y;
+			vel.y *= -boundary_damping;
+		}
+		if (pos.y > bounds_max.y) {
+			pos.y = bounds_max.y;
+			vel.y *= -boundary_damping;
+		}
+	}
+	
+	//compute predicted position
+	vec2 predicted_pos = pos + vel * predict_delta_time;
+	
+	//compute hash based off of predicted position
+	int hash = computeHash(predicted_pos);
+	
+    imageStore(posvelTexture, texelCoord, vec4(pos, vel));
+    imageStore(predictedPosLUTTexture, texelCoord, vec4(predicted_pos, float(hash), 0.0));
+}

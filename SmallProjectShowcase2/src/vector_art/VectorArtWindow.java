@@ -42,7 +42,7 @@ public class VectorArtWindow extends Window {
 
 	private void init() {
 		this.uiScreen = new UIScreen();
-		this.uiSection = new UISection(0, 0, this.getWidth(), this.getHeight(), this.uiScreen);
+		this.uiSection = new UISection();
 		UIFilledRectangle backgroundRect = this.uiSection.getBackgroundRect();
 		backgroundRect.bind(this.rootUIElement);
 		backgroundRect.setFrameAlignmentStyle(UIElement.FROM_LEFT, UIElement.FROM_TOP);
@@ -111,7 +111,8 @@ public class VectorArtWindow extends Window {
 
 	@Override
 	protected void _resize() {
-
+		this.uiScreen.setScreenDimensions(this.getWidth(), this.getHeight());
+		this.uiSection.setScreenDimensions(this.getWidth(), this.getHeight());
 	}
 
 	@Override

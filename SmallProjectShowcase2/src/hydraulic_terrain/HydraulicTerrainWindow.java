@@ -55,8 +55,6 @@ public class HydraulicTerrainWindow extends Window {
 	private final int WORLD_SCENE = Scene.generateScene();
 
 	private PerspectiveScreen perspectiveScreen;
-
-	private UIScreen uiScreen;
 	private UISection uiSection;
 
 	private static final int TERRAIN_RESOLUTION = 512;
@@ -103,8 +101,7 @@ public class HydraulicTerrainWindow extends Window {
 
 		this.mousePos = this.getWindowMousePos();
 
-		this.uiScreen = new UIScreen();
-		this.uiSection = new UISection(0, 0, this.getWidth(), this.getHeight(), this.uiScreen);
+		this.uiSection = new UISection();
 
 		Material backgroundMaterial = new Material(this.contentDefaultMaterial);
 		backgroundMaterial.setAlpha(0.5f);
@@ -474,7 +471,7 @@ public class HydraulicTerrainWindow extends Window {
 		this.perspectiveScreen.kill();
 		Scene.removeScene(WORLD_SCENE);
 
-		this.uiScreen.kill();
+		this.uiSection.kill();
 
 		if (this.terrainModel != null) {
 			this.terrainModel.kill();
@@ -488,7 +485,7 @@ public class HydraulicTerrainWindow extends Window {
 	@Override
 	protected void _resize() {
 		this.perspectiveScreen.setScreenDimensions(this.getWidth(), this.getHeight());
-		this.uiScreen.setScreenDimensions(this.getWidth(), this.getHeight());
+		this.uiSection.setScreenDimensions(this.getWidth(), this.getHeight());
 	}
 
 	@Override
@@ -566,7 +563,7 @@ public class HydraulicTerrainWindow extends Window {
 	@Override
 	protected void _mousePressed(int button) {
 		this.uiSection.mousePressed(button);
-		if (this.uiSection.sectionHovered()) {
+		if (this.uiSection.isSectionHovered()) {
 
 		}
 		else {

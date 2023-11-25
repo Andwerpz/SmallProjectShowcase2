@@ -33,12 +33,12 @@ public class Main {
 		lwjglengine.main.Main main = new lwjglengine.main.Main();
 		main.start();
 
-		//Main.makeWallpaper(main);
+		//Main.makeWallpaper();
 	}
 
 	//note: most important function
-	public static void makeWallpaper(lwjglengine.main.Main main) {
-		while (main.window == 0) {
+	public static void makeWallpaper() {
+		while (lwjglengine.main.Main.window == 0) {
 			try {
 				System.out.println("WAITING FOR WINDOW");
 				Thread.sleep(1000);
@@ -48,17 +48,17 @@ public class Main {
 				e.printStackTrace();
 			}
 		}
-		System.err.println("WINDOW : " + main.window);
+		System.err.println("WINDOW : " + lwjglengine.main.Main.window);
 
 		if (Platform.isWindows())
-			windowsMakeWallpaper(main.window);
+			windowsMakeWallpaper(lwjglengine.main.Main.window);
 		else if (Platform.isLinux() && Platform.isX11())
-			linuxMakeWallpaper(main.window);
+			linuxMakeWallpaper(lwjglengine.main.Main.window);
 		else
 			throw new UnsupportedOperationException("not supported on this platform");
 
-		main.setWindowDimensions(1920, 1080);
-		main.setWindowPosition(0, 0);
+		lwjglengine.main.Main.setWindowDimensions(1920, 1080);
+		lwjglengine.main.Main.setWindowPosition(0, 0);
 	}
 
 	public static InputStream openURLStream(URL url) throws IOException {

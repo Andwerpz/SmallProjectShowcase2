@@ -19,6 +19,7 @@ import lwjglengine.player.Camera;
 import lwjglengine.player.PlayerInputController;
 import lwjglengine.scene.Scene;
 import lwjglengine.screen.SkyboxCube;
+import lwjglengine.util.ShaderUtils;
 import lwjglengine.window.Window;
 import myutils.file.FileUtils;
 import myutils.math.Mat4;
@@ -58,7 +59,7 @@ public class RayMarchingWindow extends Window {
 		}
 		this.skybox = new Cubemap(skyboxSides);
 
-		this.shader = new Shader("/ray_marching/skybox.vert", "/ray_marching/skybox.frag");
+		this.shader = ShaderUtils.createShader("/ray_marching/skybox.vert", "/ray_marching/skybox.frag");
 
 		this.lightDir = new Vec3(1, 1, 1);
 		this.lightDir.normalize();
