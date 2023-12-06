@@ -47,6 +47,7 @@ import lwjglengine.ui.UIFilledRectangle;
 import lwjglengine.ui.UISection;
 import lwjglengine.util.ShaderUtils;
 import lwjglengine.window.AdjustableWindow;
+import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
 import myutils.math.Mat4;
@@ -58,7 +59,8 @@ import myutils.misc.Pair;
 public class SPHWaterWindow extends Window {
 
 	//TODO
-	// - control panel for simulation variables
+	// - weird behaviour when viscosity gets too high
+	// - implement bitonic merge sort
 
 	private static final int LUT_P1 = 251527;
 	private static final int LUT_P2 = 6037;
@@ -85,23 +87,7 @@ public class SPHWaterWindow extends Window {
 
 	private static float waterMass = 1f;
 
-	private Vec2 gravity = new Vec2(0, -30);
-
-	private float boundaryDamping = 0.5f;
-
-	private float viscosityStrength = 0.25f;
-
-	private float pressureMultiplier = 50f;
-	private float nearPressureMultiplier = 0.1f;
-	private float predictDeltaTime = 1.0f / 60.0f;
-
-	private float targetDensity = 1f;
-
-	private float interactionStrength = 150f;
-	private float interactionRadius = 25f;
-
-	private boolean renderMetaballs = true;
-	private boolean renderParticles = false;
+	private SPHWaterSettings settings;
 
 	private UIScreen uiScreen;
 	private final int WATER_PARTICLE_SCENE = Scene.generateScene();
@@ -132,6 +118,8 @@ public class SPHWaterWindow extends Window {
 	private void init() {
 		this.uiScreen = new UIScreen();
 
+		this.settings = new SPHWaterSettings();
+
 		this.waterModels = new ArrayList<>();
 
 		this.boundsMin = new Vec2(0, 0);
@@ -157,6 +145,10 @@ public class SPHWaterWindow extends Window {
 
 				this.waterModels.add(new ModelInstance(this.circleRect, WATER_PARTICLE_SCENE));
 			}
+		}
+
+		{
+			AdjustableWindow adj = new AdjustableWindow(new ObjectEditorWindow(this.settings), this);
 		}
 
 		this.waterComputeShader1 = ShaderUtils.createShader("/sph_water/water1.compute", GL_COMPUTE_SHADER);
@@ -208,11 +200,11 @@ public class SPHWaterWindow extends Window {
 		// - generate predicted positions, and calculate hashes based on those positions. 
 		this.waterComputeShader1.enable();
 		this.waterComputeShader1.setUniform1f("delta_time", deltaTime);
-		this.waterComputeShader1.setUniform1f("predict_delta_time", predictDeltaTime);
+		this.waterComputeShader1.setUniform1f("predict_delta_time", this.settings.predictDeltaTime);
 		this.waterComputeShader1.setUniform2f("bounds_min", this.boundsMin);
 		this.waterComputeShader1.setUniform2f("bounds_max", this.boundsMax);
-		this.waterComputeShader1.setUniform2f("gravity", gravity);
-		this.waterComputeShader1.setUniform1f("boundary_damping", boundaryDamping);
+		this.waterComputeShader1.setUniform2f("gravity", this.settings.gravity);
+		this.waterComputeShader1.setUniform1f("boundary_damping", this.settings.boundaryDamping);
 
 		this.waterComputeShader1.setUniform1i("nr_particles", COMPUTE_NR_PARTICLES);
 		this.waterComputeShader1.setUniform1f("smoothing_radius", smoothingRadius);
@@ -225,7 +217,7 @@ public class SPHWaterWindow extends Window {
 		glBindImageTexture(0, this.posvelTexture.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
 		glBindImageTexture(1, this.predictedPosLUTTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
-		glDispatchCompute(COMPUTE_NR_PARTICLES / 8, 1, 1);
+		glDispatchCompute(COMPUTE_NR_PARTICLES / 64, 1, 1);
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
 		//PHASE 2 : 
@@ -250,6 +242,8 @@ public class SPHWaterWindow extends Window {
 				arr[5] = LUT[i * 4 + 1];
 				int hash = Math.round(LUT[i * 4 + 2]);
 				data.add(new Pair<>(hash, arr));
+
+				LUT[i * 4 + 3] = COMPUTE_NR_PARTICLES;
 			}
 
 			Collections.sort(data, (a, b) -> a.first - b.first);
@@ -290,13 +284,13 @@ public class SPHWaterWindow extends Window {
 		this.waterComputeShader3.setUniform1f("near_density_smoothing_kernel_volume", nearDensitySmoothingKernelVolume);
 		this.waterComputeShader3.setUniform1f("viscosity_smoothing_kernel_volume", viscositySmoothingKernelVolume);
 
-		this.waterComputeShader3.setUniform1f("viscosity_strength", viscosityStrength);
+		this.waterComputeShader3.setUniform1f("viscosity_strength", this.settings.viscosityStrength);
 
 		glBindImageTexture(0, this.predictedPosLUTTexture.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
 		glBindImageTexture(1, this.densityViscosityTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
 		glBindImageTexture(2, this.posvelTexture.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
 
-		glDispatchCompute(COMPUTE_NR_PARTICLES / 8, 1, 1);
+		glDispatchCompute(COMPUTE_NR_PARTICLES / 64, 1, 1);
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
 		//PHASE 4 : 
@@ -317,14 +311,14 @@ public class SPHWaterWindow extends Window {
 		this.waterComputeShader4.setUniform1f("density_smoothing_kernel_volume", densitySmoothingKernelVolume);
 		this.waterComputeShader4.setUniform1f("near_density_smoothing_kernel_volume", nearDensitySmoothingKernelVolume);
 
-		this.waterComputeShader4.setUniform1f("target_density", targetDensity);
-		this.waterComputeShader4.setUniform1f("pressure_multiplier", pressureMultiplier);
-		this.waterComputeShader4.setUniform1f("near_pressure_multiplier", nearPressureMultiplier);
+		this.waterComputeShader4.setUniform1f("target_density", this.settings.targetDensity);
+		this.waterComputeShader4.setUniform1f("pressure_multiplier", this.settings.pressureMultiplier);
+		this.waterComputeShader4.setUniform1f("near_pressure_multiplier", this.settings.nearPressureMultiplier);
 
 		this.waterComputeShader4.setUniform2f("mouse_pos", this.getWindowMousePos().div(waterPositionScale));
 		this.waterComputeShader4.setUniform1i("mouse_pressed", this.mousePressed ? 1 : 0);
-		this.waterComputeShader4.setUniform1f("interaction_radius", interactionRadius);
-		this.waterComputeShader4.setUniform1f("interaction_strength", interactionStrength * (this.mouseAttract ? 1 : -1));
+		this.waterComputeShader4.setUniform1f("interaction_radius", this.settings.interactionRadius);
+		this.waterComputeShader4.setUniform1f("interaction_strength", this.settings.interactionStrength * (this.mouseAttract ? 1 : -1));
 
 		glBindImageTexture(0, this.predictedPosLUTTexture.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
 		glBindImageTexture(1, this.densityViscosityTexture.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
@@ -334,7 +328,7 @@ public class SPHWaterWindow extends Window {
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
 		//update model transforms
-		if (this.renderParticles) {
+		if (this.settings.renderParticles) {
 			float[] pixels = new float[COMPUTE_NR_PARTICLES * 4];
 			glBindTexture(GL_TEXTURE_1D, this.posvelTexture.getID());
 			glGetTexImage(GL_TEXTURE_1D, 0, GL_RGBA, GL_FLOAT, pixels);
@@ -366,14 +360,14 @@ public class SPHWaterWindow extends Window {
 	@Override
 	protected void _update() {
 		long startMillis = System.currentTimeMillis();
-		//this.updateWater(16.0f / 1000.0f);
 		this.updateWater(16.0f / 1000.0f);
+
 		//System.out.println("SPH UPDATE : " + (System.currentTimeMillis() - startMillis));
 	}
 
 	@Override
 	protected void renderContent(Framebuffer outputBuffer) {
-		if (this.renderMetaballs) {
+		if (this.settings.renderMetaballs) {
 			glViewport(0, 0, this.getWidth(), this.getHeight());
 			this.waterMetaballShader.enable();
 			this.waterMetaballShader.setUniform1i("nr_particles", COMPUTE_NR_PARTICLES);
@@ -388,7 +382,7 @@ public class SPHWaterWindow extends Window {
 			this.waterMetaballShader.setUniform1f("window_height", this.getHeight());
 			this.waterMetaballShader.setUniform1f("water_position_scale", waterPositionScale);
 
-			this.waterMetaballShader.setUniform1f("density_threshold", this.targetDensity);
+			this.waterMetaballShader.setUniform1f("density_threshold", this.settings.targetDensity);
 
 			this.waterMetaballShader.setUniform1f("water_mass", waterMass);
 			this.waterMetaballShader.setUniform1f("density_smoothing_kernel_volume", densitySmoothingKernelVolume);
@@ -396,7 +390,7 @@ public class SPHWaterWindow extends Window {
 			ScreenQuad.screenQuad.render();
 		}
 
-		if (this.renderParticles) {
+		if (this.settings.renderParticles) {
 			this.uiScreen.setUIScene(WATER_PARTICLE_SCENE);
 			this.uiScreen.render(outputBuffer);
 		}
@@ -467,6 +461,134 @@ public class SPHWaterWindow extends Window {
 	protected void _keyReleased(int key) {
 		// TODO Auto-generated method stub
 
+	}
+
+	public class SPHWaterSettings {
+		private Vec2 gravity = new Vec2(0, -30);
+
+		private float boundaryDamping = 0.5f;
+
+		private float viscosityStrength = 0.25f;
+
+		private float pressureMultiplier = 50f;
+		private float nearPressureMultiplier = 0.1f;
+		private float predictDeltaTime = 1.0f / 60.0f;
+
+		private float targetDensity = 1f;
+
+		private float interactionStrength = 150f;
+		private float interactionRadius = 25f;
+
+		private boolean renderMetaballs = true;
+		private boolean renderParticles = false;
+
+		public SPHWaterSettings() {
+			gravity = new Vec2(0, -30);
+
+			boundaryDamping = 0.5f;
+
+			viscosityStrength = 0.25f;
+
+			pressureMultiplier = 50f;
+			nearPressureMultiplier = 0.1f;
+			predictDeltaTime = 1.0f / 60.0f;
+
+			targetDensity = 1f;
+
+			interactionStrength = 150f;
+			interactionRadius = 25f;
+
+			renderMetaballs = true;
+			renderParticles = false;
+		}
+
+		public Vec2 getGravity() {
+			return gravity;
+		}
+
+		public void setGravity(Vec2 gravity) {
+			this.gravity = gravity;
+		}
+
+		public float getBoundaryDamping() {
+			return boundaryDamping;
+		}
+
+		public void setBoundaryDamping(float boundaryDamping) {
+			this.boundaryDamping = boundaryDamping;
+		}
+
+		public float getViscosityStrength() {
+			return viscosityStrength;
+		}
+
+		public void setViscosityStrength(float viscosityStrength) {
+			this.viscosityStrength = viscosityStrength;
+		}
+
+		public float getPressureMultiplier() {
+			return pressureMultiplier;
+		}
+
+		public void setPressureMultiplier(float pressureMultiplier) {
+			this.pressureMultiplier = pressureMultiplier;
+		}
+
+		public float getNearPressureMultiplier() {
+			return nearPressureMultiplier;
+		}
+
+		public void setNearPressureMultiplier(float nearPressureMultiplier) {
+			this.nearPressureMultiplier = nearPressureMultiplier;
+		}
+
+		public float getPredictDeltaTime() {
+			return predictDeltaTime;
+		}
+
+		public void setPredictDeltaTime(float predictDeltaTime) {
+			this.predictDeltaTime = predictDeltaTime;
+		}
+
+		public float getTargetDensity() {
+			return targetDensity;
+		}
+
+		public void setTargetDensity(float targetDensity) {
+			this.targetDensity = targetDensity;
+		}
+
+		public float getInteractionStrength() {
+			return interactionStrength;
+		}
+
+		public void setInteractionStrength(float interactionStrength) {
+			this.interactionStrength = interactionStrength;
+		}
+
+		public float getInteractionRadius() {
+			return interactionRadius;
+		}
+
+		public void setInteractionRadius(float interactionRadius) {
+			this.interactionRadius = interactionRadius;
+		}
+
+		public boolean getRenderMetaballs() {
+			return renderMetaballs;
+		}
+
+		public void setRenderMetaballs(boolean renderMetaballs) {
+			this.renderMetaballs = renderMetaballs;
+		}
+
+		public boolean getRenderParticles() {
+			return renderParticles;
+		}
+
+		public void setRenderParticles(boolean renderParticles) {
+			this.renderParticles = renderParticles;
+		}
 	}
 
 }

@@ -123,8 +123,10 @@ void main() {
 	//density = min(10.0, density);
 	//near_density = min(10.0, near_density);
 	
-	vec2 vel = imageLoad(posvelTexture, texelCoord).zw;
-	vec2 viscosity_force = computeViscosityForce(texelCoord, predicted_pos, vel);
+	vec4 posvel = imageLoad(posvelTexture, texelCoord);
+	vec2 pos = posvel.xy;
+	vec2 vel = posvel.zw;
+	vec2 viscosity_force = computeViscosityForce(texelCoord, pos, vel);
 	
 	imageStore(densityViscosityTexture, texelCoord, vec4(density, near_density, viscosity_force));
 }

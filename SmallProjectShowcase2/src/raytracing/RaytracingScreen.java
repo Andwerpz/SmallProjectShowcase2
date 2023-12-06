@@ -34,7 +34,9 @@ import myutils.math.Vec3;
 public class RaytracingScreen extends Screen {
 	//raytracing, wowee, very nice
 
-	//TODO read triangles in from attached raytracing scene. 
+	//TODO 
+	// - read triangles in from attached raytracing scene. 
+	// - construct BVH so that ray collisions are fast
 
 	//Preview Mode - camera can move around, and minimal rays are sent
 	//Render Mode - camera cannot move around, and previous frames get blended with new frames to create the render

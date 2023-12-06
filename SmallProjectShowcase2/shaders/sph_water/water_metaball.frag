@@ -90,7 +90,7 @@ void main() {
 	if(density > density_threshold) {
 		result = vec4(water_color, 1);
 	}
-	else if(density > density_threshold * 0.60) {
+	else if(density > density_threshold * 0.25) {
 		result = vec4(water_color_light, 1);
 	}
 	

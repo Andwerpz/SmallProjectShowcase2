@@ -23,6 +23,7 @@ import sph_water.SPHWaterWindow;
 import sum_of_sines_water.SumOfSinesWaterWindow;
 import vector_art.VectorArtWindow;
 import volumetric_clouds.VolumetricCloudsWindow;
+import voxel_raytracing.VoxelRaytracingWindow;
 
 public class BackgroundWindow extends Window {
 	//for now, this window should just be to open a context menu. 
@@ -33,14 +34,24 @@ public class BackgroundWindow extends Window {
 	// - Dynamic Skybox Shader
 	// - 3D Model Animations
 	// - Vector Art Rendering
-	//    - trying to create a svg renderer is probably too hard; they have too many features.
-	//    - https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-25-rendering-vector-art-gpu
-	//	  - www.polygontriangulation.com/2018/07/triangulation-algorithm.html
-	//    - LaTeX math renderer
+	//   - trying to create a svg renderer is probably too hard; they have too many features.
+	//   - https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-25-rendering-vector-art-gpu
+	//	 - www.polygontriangulation.com/2018/07/triangulation-algorithm.html
+	//   - LaTeX math renderer
 	// - Doom style level editor
 	// - Gaussian Splatting
 	//   - this one is a stretch lol
 	// - Tile based bread board
+	// - Voxel Ray Tracing
+	//   - either use octtree to save the entire world, 
+	//   - or save chunks of the world and raytrace when rastering the boundary mesh. 
+	//   - brickmaps?
+	//   - probably will use octrees, look into sparse voxel octrees
+	//   - also, figure out how to convert 3D meshes into voxel representation
+	//   - reading google map data might also be fun
+	//   - Sparse Voxel Octree : https://www.nvidia.com/docs/IO/88972/nvr-2010-001.pdf
+	// - Wave Function Collapse
+	// - 3D mesh rigid and softbody physics
 
 	private final int BACKGROUND_SCENE = Scene.generateScene();
 	private final int TEXT_SCENE = Scene.generateScene();
@@ -103,6 +114,7 @@ public class BackgroundWindow extends Window {
 			projectPicker.addToList("PBR Rendering");
 			projectPicker.addToList("Vector Art");
 			projectPicker.addToList("SPH Water");
+			projectPicker.addToList("Voxel Raytracing");
 			break;
 		}
 
@@ -166,6 +178,11 @@ public class BackgroundWindow extends Window {
 
 		case "SPH Water": {
 			AdjustableWindow window = new AdjustableWindow(new SPHWaterWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Voxel Raytracing": {
+			AdjustableWindow window = new AdjustableWindow(new VoxelRaytracingWindow(x, y, width, height, null), this);
 			break;
 		}
 		}
