@@ -1,11 +1,11 @@
-#version 440 core
+#version 430 core
 layout (location = 0) out vec4 tex_color;
 
 uniform samplerCube skybox_tex;
 uniform vec3 camera_pos;
 
 uniform vec3 svo_offset;	//offset of minimum (x, y, z)
-uniform int svo_size;	//x, y, z dimensions
+layout(r32ui, binding = 1) uniform uimage1D svo_buffer;
 
 in vec3 frag_dir;
 
@@ -15,6 +15,10 @@ struct Ray {
 };
 
 vec3 traceRay(Ray ray) {
+	//read svo size from buffer
+	uint svo_size_pow = imageLoad(svo_buffer, 0).r;
+	uint svo_size = (1 << svo_size_pow);
+
 	//translate ray into svo space
 	ray.origin -= svo_offset;
 	
@@ -60,6 +64,8 @@ vec3 traceRay(Ray ray) {
 	}
 	
 	//traverse through svo and see what color we get
+	//int cur_size = svo_size;
+	
 	result = ray.origin / float(svo_size);
 	
 	return result;

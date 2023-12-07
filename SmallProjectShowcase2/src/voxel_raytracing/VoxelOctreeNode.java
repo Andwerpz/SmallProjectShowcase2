@@ -9,6 +9,9 @@ import myutils.math.Vec4;
 
 public class VoxelOctreeNode {
 
+	//TODO 
+	// - optimize so that the serialized form only stores voxels that are adjacent to air
+
 	//children bits correspond to their position within the parent node
 	//i -> xyz
 	//0 -> 000
@@ -24,7 +27,7 @@ public class VoxelOctreeNode {
 	private VoxelOctreeNode[] children = null;
 	private int nrEmptySubtrees;
 
-	private int r, g, b;
+	private int r, g, b, a; //0 - 255
 
 	private int size; //must be a power of 2
 
@@ -59,15 +62,15 @@ public class VoxelOctreeNode {
 		this.size = parent.size / 2;
 	}
 
-	private static final int HEADER_SIZE_POW_BITS = 8;
+	private static final int HEADER_SIZE_POW_BITS = 32;
 	private static final int COLOR_BITS = 8;
 	private static final int CHILD_OFFSET_BITS = 32;
 
 	/**
 	 * Returns the number of bits required to store the subtree in serial form
 	 * 
-	 * Header takes 8 bits
-	 * Leaves take 24 bits
+	 * Header takes 32 bits
+	 * Leaves take 32 bits
 	 * Non-leaves take 8 * 32 bits
 	 * 
 	 * @param root
@@ -81,7 +84,7 @@ public class VoxelOctreeNode {
 		}
 
 		if (root.size == 1) {
-			ans += COLOR_BITS * 3;
+			ans += COLOR_BITS * 4;
 		}
 		else {
 			ans += CHILD_OFFSET_BITS * 8;
@@ -97,6 +100,7 @@ public class VoxelOctreeNode {
 
 	/**
 	 * Converts subtree into bits
+	 * Nodes are 4 byte aligned
 	 * 
 	 * Format:
 	 * HEADER
@@ -105,14 +109,14 @@ public class VoxelOctreeNode {
 	 * 
 	 * IF node is leaf, 
 	 * color bits
-	 * color bits = R + G + B
-	 * R, G, B = 8 bit unsigned int
+	 * color bits = R + G + B + A
+	 * R, G, B, A = 8 bit unsigned int
 	 * 
 	 * ELSE node is not leaf,
 	 * child bits
 	 * child bits = child rel offset * 8
 	 * child rel offset = 32 bit unsigned int
-	 * offset is relative to the first bit of the parent
+	 * offset is relative to the first bit of the parent.
 	 * if child is null, then offset = 0
 	 * 
 	 * all numbers will be stored in big endian
@@ -162,7 +166,10 @@ public class VoxelOctreeNode {
 			for (int i = 0; i < 8; i++) {
 				bits[ptr++] = (((root.b >> (COLOR_BITS - 1 - i)) & 1) == 1);
 			}
-			nrBits = COLOR_BITS * 3;
+			for (int i = 0; i < 8; i++) {
+				bits[ptr++] = (((root.a >> (COLOR_BITS - 1 - i)) & 1) == 1);
+			}
+			nrBits = COLOR_BITS * 4;
 		}
 		else {
 			int offset = CHILD_OFFSET_BITS * 8;
@@ -198,7 +205,6 @@ public class VoxelOctreeNode {
 			rootSizePow += bits[i] ? 1 : 0;
 		}
 		int rootSize = (1 << rootSizePow);
-		System.out.println("DESERIALIZE SIZE : " + rootSize);
 		VoxelOctreeNode root = _deserialize(bits, HEADER_SIZE_POW_BITS, rootSize);
 		root.isRoot = true;
 		return root;
@@ -213,6 +219,7 @@ public class VoxelOctreeNode {
 			root.r = 0;
 			root.g = 0;
 			root.b = 0;
+			root.a = 0;
 			for (int i = 0; i < COLOR_BITS; i++) {
 				root.r = (root.r << 1) + (bits[ptr++] ? 1 : 0);
 			}
@@ -221,6 +228,9 @@ public class VoxelOctreeNode {
 			}
 			for (int i = 0; i < COLOR_BITS; i++) {
 				root.b = (root.b << 1) + (bits[ptr++] ? 1 : 0);
+			}
+			for (int i = 0; i < COLOR_BITS; i++) {
+				root.a = (root.a << 1) + (bits[ptr++] ? 1 : 0);
 			}
 		}
 		else {

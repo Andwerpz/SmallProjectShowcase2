@@ -38,47 +38,6 @@ public class VoxelRaytracingWindow extends Window {
 
 		this.voxelScreen = new VoxelRaytracingScreen();
 
-		System.out.print("BUILDING VOXEL OCTREE : ");
-		long startMillis = System.currentTimeMillis();
-		int size = 64;
-		float prob = 1f;
-		int nrRemove = 0;
-		float radius = 20;
-		VoxelOctreeNode root = new VoxelOctreeNode(size);
-		for (int i = 0; i < size; i++) {
-			for (int j = 0; j < size; j++) {
-				for (int k = 0; k < size; k++) {
-					Vec3 v = new Vec3(i, j, k);
-					if (Math.random() < prob && v.length() < radius) {
-						int r = (int) (Math.random() * 256);
-						int g = (int) (Math.random() * 256);
-						int b = (int) (Math.random() * 256);
-						root.addVoxel(i, j, k, r, g, b);
-					}
-				}
-			}
-		}
-		for (int i = 0; i < nrRemove; i++) {
-			int x = (int) (Math.random() * size);
-			int y = (int) (Math.random() * size);
-			int z = (int) (Math.random() * size);
-			root.removeVoxel(x, y, z);
-		}
-		System.out.println(System.currentTimeMillis() - startMillis);
-		System.out.print("SERIALIZING OCTREE : ");
-		startMillis = System.currentTimeMillis();
-		boolean[] bits = VoxelOctreeNode.serialize(root);
-		System.out.println(System.currentTimeMillis() - startMillis);
-		System.out.println("BITS LENGTH : " + bits.length);
-
-		System.out.print("DESERIALIZING OCTREE : ");
-		startMillis = System.currentTimeMillis();
-		VoxelOctreeNode root_cpy = VoxelOctreeNode.deserialize(bits);
-		System.out.println(System.currentTimeMillis() - startMillis);
-
-		System.out.println("ARE EQUAL : " + (root.equals(root_cpy)));
-		System.out.println("ESTIMATED REQUIRED BITS : " + VoxelOctreeNode.countRequiredBits(root));
-
 		this._resize();
 	}
 
