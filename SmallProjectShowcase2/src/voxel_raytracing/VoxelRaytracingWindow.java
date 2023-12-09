@@ -19,6 +19,7 @@ public class VoxelRaytracingWindow extends Window {
 	// - implement chunk system. 
 	// - for now, use textures to give fragment shader access to SVO, later look into SSBOs
 	//   - discussion regarding data streaming : https://www.reddit.com/r/VoxelGameDev/comments/hy5sx4/uploading_voxel_octree_to_opengl/
+	// - some rays will enter an infinite loop when traversing the octree, fix this
 
 	private VoxelRaytracingScreen voxelScreen;
 

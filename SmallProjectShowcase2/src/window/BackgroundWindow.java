@@ -52,6 +52,8 @@ public class BackgroundWindow extends Window {
 	//   - Sparse Voxel Octree : https://www.nvidia.com/docs/IO/88972/nvr-2010-001.pdf
 	// - Wave Function Collapse
 	// - 3D mesh rigid and softbody physics
+	// - 2D Terrain Shadow Casting
+	//   - https://www.youtube.com/watch?v=bMTeCqNkId8
 
 	private final int BACKGROUND_SCENE = Scene.generateScene();
 	private final int TEXT_SCENE = Scene.generateScene();

@@ -75,9 +75,10 @@ public class VoxelRaytracingScreen extends Screen {
 				for (int k = 0; k < size; k++) {
 					Vec3 v = new Vec3(i, j, k);
 					if (Math.random() < prob && v.length() < radius) {
-						int r = (int) (Math.random() * 256);
-						int g = (int) (Math.random() * 256);
-						int b = (int) (Math.random() * 256);
+						int col = (int) (Math.random() * 10);
+						int r = col;
+						int g = col;
+						int b = col;
 						root.addVoxel(i, j, k, r, g, b);
 					}
 				}

@@ -104,7 +104,7 @@ public class VoxelOctreeNode {
 	 * 
 	 * Format:
 	 * HEADER
-	 * K = 8 bit unsigned int
+	 * K = 32 bit unsigned int
 	 * the size of the root is 2^K
 	 * 
 	 * IF node is leaf, 
