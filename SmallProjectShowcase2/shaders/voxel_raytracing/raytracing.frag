@@ -5,7 +5,10 @@ uniform samplerCube skybox_tex;
 uniform vec3 camera_pos;
 
 uniform vec3 svo_offset;	//offset of minimum (x, y, z)
-layout(r32ui, binding = 1) uniform uimage1D svo_buffer;
+layout(std430, binding = 1) buffer svo_ssbo
+{
+    int svo_data[];
+};
 
 in vec3 frag_dir;
 
@@ -81,13 +84,13 @@ float rayAABBDist(Ray ray, vec3 AABB_bl, int AABB_size) {
 }
 
 vec3 traceRay(Ray ray) {
-	//translate ray into svo space
-	ray.origin -= svo_offset;
-	
 	vec3 result = texture(skybox_tex, ray.dir).rgb;
 
+	//translate ray into svo space
+	ray.origin -= svo_offset;
+
 	//read svo size from buffer
-	int svo_size_pow = int(imageLoad(svo_buffer, 0).r);
+	int svo_size_pow = svo_data[0];
 	int svo_size = (1 << svo_size_pow);
 	
 	//check if ray will collide with svo at all
@@ -99,27 +102,30 @@ vec3 traceRay(Ray ray) {
 	
 	//traverse through svo and see what color we get
 	int stack_ind = 0;
-	int ind_stack[64];
-	vec3 pos_stack[64];
+	int ind_stack[64];	//what's the buffer index offset of the parent
+	vec3 pos_stack[64];	//what's the bl offset of the parent
+	int child_ind_stack[64];	//in this parent, what's the index of the child the ray is in?
 	
 	pos_stack[0] = vec3(0);
 	ind_stack[0] = 1;
+	child_ind_stack[0] = computeChildInd(ray, vec3(0), svo_size);
 	int cur_size = svo_size;
 	int iter_cnt = 0;
 	
 	while(stack_ind >= 0){
 		iter_cnt ++;
-		if(iter_cnt == 100){
-			//result = vec3(1);
+		if(iter_cnt == 3 * svo_size){
+			result = vec3(0, 1, 0);
 			break;
 		}
 	
 		vec3 pos_offset = pos_stack[stack_ind];
 		int ind_offset = ind_stack[stack_ind];
+		int child_ind = child_ind_stack[stack_ind];
 		
 		if(cur_size == 1){
 			//we're at a leaf node, find the color and exit
-			int color_bits = int(imageLoad(svo_buffer, ind_offset).r);
+			int color_bits = svo_data[ind_offset];
 			int r = (color_bits >> 24) & 0xff;
 			int g = (color_bits >> 16) & 0xff;
 			int b = (color_bits >> 8) & 0xff;
@@ -127,45 +133,73 @@ vec3 traceRay(Ray ray) {
 			break;
 		}
 		
-		//check if we've exited parent
-		bool exit_parent = !pointInsideAABB(ray.origin, pos_offset, cur_size);
-		
-		//if we've exited parent, pop off stack
-		if(exit_parent){
-			//pop parent off stack
-			stack_ind --;
-			cur_size *= 2;
+		//check if child exists
+		int child_ind_offset = (svo_data[ind_offset + child_ind] / 32) + ind_offset;
+		if(child_ind_offset != ind_offset){
+			//child exists, push stuff to stack. 
+			vec3 child_pos_offset = pos_offset;
+			child_pos_offset.x += (cur_size / 2) * ((child_ind >> 0) & 1);
+			child_pos_offset.y += (cur_size / 2) * ((child_ind >> 1) & 1);
+			child_pos_offset.z += (cur_size / 2) * ((child_ind >> 2) & 1);
+			
+			stack_ind ++;
+			cur_size /= 2;
+			pos_stack[stack_ind] = child_pos_offset;
+			ind_stack[stack_ind] = child_ind_offset;
+			child_ind_stack[stack_ind] = computeChildInd(ray, child_pos_offset, cur_size);
 			continue;
 		}
 		
-		int child_ind = computeChildInd(ray, pos_offset, cur_size);
-		
-		vec3 child_pos_offset = pos_offset;
-		child_pos_offset.x += (cur_size / 2) * ((child_ind >> 0) & 1);
-		child_pos_offset.y += (cur_size / 2) * ((child_ind >> 1) & 1);
-		child_pos_offset.z += (cur_size / 2) * ((child_ind >> 2) & 1);
-		
-		//check if child exists
-		bool exists = false;
-		int child_ind_offset = (int(imageLoad(svo_buffer, ind_offset + child_ind).r) / 32) + ind_offset;
-		if(child_ind_offset != ind_offset){
-			exists = true;
+		//figure out what's the next boundary we cross. 
+		int which_bound = -1;
+		float min_dist = 1000000000;
+		float dir_component[3] = float[](ray.dir.x, ray.dir.y, ray.dir.z);
+		float pos_component[3] = float[](ray.origin.x, ray.origin.y, ray.origin.z);
+		float bl_offset_component[3] = float[](pos_offset.x, pos_offset.y, pos_offset.z);
+		bl_offset_component[0] += (cur_size / 2) * ((child_ind >> 0) & 1);
+		bl_offset_component[1] += (cur_size / 2) * ((child_ind >> 1) & 1);
+		bl_offset_component[2] += (cur_size / 2) * ((child_ind >> 2) & 1);
+		for(int i = 0; i < 3; i++){
+			if(dir_component[i] == 0){
+				continue;
+			}
+			float tgt = bl_offset_component[i] + (dir_component[i] > 0? cur_size / 2 : 0);
+			float dist = tgt - pos_component[i];
+			float ray_mul = dist / dir_component[i];
+			if(ray_mul < min_dist) {
+				min_dist = ray_mul;
+				which_bound = i;
+			}
 		}
 		
-		//if child exists, go down a layer
-		if(exists){
-			//append new child onto stack
-			stack_ind ++;
-			cur_size /= 2;
-			ind_stack[stack_ind] = child_ind_offset;
-			pos_stack[stack_ind] = child_pos_offset;
+		//this shouldn't happen
+		if(which_bound == -1){
+			result = vec3(0, 0, 1);
+			break;
 		}
-		//otherwise, traverse through current child
-		else {	
-			float dist = rayAABBBoundsDist(ray, child_pos_offset, cur_size / 2);
-			ray.origin += ray.dir * (dist + 0.01);
+		
+		//ok, now that we've found the bound, let's update the ray, and see what child indexes we can update
+		ray.origin += ray.dir * min_dist;
+		
+		bool decrease = dir_component[which_bound] < 0;
+		while(stack_ind >= 0) {
+			int cur_child_ind = child_ind_stack[stack_ind];
+			if(((cur_child_ind >> which_bound) & 1) == 0 ^^ decrease) {
+				//we stay in our current parent
+				cur_child_ind = cur_child_ind ^ (1 << which_bound);
+				child_ind_stack[stack_ind] = cur_child_ind;
+				break;
+			}
+			else {
+				//we exit our current parent
+				stack_ind --;
+				cur_size *= 2;
+				continue;
+			}
 		}
 	}
+	
+	result.r += (3.0 / svo_size) * iter_cnt;
 	
 	return result;
 }

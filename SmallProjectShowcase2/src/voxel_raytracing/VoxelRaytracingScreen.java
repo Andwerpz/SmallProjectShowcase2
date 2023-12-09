@@ -31,6 +31,7 @@ import java.nio.ByteBuffer;
 import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Shader;
+import lwjglengine.graphics.ShaderStorageBuffer;
 import lwjglengine.graphics.Texture;
 import lwjglengine.graphics.Texture1D;
 import lwjglengine.player.Camera;
@@ -48,8 +49,7 @@ public class VoxelRaytracingScreen extends Screen {
 
 	private Cubemap skybox;
 
-	private Texture1D svoBuffer;
-	private int svoBufferLength;
+	private ShaderStorageBuffer svoSSBO;
 
 	public VoxelRaytracingScreen() {
 		this.voxelRaytracingShader = ShaderUtils.createShader("/voxel_raytracing/raytracing.vert", "/voxel_raytracing/raytracing.frag");
@@ -65,20 +65,20 @@ public class VoxelRaytracingScreen extends Screen {
 
 		System.out.print("BUILDING VOXEL OCTREE : ");
 		long startMillis = System.currentTimeMillis();
-		int size = 64;
-		float prob = 1f;
+		int size = 128;
+		float prob = 0.1f;
 		int nrRemove = 0;
-		float radius = 20;
+		float radius = 48f;
 		VoxelOctreeNode root = new VoxelOctreeNode(size);
 		for (int i = 0; i < size; i++) {
 			for (int j = 0; j < size; j++) {
 				for (int k = 0; k < size; k++) {
-					Vec3 v = new Vec3(i, j, k);
+					Vec3 v = new Vec3(i - size / 2, j - size / 2, k - size / 2);
 					if (Math.random() < prob && v.length() < radius) {
 						int col = (int) (Math.random() * 10);
-						int r = col;
-						int g = col;
-						int b = col;
+						int r = 79 + col;
+						int g = 58 + col;
+						int b = 43 + col;
 						root.addVoxel(i, j, k, r, g, b);
 					}
 				}
@@ -110,25 +110,9 @@ public class VoxelRaytracingScreen extends Screen {
 			int bit_ind = i % 32;
 			data[i / 32] = data[i / 32] | ((bits[i] ? 1 : 0) << (31 - bit_ind));
 		}
-		this.svoBufferLength = data.length;
 
-		System.out.println("DATA");
-		for (int i = 0; i < 100; i++) {
-			System.out.println(data[i]);
-		}
-
-		System.err.println("BEFORE SVO BUFFER : " + glGetError());
-		this.svoBuffer = new Texture1D(GL_R32UI, this.svoBufferLength, GL_RED_INTEGER, GL_UNSIGNED_INT, data);
-		System.err.println("CREATED SVO BUFFER : " + glGetError());
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
-
-		int[] retrievedData = new int[this.svoBufferLength];
-		glBindTexture(GL_TEXTURE_1D, this.svoBuffer.getID());
-		glGetTexImage(GL_TEXTURE_1D, 0, GL_RED_INTEGER, GL_UNSIGNED_INT, retrievedData);
-		System.out.println("RETRIEVED DATA");
-		for (int i = 0; i < 100; i++) {
-			System.out.println(retrievedData[i]);
-		}
+		this.svoSSBO = new ShaderStorageBuffer();
+		this.svoSSBO.setData(data);
 	}
 
 	public void setCameraPos(Vec3 pos) {
@@ -163,7 +147,7 @@ public class VoxelRaytracingScreen extends Screen {
 		this.voxelRaytracingShader.setUniform1i("svo_size", 64);
 
 		this.skybox.bind(GL_TEXTURE0);
-		glBindImageTexture(1, this.svoBuffer.getID(), 0, false, 0, GL_READ_ONLY, GL_R32UI);
+		this.svoSSBO.bindToBase(1);
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_CULL_FACE);
 		glDisable(GL_BLEND);
