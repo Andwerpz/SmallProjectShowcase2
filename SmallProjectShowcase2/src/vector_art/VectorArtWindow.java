@@ -30,6 +30,11 @@ import myutils.math.Vec2;
 
 public class VectorArtWindow extends Window {
 
+	// - trying to create a svg renderer is probably too hard; they have too many features.
+	// - https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-25-rendering-vector-art-gpu
+	// - www.polygontriangulation.com/2018/07/triangulation-algorithm.html
+	// - LaTeX math renderer
+
 	private final int VECTOR_SCENE = Scene.generateScene();
 
 	private UIScreen uiScreen;

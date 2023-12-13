@@ -10,16 +10,16 @@ import myutils.math.Vec3;
 public class VoxelRaytracingWindow extends Window {
 
 	//TODO
-	// - implement Sparse Voxel Octree
+	// - optimize SVO
+	//   - lower the amount of memory required to store
 	//   - maybe useful : https://eisenwave.github.io/voxel-compression-docs/svo/svo.html
 	//   - paper covering SVO : https://www.nvidia.com/docs/IO/88972/nvr-2010-001.pdf
 	//   - potentially look into DAG optimization
 	//   - paper covering DAG : https://www.cse.chalmers.se/~uffe/HighResolutionSparseVoxelDAGs.pdf
-	// - implement raytracing fragment shader to render out the SVO
 	// - implement chunk system. 
-	// - for now, use textures to give fragment shader access to SVO, later look into SSBOs
-	//   - discussion regarding data streaming : https://www.reddit.com/r/VoxelGameDev/comments/hy5sx4/uploading_voxel_octree_to_opengl/
-	// - some rays will enter an infinite loop when traversing the octree, fix this
+	// - discussion regarding data streaming : https://www.reddit.com/r/VoxelGameDev/comments/hy5sx4/uploading_voxel_octree_to_opengl/
+	// - also, figure out how to convert 3D meshes into voxel representation
+	// - reading google map data might also be fun
 
 	private VoxelRaytracingScreen voxelScreen;
 

@@ -33,27 +33,17 @@ public class BackgroundWindow extends Window {
 	// - Actual FFT Water
 	// - Dynamic Skybox Shader
 	// - 3D Model Animations
-	// - Vector Art Rendering
-	//   - trying to create a svg renderer is probably too hard; they have too many features.
-	//   - https://developer.nvidia.com/gpugems/gpugems3/part-iv-image-effects/chapter-25-rendering-vector-art-gpu
-	//	 - www.polygontriangulation.com/2018/07/triangulation-algorithm.html
-	//   - LaTeX math renderer
 	// - Doom style level editor
 	// - Gaussian Splatting
 	//   - this one is a stretch lol
 	// - Tile based bread board
-	// - Voxel Ray Tracing
-	//   - either use octtree to save the entire world, 
-	//   - or save chunks of the world and raytrace when rastering the boundary mesh. 
-	//   - brickmaps?
-	//   - probably will use octrees, look into sparse voxel octrees
-	//   - also, figure out how to convert 3D meshes into voxel representation
-	//   - reading google map data might also be fun
-	//   - Sparse Voxel Octree : https://www.nvidia.com/docs/IO/88972/nvr-2010-001.pdf
 	// - Wave Function Collapse
 	// - 3D mesh rigid and softbody physics
 	// - 2D Terrain Shadow Casting
 	//   - https://www.youtube.com/watch?v=bMTeCqNkId8
+	// - Layered Material Painting? 
+	//   - need to find the proper name for this
+	//   - https://www.youtube.com/watch?v=On64nNkjJpQ
 
 	private final int BACKGROUND_SCENE = Scene.generateScene();
 	private final int TEXT_SCENE = Scene.generateScene();

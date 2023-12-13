@@ -3,6 +3,7 @@ layout (location = 0) out vec4 tex_color;
 
 uniform samplerCube skybox_tex;
 uniform vec3 camera_pos;
+uniform vec3 sun_dir;	//direction towards the sun
 
 uniform vec3 svo_offset;	//offset of minimum (x, y, z)
 layout(std430, binding = 1) buffer svo_ssbo
@@ -15,6 +16,13 @@ in vec3 frag_dir;
 struct Ray {
 	vec3 origin;
 	vec3 dir;
+};
+
+struct HitInfo {
+	bool did_hit;
+	vec3 pos;
+	vec3 normal;
+	vec3 color;
 };
 
 int computeChildInd(Ray ray, vec3 parent_bl_offset, int parent_size) {
@@ -83,8 +91,12 @@ float rayAABBDist(Ray ray, vec3 AABB_bl, int AABB_size) {
 	return rayAABBBoundsDist(ray, vec3(0), AABB_size);
 }
 
-vec3 traceRay(Ray ray) {
-	vec3 result = texture(skybox_tex, ray.dir).rgb;
+HitInfo createHitInfo() {
+	return HitInfo(false, vec3(0), vec3(0), vec3(0));
+}
+
+HitInfo raySVO(Ray ray) {
+	HitInfo result = createHitInfo();
 
 	//translate ray into svo space
 	ray.origin -= svo_offset;
@@ -112,10 +124,15 @@ vec3 traceRay(Ray ray) {
 	int cur_size = svo_size;
 	int iter_cnt = 0;
 	
+	int last_norm = 0;
+	
+	float dir_component[3] = float[](ray.dir.x, ray.dir.y, ray.dir.z);
+	
 	while(stack_ind >= 0){
 		iter_cnt ++;
 		if(iter_cnt == 3 * svo_size){
-			result = vec3(0, 1, 0);
+			result.did_hit = true;
+			result.color = vec3(0, 1, 0);
 			break;
 		}
 	
@@ -129,7 +146,11 @@ vec3 traceRay(Ray ray) {
 			int r = (color_bits >> 24) & 0xff;
 			int g = (color_bits >> 16) & 0xff;
 			int b = (color_bits >> 8) & 0xff;
-			result = vec3(r, g, b) / 255.0;
+			result.did_hit = true;
+			result.pos = ray.origin;
+			result.color = vec3(r, g, b) / 255.0;
+			result.normal = last_norm == 0? vec3(1, 0, 0) : (last_norm == 1? vec3(0, 1, 0) : vec3(0, 0, 1));
+			result.normal *= dir_component[last_norm] > 0? -1 : 1;
 			break;
 		}
 		
@@ -153,7 +174,6 @@ vec3 traceRay(Ray ray) {
 		//figure out what's the next boundary we cross. 
 		int which_bound = -1;
 		float min_dist = 1000000000;
-		float dir_component[3] = float[](ray.dir.x, ray.dir.y, ray.dir.z);
 		float pos_component[3] = float[](ray.origin.x, ray.origin.y, ray.origin.z);
 		float bl_offset_component[3] = float[](pos_offset.x, pos_offset.y, pos_offset.z);
 		bl_offset_component[0] += (cur_size / 2) * ((child_ind >> 0) & 1);
@@ -174,12 +194,14 @@ vec3 traceRay(Ray ray) {
 		
 		//this shouldn't happen
 		if(which_bound == -1){
-			result = vec3(0, 0, 1);
+			result.did_hit = true;
+			result.color = vec3(0, 0, 1);
 			break;
 		}
 		
 		//ok, now that we've found the bound, let's update the ray, and see what child indexes we can update
 		ray.origin += ray.dir * min_dist;
+		last_norm = which_bound;
 		
 		bool decrease = dir_component[which_bound] < 0;
 		while(stack_ind >= 0) {
@@ -199,9 +221,39 @@ vec3 traceRay(Ray ray) {
 		}
 	}
 	
-	result.r += (3.0 / svo_size) * iter_cnt;
+	//result.color.r += float(iter_cnt) * 4 / (svo_size);
 	
 	return result;
+}
+
+vec3 traceRay(Ray ray) {
+	HitInfo hit = raySVO(ray);
+	if(hit.did_hit) {
+		float diffuse = dot(hit.normal, sun_dir);
+		float ambient = 1;
+		
+		//test for shadow
+		{
+			Ray shadow_ray = Ray(hit.pos + hit.normal * 0.001, sun_dir);
+			HitInfo shadow_hit = raySVO(shadow_ray);
+			if(shadow_hit.did_hit) {
+				diffuse = 0;
+			}
+		}
+		
+		float exposure = 2;
+		float gamma = 0.5;
+		
+		vec3 final_color = hit.color * (diffuse + ambient);
+
+    	final_color =  vec3(1.0) - exp(-final_color * exposure); //hdr tonemapping    
+		final_color = pow(final_color, vec3(1.0 / gamma)); //gamma correction
+	
+		return final_color;
+	}
+	else {
+		return texture(skybox_tex, ray.dir).rgb;
+	}	
 }
 
 void main() {   

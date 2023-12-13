@@ -34,6 +34,7 @@ import lwjglengine.graphics.Shader;
 import lwjglengine.graphics.ShaderStorageBuffer;
 import lwjglengine.graphics.Texture;
 import lwjglengine.graphics.Texture1D;
+import lwjglengine.main.Main;
 import lwjglengine.player.Camera;
 import lwjglengine.screen.Screen;
 import lwjglengine.screen.ScreenQuad;
@@ -51,6 +52,8 @@ public class VoxelRaytracingScreen extends Screen {
 
 	private ShaderStorageBuffer svoSSBO;
 
+	private float sunRotRads = 0;
+
 	public VoxelRaytracingScreen() {
 		this.voxelRaytracingShader = ShaderUtils.createShader("/voxel_raytracing/raytracing.vert", "/voxel_raytracing/raytracing.frag");
 
@@ -66,16 +69,17 @@ public class VoxelRaytracingScreen extends Screen {
 		System.out.print("BUILDING VOXEL OCTREE : ");
 		long startMillis = System.currentTimeMillis();
 		int size = 128;
-		float prob = 0.1f;
+		float prob = 1f;
 		int nrRemove = 0;
 		float radius = 48f;
 		VoxelOctreeNode root = new VoxelOctreeNode(size);
+		Vec3 center = new Vec3(size / 2, size / 2 - 20, size / 2);
 		for (int i = 0; i < size; i++) {
 			for (int j = 0; j < size; j++) {
 				for (int k = 0; k < size; k++) {
-					Vec3 v = new Vec3(i - size / 2, j - size / 2, k - size / 2);
-					if (Math.random() < prob && v.length() < radius) {
-						int col = (int) (Math.random() * 10);
+					Vec3 v = new Vec3(new Vec3(i, j, k), center);
+					if ((Math.random() < prob && v.length() < radius) || (j <= 20)) {
+						int col = (int) (Math.random() * 15);
 						int r = 79 + col;
 						int g = 58 + col;
 						int b = 43 + col;
@@ -138,11 +142,18 @@ public class VoxelRaytracingScreen extends Screen {
 
 	@Override
 	protected void _render(Framebuffer outputBuffer) {
+		Vec3 sun_dir = new Vec3(0, 1, 1);
+		sun_dir.normalize();
+
+		this.sunRotRads += (Main.getDeltaMillis() / 1000.0f) / 5.0f;
+		sun_dir.rotateY(this.sunRotRads);
+
 		outputBuffer.bind();
 		this.voxelRaytracingShader.enable();
 		this.voxelRaytracingShader.setUniformMat4("pr_matrix", this.camera.getProjectionMatrix());
 		this.voxelRaytracingShader.setUniformMat4("vw_matrix", this.camera.getViewMatrix());
 		this.voxelRaytracingShader.setUniform3f("camera_pos", this.camera.getPos());
+		this.voxelRaytracingShader.setUniform3f("sun_dir", sun_dir);
 		this.voxelRaytracingShader.setUniform3f("svo_offset", new Vec3(0, 0, 0));
 		this.voxelRaytracingShader.setUniform1i("svo_size", 64);
 
