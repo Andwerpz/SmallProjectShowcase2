@@ -27,7 +27,8 @@ public class VoxelOctreeNode {
 	private VoxelOctreeNode[] children = null;
 	private int nrEmptySubtrees;
 
-	private int r, g, b, a; //0 - 255
+	private int r, g, b, a;  //[0, 255], color data
+	private int nx, ny, nz, nw;  //[-127, 127], normal data
 
 	private int size; //must be a power of 2
 
@@ -63,7 +64,8 @@ public class VoxelOctreeNode {
 	}
 
 	private static final int HEADER_SIZE_POW_BITS = 32;
-	private static final int COLOR_BITS = 8;
+	private static final int COLOR_COMPONENT_BITS = 8;
+	private static final int NORMAL_COMPONENT_BITS = 8;
 	private static final int CHILD_OFFSET_BITS = 32;
 
 	/**
@@ -84,7 +86,8 @@ public class VoxelOctreeNode {
 		}
 
 		if (root.size == 1) {
-			ans += COLOR_BITS * 4;
+			ans += COLOR_COMPONENT_BITS * 4;
+			ans += NORMAL_COMPONENT_BITS * 4;
 		}
 		else {
 			ans += CHILD_OFFSET_BITS * 8;
@@ -108,9 +111,11 @@ public class VoxelOctreeNode {
 	 * the size of the root is 2^K
 	 * 
 	 * IF node is leaf, 
-	 * color bits
+	 * color bits + normal bits
 	 * color bits = R + G + B + A
 	 * R, G, B, A = 8 bit unsigned int
+	 * normal bits = X + Y + Z + W
+	 * X, Y, Z, W = 8 bit signed int
 	 * 
 	 * ELSE node is not leaf,
 	 * child bits
@@ -157,19 +162,33 @@ public class VoxelOctreeNode {
 		int ptr = start;
 		if (root.size == 1) {
 			//leaf node, encode color
-			for (int i = 0; i < COLOR_BITS; i++) {
-				bits[ptr++] = (((root.r >> (COLOR_BITS - 1 - i)) & 1) == 1);
+			for (int i = 0; i < COLOR_COMPONENT_BITS; i++) {
+				bits[ptr++] = (((root.r >> (COLOR_COMPONENT_BITS - 1 - i)) & 1) == 1);
 			}
-			for (int i = 0; i < 8; i++) {
-				bits[ptr++] = (((root.g >> (COLOR_BITS - 1 - i)) & 1) == 1);
+			for (int i = 0; i < COLOR_COMPONENT_BITS; i++) {
+				bits[ptr++] = (((root.g >> (COLOR_COMPONENT_BITS - 1 - i)) & 1) == 1);
 			}
-			for (int i = 0; i < 8; i++) {
-				bits[ptr++] = (((root.b >> (COLOR_BITS - 1 - i)) & 1) == 1);
+			for (int i = 0; i < COLOR_COMPONENT_BITS; i++) {
+				bits[ptr++] = (((root.b >> (COLOR_COMPONENT_BITS - 1 - i)) & 1) == 1);
 			}
-			for (int i = 0; i < 8; i++) {
-				bits[ptr++] = (((root.a >> (COLOR_BITS - 1 - i)) & 1) == 1);
+			for (int i = 0; i < COLOR_COMPONENT_BITS; i++) {
+				bits[ptr++] = (((root.a >> (COLOR_COMPONENT_BITS - 1 - i)) & 1) == 1);
 			}
-			nrBits = COLOR_BITS * 4;
+			nrBits += COLOR_COMPONENT_BITS * 4;
+			//encode normal
+			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
+				bits[ptr++] = (((root.nx >> (NORMAL_COMPONENT_BITS - 1 - i)) & 1) == 1);
+			}
+			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
+				bits[ptr++] = (((root.ny >> (NORMAL_COMPONENT_BITS - 1 - i)) & 1) == 1);
+			}
+			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
+				bits[ptr++] = (((root.nz >> (NORMAL_COMPONENT_BITS - 1 - i)) & 1) == 1);
+			}
+			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
+				bits[ptr++] = (((root.nw >> (NORMAL_COMPONENT_BITS - 1 - i)) & 1) == 1);
+			}
+			nrBits += NORMAL_COMPONENT_BITS * 4;
 		}
 		else {
 			int offset = CHILD_OFFSET_BITS * 8;
@@ -220,17 +239,33 @@ public class VoxelOctreeNode {
 			root.g = 0;
 			root.b = 0;
 			root.a = 0;
-			for (int i = 0; i < COLOR_BITS; i++) {
+			for (int i = 0; i < COLOR_COMPONENT_BITS; i++) {
 				root.r = (root.r << 1) + (bits[ptr++] ? 1 : 0);
 			}
-			for (int i = 0; i < COLOR_BITS; i++) {
+			for (int i = 0; i < COLOR_COMPONENT_BITS; i++) {
 				root.g = (root.g << 1) + (bits[ptr++] ? 1 : 0);
 			}
-			for (int i = 0; i < COLOR_BITS; i++) {
+			for (int i = 0; i < COLOR_COMPONENT_BITS; i++) {
 				root.b = (root.b << 1) + (bits[ptr++] ? 1 : 0);
 			}
-			for (int i = 0; i < COLOR_BITS; i++) {
+			for (int i = 0; i < COLOR_COMPONENT_BITS; i++) {
 				root.a = (root.a << 1) + (bits[ptr++] ? 1 : 0);
+			}
+			root.nx = 0;
+			root.ny = 0;
+			root.nz = 0;
+			root.nw = 0;
+			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
+				root.nx = (root.nx << 1) + (bits[ptr++] ? 1 : 0);
+			}
+			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
+				root.ny = (root.ny << 1) + (bits[ptr++] ? 1 : 0);
+			}
+			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
+				root.nz = (root.nz << 1) + (bits[ptr++] ? 1 : 0);
+			}
+			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
+				root.nw = (root.nw << 1) + (bits[ptr++] ? 1 : 0);
 			}
 		}
 		else {
@@ -253,7 +288,7 @@ public class VoxelOctreeNode {
 		return root;
 	}
 
-	public void addVoxel(int x, int y, int z, int r, int g, int b) {
+	public void addVoxel(int x, int y, int z, Vec3 color, Vec3 normal) {
 		//check if is outside range
 		if (x < 0 || y < 0 || z < 0 || x >= this.size || y >= this.size || z >= this.size) {
 			//it's outside of the range of the current voxel
@@ -263,9 +298,17 @@ public class VoxelOctreeNode {
 
 		if (this.size == 1) {
 			//this is the leaf node
-			this.r = r;
-			this.g = g;
-			this.b = b;
+			this.r = MathUtils.clamp(0, (1 << COLOR_COMPONENT_BITS) - 1, (int) (color.x * (1 << COLOR_COMPONENT_BITS)));
+			this.g = MathUtils.clamp(0, (1 << COLOR_COMPONENT_BITS) - 1, (int) (color.y * (1 << COLOR_COMPONENT_BITS)));
+			this.b = MathUtils.clamp(0, (1 << COLOR_COMPONENT_BITS) - 1, (int) (color.z * (1 << COLOR_COMPONENT_BITS)));
+			
+			normal.normalize();
+			this.nx = MathUtils.clamp(-127, 127, (int) (normal.x * (1 << (NORMAL_COMPONENT_BITS - 1))));
+			this.ny = MathUtils.clamp(-127, 127, (int) (normal.y * (1 << (NORMAL_COMPONENT_BITS - 1))));
+			this.nz = MathUtils.clamp(-127, 127, (int) (normal.z * (1 << (NORMAL_COMPONENT_BITS - 1))));
+			this.nx = this.nx < 0? Math.abs(this.nx) + (1 << (NORMAL_COMPONENT_BITS - 1)) : this.nx;
+			this.ny = this.ny < 0? Math.abs(this.ny) + (1 << (NORMAL_COMPONENT_BITS - 1)) : this.ny;
+			this.nz = this.nz < 0? Math.abs(this.nz) + (1 << (NORMAL_COMPONENT_BITS - 1)) : this.nz;
 			return;
 		}
 
@@ -287,7 +330,7 @@ public class VoxelOctreeNode {
 			this.nrEmptySubtrees--;
 			this.children[ind] = new VoxelOctreeNode(this);
 		}
-		this.children[ind].addVoxel(x, y, z, r, g, b);
+		this.children[ind].addVoxel(x, y, z, color, normal);
 	}
 
 	/**
@@ -353,6 +396,9 @@ public class VoxelOctreeNode {
 			if (this.r != n.r || this.g != n.g || this.b != n.b) {
 				return false;
 			}
+			if(this.nx != n.nx || this.ny != n.ny || this.nz != n.nz) {
+				return false;
+			}
 		}
 		else {
 			if (this.isRoot != n.isRoot) {
@@ -383,7 +429,9 @@ public class VoxelOctreeNode {
 		StringBuilder res = new StringBuilder();
 		res.append("{");
 		if (this.size == 1) {
-			res.append(this.r + ", " + this.g + " " + this.b);
+			res.append("(" + this.r + ", " + this.g + ", " + this.b + ")");
+			res.append(", ");
+			res.append("(" + this.nx + ", " + this.ny + ", " + this.nz + ")");
 		}
 		else {
 			res.append("[");

@@ -68,22 +68,25 @@ public class VoxelRaytracingScreen extends Screen {
 
 		System.out.print("BUILDING VOXEL OCTREE : ");
 		long startMillis = System.currentTimeMillis();
-		int size = 128;
+		int size = 256;
 		float prob = 1f;
 		int nrRemove = 0;
-		float radius = 48f;
+		float radius = 100f;
 		VoxelOctreeNode root = new VoxelOctreeNode(size);
-		Vec3 center = new Vec3(size / 2, size / 2 - 20, size / 2);
+		Vec3 center = new Vec3(size / 2, size / 2, size / 2);
 		for (int i = 0; i < size; i++) {
 			for (int j = 0; j < size; j++) {
 				for (int k = 0; k < size; k++) {
-					Vec3 v = new Vec3(new Vec3(i, j, k), center);
-					if ((Math.random() < prob && v.length() < radius) || (j <= 20)) {
+					Vec3 v = new Vec3(center, new Vec3(i, j, k));
+					if ((Math.random() < prob && v.length() < radius)) {
 						int col = (int) (Math.random() * 15);
 						int r = 79 + col;
 						int g = 58 + col;
 						int b = 43 + col;
-						root.addVoxel(i, j, k, r, g, b);
+						v.normalize();
+						Vec3 color = new Vec3(r, g, b);
+						color.muli(1.0 / 255.0);
+						root.addVoxel(i, j, k, color, v);
 					}
 				}
 			}
@@ -155,7 +158,6 @@ public class VoxelRaytracingScreen extends Screen {
 		this.voxelRaytracingShader.setUniform3f("camera_pos", this.camera.getPos());
 		this.voxelRaytracingShader.setUniform3f("sun_dir", sun_dir);
 		this.voxelRaytracingShader.setUniform3f("svo_offset", new Vec3(0, 0, 0));
-		this.voxelRaytracingShader.setUniform1i("svo_size", 64);
 
 		this.skybox.bind(GL_TEXTURE0);
 		this.svoSSBO.bindToBase(1);

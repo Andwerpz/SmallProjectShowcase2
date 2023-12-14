@@ -142,15 +142,30 @@ HitInfo raySVO(Ray ray) {
 		
 		if(cur_size == 1){
 			//we're at a leaf node, find the color and exit
-			int color_bits = svo_data[ind_offset];
+			int color_bits = svo_data[ind_offset + 0];
+			int normal_bits = svo_data[ind_offset + 1];
 			int r = (color_bits >> 24) & 0xff;
 			int g = (color_bits >> 16) & 0xff;
 			int b = (color_bits >> 8) & 0xff;
+			int nx_bits = (normal_bits >> 24) & 0xff;
+			int ny_bits = (normal_bits >> 16) & 0xff;
+			int nz_bits = (normal_bits >> 8) & 0xff;
+			
+			if((nx_bits | (1 << 7)) == nx_bits) {nx_bits = (nx_bits - (1 << 7)) * -1;}
+			if((ny_bits | (1 << 7)) == ny_bits) {ny_bits = (ny_bits - (1 << 7)) * -1;}
+			if((nz_bits | (1 << 7)) == nz_bits) {nz_bits = (nz_bits - (1 << 7)) * -1;}
+			
 			result.did_hit = true;
 			result.pos = ray.origin;
 			result.color = vec3(r, g, b) / 255.0;
-			result.normal = last_norm == 0? vec3(1, 0, 0) : (last_norm == 1? vec3(0, 1, 0) : vec3(0, 0, 1));
-			result.normal *= dir_component[last_norm] > 0? -1 : 1;
+			result.normal = vec3(nx_bits, ny_bits, nz_bits);
+			result.normal = normalize(result.normal);
+			
+			//result.normal = pos_offset - vec3(svo_size / 2);
+			//result.normal = normalize(result.normal);
+			
+			//result.normal = last_norm == 0? vec3(1, 0, 0) : (last_norm == 1? vec3(0, 1, 0) : vec3(0, 0, 1));
+			//result.normal *= dir_component[last_norm] > 0? -1 : 1;
 			break;
 		}
 		
@@ -231,15 +246,6 @@ vec3 traceRay(Ray ray) {
 	if(hit.did_hit) {
 		float diffuse = dot(hit.normal, sun_dir);
 		float ambient = 1;
-		
-		//test for shadow
-		{
-			Ray shadow_ray = Ray(hit.pos + hit.normal * 0.001, sun_dir);
-			HitInfo shadow_hit = raySVO(shadow_ray);
-			if(shadow_hit.did_hit) {
-				diffuse = 0;
-			}
-		}
 		
 		float exposure = 2;
 		float gamma = 0.5;
