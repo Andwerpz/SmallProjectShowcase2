@@ -42,6 +42,7 @@ import lwjglengine.screen.SkyboxCube;
 import lwjglengine.util.BufferUtils;
 import lwjglengine.util.ShaderUtils;
 import myutils.file.FileUtils;
+import myutils.math.IVec3;
 import myutils.math.Vec3;
 
 public class VoxelRaytracingScreen extends Screen {
@@ -51,8 +52,6 @@ public class VoxelRaytracingScreen extends Screen {
 	private Cubemap skybox;
 
 	private ShaderStorageBuffer svoSSBO;
-
-	private float sunRotRads = 0;
 
 	public VoxelRaytracingScreen() {
 		this.voxelRaytracingShader = ShaderUtils.createShader("/voxel_raytracing/raytracing.vert", "/voxel_raytracing/raytracing.frag");
@@ -86,7 +85,7 @@ public class VoxelRaytracingScreen extends Screen {
 						v.normalize();
 						Vec3 color = new Vec3(r, g, b);
 						color.muli(1.0 / 255.0);
-						root.addVoxel(i, j, k, color, v);
+						root.addVoxel(new IVec3(i, j, k), color, v);
 					}
 				}
 			}
@@ -95,12 +94,12 @@ public class VoxelRaytracingScreen extends Screen {
 			int x = (int) (Math.random() * size);
 			int y = (int) (Math.random() * size);
 			int z = (int) (Math.random() * size);
-			root.removeVoxel(x, y, z);
+			root.removeVoxel(new IVec3(x, y, z));
 		}
 		System.out.println(System.currentTimeMillis() - startMillis);
 		System.out.print("SERIALIZING OCTREE : ");
 		startMillis = System.currentTimeMillis();
-		boolean[] bits = VoxelOctreeNode.serialize(root);
+		boolean[] bits = root.serialize();
 		System.out.println(System.currentTimeMillis() - startMillis);
 		System.out.println("BITS LENGTH : " + bits.length);
 
@@ -145,11 +144,8 @@ public class VoxelRaytracingScreen extends Screen {
 
 	@Override
 	protected void _render(Framebuffer outputBuffer) {
-		Vec3 sun_dir = new Vec3(0, 1, 1);
+		Vec3 sun_dir = new Vec3(0.2, 1, 0.7);
 		sun_dir.normalize();
-
-		this.sunRotRads += (Main.getDeltaMillis() / 1000.0f) / 5.0f;
-		sun_dir.rotateY(this.sunRotRads);
 
 		outputBuffer.bind();
 		this.voxelRaytracingShader.enable();
