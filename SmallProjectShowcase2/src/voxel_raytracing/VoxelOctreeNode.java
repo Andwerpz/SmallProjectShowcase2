@@ -11,15 +11,17 @@ import myutils.math.Vec4;
 public class VoxelOctreeNode {
 
 	//TODO 
-	// - optimize so that the serialized form only stores voxels that are adjacent to air
 	// - store per vertex per face AO information
 	//   - 6 faces
 	//   - each face needs to store 4 vertices
 	//   - each vertex should have 2 bits
 	//   - total of 6 * 4 * 2 = 48 bits
+	//   - could also just store adjacent voxel info and let the gpu figure it out. 
+
+	//the serialized form only stores voxels that are adjacent to air. 
 
 	//children bits correspond to their position within the parent node
-	//i -> xyz
+	//i -> zyx
 	//0 -> 000
 	//1 -> 001
 	//2 -> 010
@@ -29,18 +31,31 @@ public class VoxelOctreeNode {
 	//6 -> 110
 	//7 -> 111
 
+	private VoxelOctreeManager manager;
+	private VoxelOctreeNode root;
+
 	private VoxelOctreeNode parent = null;
 	private VoxelOctreeNode[] children = null;
 	private int nrEmptySubtrees;
 
-	private int r, g, b, a;  //[0, 255], color data
-	private int nx, ny, nz, nw;  //[-127, 127], normal data
+	private int r, g, b, a; //[0, 255], color data
+	private int nx, ny, nz, nw; //[-127, 127], normal data
 
 	private int size; //must be a power of 2
 
 	private boolean isRoot = false;
+	private IVec3 offset;
 
-	public VoxelOctreeNode(int size) {
+	private IVec3 relOffset;
+
+	//if true, it means that somewhere in this subtree, there exists a leaf that is adjacent to air. 
+	private boolean isAirAdjacent;
+	private int nrAirAdjacentSubtrees;
+
+	//used by leaf nodes.
+	private int nrAdjacentVoxels;
+
+	public VoxelOctreeNode(VoxelOctreeManager manager, int size, IVec3 offset) {
 		//raise size to the nearest power of 2
 		{
 			int tmp = 1;
@@ -50,33 +65,56 @@ public class VoxelOctreeNode {
 			size = tmp;
 		}
 
+		this.manager = manager;
+		this.root = this;
+
+		assert this.manager != null : "Must have manager D:";
+
 		this.parent = null;
 		this.children = new VoxelOctreeNode[8];
 		this.nrEmptySubtrees = 8;
 
 		this.isRoot = true;
+		this.offset = new IVec3(offset);
+
+		this.relOffset = new IVec3();
 
 		this.size = size;
+
+		this.isAirAdjacent = true;
+		this.nrAirAdjacentSubtrees = 8;
+		this.nrAdjacentVoxels = 0;
 	}
 
-	private VoxelOctreeNode(VoxelOctreeNode parent) {
+	private VoxelOctreeNode(VoxelOctreeNode parent, IVec3 relOffset) {
+		this.manager = parent.manager;
+		this.root = parent.root;
+
 		this.parent = parent;
 		this.children = new VoxelOctreeNode[8];
 		this.nrEmptySubtrees = 8;
 
 		this.isRoot = false;
 
+		this.relOffset = new IVec3(relOffset);
+
 		this.size = parent.size / 2;
+
+		this.isAirAdjacent = true;
+		this.nrAirAdjacentSubtrees = 8;
+		this.nrAdjacentVoxels = 0;
 	}
-	
+
 	public boolean isInside(IVec3 v) {
 		return !(v.x < 0 || v.y < 0 || v.z < 0 || v.x >= this.size || v.y >= this.size || v.z >= this.size);
 	}
-	
-	private int calcChildInd(IVec3 v) {
+
+	private int calcChildInd(IVec3 relCoord) {
+		IVec3 v = new IVec3(relCoord);
+
 		//make sure coords are inside node
 		assert this.isInside(v);
-		
+
 		//calculate index
 		int ind = 0;
 		if (v.x >= this.size / 2) {
@@ -93,38 +131,14 @@ public class VoxelOctreeNode {
 		}
 		return ind;
 	}
-	
-//	private int calcChildInd(int x, int y, int z) {
-//		//make sure coords are inside node
-//		assert !(x < 0 || y < 0 || z < 0 || x >= this.size || y >= this.size || z >= this.size);
-//		
-//		//calculate index
-//		int ind = 0;
-//		if (x >= this.size / 2) {
-//			x -= this.size / 2;
-//			ind += (1 << 0);
-//		}
-//		if (y >= this.size / 2) {
-//			y -= this.size / 2;
-//			ind += (1 << 1);
-//		}
-//		if (z >= this.size / 2) {
-//			z -= this.size / 2;
-//			ind += (1 << 2);
-//		}
-//		return ind;
-//	}
-	
+
 	private IVec3 calcChildCoord(IVec3 coord) {
 		assert this.size != 1;
 		return coord.mod(this.size / 2);
 	}
-	
-//	private IVec3 calcChildCoord(int x, int y, int z) {
-//		return this.calcChildCoord(new IVec3(x, y, z));
-//	}
 
 	private static final int HEADER_SIZE_POW_BITS = 32;
+	private static final int HEADER_OFFSET_COMPONENT_BITS = 32;
 	private static final int COLOR_COMPONENT_BITS = 8;
 	private static final int NORMAL_COMPONENT_BITS = 8;
 	private static final int CHILD_OFFSET_BITS = 32;
@@ -132,7 +146,7 @@ public class VoxelOctreeNode {
 	/**
 	 * Returns the number of bits required to store the subtree in serial form
 	 * 
-	 * Header takes 32 bits
+	 * Header takes 32 + 32 * 3 bits
 	 * Leaves take 32 bits
 	 * Non-leaves take 8 * 32 bits
 	 * 
@@ -143,7 +157,7 @@ public class VoxelOctreeNode {
 		int ans = 0;
 		if (root.isRoot) {
 			//header
-			ans += HEADER_SIZE_POW_BITS;
+			ans += HEADER_SIZE_POW_BITS + HEADER_OFFSET_COMPONENT_BITS * 3;
 		}
 
 		if (root.size == 1) {
@@ -153,7 +167,7 @@ public class VoxelOctreeNode {
 		else {
 			ans += CHILD_OFFSET_BITS * 8;
 			for (int i = 0; i < 8; i++) {
-				if (root.children[i] != null) {
+				if (root.children[i] != null && root.children[i].isAirAdjacent) {
 					ans += countRequiredBits(root.children[i]);
 				}
 			}
@@ -168,7 +182,8 @@ public class VoxelOctreeNode {
 	 * 
 	 * Format:
 	 * HEADER
-	 * K = 32 bit unsigned int
+	 * K + OX + OY + OZ
+	 * K, OX, OY, OZ = 32 bit unsigned int
 	 * the size of the root is 2^K
 	 * 
 	 * IF node is leaf, 
@@ -191,7 +206,7 @@ public class VoxelOctreeNode {
 	 * @return
 	 */
 	public boolean[] serialize() {
-		assert this.isRoot;
+		assert this.isRoot : "Try calling serialize on the root";
 
 		boolean[] bits = new boolean[countRequiredBits(this)];
 
@@ -202,11 +217,25 @@ public class VoxelOctreeNode {
 			tmp *= 2;
 			sizePow++;
 		}
+
+		int ptr = 0;
+		//size pow
 		for (int i = 0; i < HEADER_SIZE_POW_BITS; i++) {
-			bits[i] = (((sizePow >> (HEADER_SIZE_POW_BITS - 1 - i)) & 1) == 1);
+			bits[ptr++] = (((sizePow >> (HEADER_SIZE_POW_BITS - 1 - i)) & 1) == 1);
 		}
-		
-		this._serialize(bits, HEADER_SIZE_POW_BITS);
+
+		//offset
+		for (int i = 0; i < HEADER_OFFSET_COMPONENT_BITS; i++) {
+			bits[ptr++] = (((this.offset.x >> (HEADER_OFFSET_COMPONENT_BITS - 1 - i)) & 1) == 1);
+		}
+		for (int i = 0; i < HEADER_OFFSET_COMPONENT_BITS; i++) {
+			bits[ptr++] = (((this.offset.y >> (HEADER_OFFSET_COMPONENT_BITS - 1 - i)) & 1) == 1);
+		}
+		for (int i = 0; i < HEADER_OFFSET_COMPONENT_BITS; i++) {
+			bits[ptr++] = (((this.offset.z >> (HEADER_OFFSET_COMPONENT_BITS - 1 - i)) & 1) == 1);
+		}
+
+		this._serialize(bits, HEADER_SIZE_POW_BITS + HEADER_OFFSET_COMPONENT_BITS * 3);
 
 		return bits;
 	}
@@ -237,16 +266,16 @@ public class VoxelOctreeNode {
 			}
 			nrBits += COLOR_COMPONENT_BITS * 4;
 			//encode normal
-			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
+			for (int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
 				bits[ptr++] = (((this.nx >> (NORMAL_COMPONENT_BITS - 1 - i)) & 1) == 1);
 			}
-			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
+			for (int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
 				bits[ptr++] = (((this.ny >> (NORMAL_COMPONENT_BITS - 1 - i)) & 1) == 1);
 			}
-			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
+			for (int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
 				bits[ptr++] = (((this.nz >> (NORMAL_COMPONENT_BITS - 1 - i)) & 1) == 1);
 			}
-			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
+			for (int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
 				bits[ptr++] = (((this.nw >> (NORMAL_COMPONENT_BITS - 1 - i)) & 1) == 1);
 			}
 			nrBits += NORMAL_COMPONENT_BITS * 4;
@@ -254,7 +283,7 @@ public class VoxelOctreeNode {
 		else {
 			int offset = CHILD_OFFSET_BITS * 8;
 			for (int i = 0; i < 8; i++) {
-				if (this.children[i] == null) {
+				if (this.children[i] == null || !this.children[i].isAirAdjacent) {
 					//encode null offset
 					for (int j = 0; j < CHILD_OFFSET_BITS; j++) {
 						bits[ptr++] = false;
@@ -273,116 +302,18 @@ public class VoxelOctreeNode {
 		return nrBits;
 	}
 
+	private static int[] adj_dx = { -1, 1, 0, 0, 0, 0 };
+	private static int[] adj_dy = { 0, 0, -1, 1, 0, 0 };
+	private static int[] adj_dz = { 0, 0, 0, 0, -1, 1 };
+
 	/**
-	 * Turns serialized octree bits back into octree nodes
-	 * @param bits
-	 * @return
+	 * Adds voxel at requested location
+	 * Color components are in the range [0, 1]. 
+	 * 
+	 * @param v
+	 * @param color
+	 * @param normal
 	 */
-	public static VoxelOctreeNode deserialize(boolean[] bits) {
-		int rootSizePow = 0;
-		for (int i = 0; i < HEADER_SIZE_POW_BITS; i++) {
-			rootSizePow *= 2;
-			rootSizePow += bits[i] ? 1 : 0;
-		}
-		int rootSize = (1 << rootSizePow);
-		VoxelOctreeNode root = _deserialize(bits, HEADER_SIZE_POW_BITS, rootSize);
-		root.isRoot = true;
-		return root;
-	}
-
-	private static VoxelOctreeNode _deserialize(boolean[] bits, int start, int size) {
-		VoxelOctreeNode root = new VoxelOctreeNode(size);
-		root.isRoot = false;
-		int ptr = start;
-		if (size == 1) {
-			//parse leaf
-			root.r = 0;
-			root.g = 0;
-			root.b = 0;
-			root.a = 0;
-			for (int i = 0; i < COLOR_COMPONENT_BITS; i++) {
-				root.r = (root.r << 1) + (bits[ptr++] ? 1 : 0);
-			}
-			for (int i = 0; i < COLOR_COMPONENT_BITS; i++) {
-				root.g = (root.g << 1) + (bits[ptr++] ? 1 : 0);
-			}
-			for (int i = 0; i < COLOR_COMPONENT_BITS; i++) {
-				root.b = (root.b << 1) + (bits[ptr++] ? 1 : 0);
-			}
-			for (int i = 0; i < COLOR_COMPONENT_BITS; i++) {
-				root.a = (root.a << 1) + (bits[ptr++] ? 1 : 0);
-			}
-			root.nx = 0;
-			root.ny = 0;
-			root.nz = 0;
-			root.nw = 0;
-			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
-				root.nx = (root.nx << 1) + (bits[ptr++] ? 1 : 0);
-			}
-			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
-				root.ny = (root.ny << 1) + (bits[ptr++] ? 1 : 0);
-			}
-			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
-				root.nz = (root.nz << 1) + (bits[ptr++] ? 1 : 0);
-			}
-			for(int i = 0; i < NORMAL_COMPONENT_BITS; i++) {
-				root.nw = (root.nw << 1) + (bits[ptr++] ? 1 : 0);
-			}
-		}
-		else {
-			//parse children
-			for (int i = 0; i < 8; i++) {
-				int offset = 0;
-				for (int j = 0; j < CHILD_OFFSET_BITS; j++) {
-					offset = (offset << 1) + (bits[ptr++] ? 1 : 0);
-				}
-
-				//null child
-				if (offset == 0) {
-					continue;
-				}
-
-				root.children[i] = _deserialize(bits, start + offset, size / 2);
-				root.nrEmptySubtrees--;
-			}
-		}
-		return root;
-	}
-
-//	public void addVoxel(int x, int y, int z, Vec3 color, Vec3 normal) {
-//		//check if is outside range
-//		if (x < 0 || y < 0 || z < 0 || x >= this.size || y >= this.size || z >= this.size) {
-//			//it's outside of the range of the current voxel
-//			assert this.isRoot;
-//			return;
-//		}
-//
-//		if (this.size == 1) {
-//			//this is the leaf node
-//			this.r = MathUtils.clamp(0, (1 << COLOR_COMPONENT_BITS) - 1, (int) (color.x * (1 << COLOR_COMPONENT_BITS)));
-//			this.g = MathUtils.clamp(0, (1 << COLOR_COMPONENT_BITS) - 1, (int) (color.y * (1 << COLOR_COMPONENT_BITS)));
-//			this.b = MathUtils.clamp(0, (1 << COLOR_COMPONENT_BITS) - 1, (int) (color.z * (1 << COLOR_COMPONENT_BITS)));
-//			
-//			normal.normalize();
-//			this.nx = MathUtils.clamp(-127, 127, (int) (normal.x * (1 << (NORMAL_COMPONENT_BITS - 1))));
-//			this.ny = MathUtils.clamp(-127, 127, (int) (normal.y * (1 << (NORMAL_COMPONENT_BITS - 1))));
-//			this.nz = MathUtils.clamp(-127, 127, (int) (normal.z * (1 << (NORMAL_COMPONENT_BITS - 1))));
-//			this.nx = this.nx < 0? Math.abs(this.nx) + (1 << (NORMAL_COMPONENT_BITS - 1)) : this.nx;
-//			this.ny = this.ny < 0? Math.abs(this.ny) + (1 << (NORMAL_COMPONENT_BITS - 1)) : this.ny;
-//			this.nz = this.nz < 0? Math.abs(this.nz) + (1 << (NORMAL_COMPONENT_BITS - 1)) : this.nz;
-//			return;
-//		}
-//
-//		//insert into a child
-//		int ind = this.calcChildInd(x, y, z);
-//		IVec3 childCoord = this.calcChildCoord(x, y, z);
-//		if (this.children[ind] == null) {
-//			this.nrEmptySubtrees--;
-//			this.children[ind] = new VoxelOctreeNode(this);
-//		}
-//		this.children[ind].addVoxel(childCoord, color, normal);
-//	}
-	
 	public void addVoxel(IVec3 v, Vec3 color, Vec3 normal) {
 		//check if is outside range
 		if (!this.isInside(v)) {
@@ -396,14 +327,25 @@ public class VoxelOctreeNode {
 			this.r = MathUtils.clamp(0, (1 << COLOR_COMPONENT_BITS) - 1, (int) (color.x * (1 << COLOR_COMPONENT_BITS)));
 			this.g = MathUtils.clamp(0, (1 << COLOR_COMPONENT_BITS) - 1, (int) (color.y * (1 << COLOR_COMPONENT_BITS)));
 			this.b = MathUtils.clamp(0, (1 << COLOR_COMPONENT_BITS) - 1, (int) (color.z * (1 << COLOR_COMPONENT_BITS)));
-			
+
 			normal.normalize();
 			this.nx = MathUtils.clamp(-127, 127, (int) (normal.x * (1 << (NORMAL_COMPONENT_BITS - 1))));
 			this.ny = MathUtils.clamp(-127, 127, (int) (normal.y * (1 << (NORMAL_COMPONENT_BITS - 1))));
 			this.nz = MathUtils.clamp(-127, 127, (int) (normal.z * (1 << (NORMAL_COMPONENT_BITS - 1))));
-			this.nx = this.nx < 0? Math.abs(this.nx) + (1 << (NORMAL_COMPONENT_BITS - 1)) : this.nx;
-			this.ny = this.ny < 0? Math.abs(this.ny) + (1 << (NORMAL_COMPONENT_BITS - 1)) : this.ny;
-			this.nz = this.nz < 0? Math.abs(this.nz) + (1 << (NORMAL_COMPONENT_BITS - 1)) : this.nz;
+			this.nx = this.nx < 0 ? Math.abs(this.nx) + (1 << (NORMAL_COMPONENT_BITS - 1)) : this.nx;
+			this.ny = this.ny < 0 ? Math.abs(this.ny) + (1 << (NORMAL_COMPONENT_BITS - 1)) : this.ny;
+			this.nz = this.nz < 0 ? Math.abs(this.nz) + (1 << (NORMAL_COMPONENT_BITS - 1)) : this.nz;
+
+			//update nr adjacent voxels
+			for (int i = 0; i < 6; i++) {
+				IVec3 nv = new IVec3(this.relOffset);
+				nv.x += adj_dx[i];
+				nv.y += adj_dy[i];
+				nv.z += adj_dz[i];
+				this.nrAdjacentVoxels += this.root.doesVoxelExist(nv) ? 1 : 0;
+				this.root.modifyNrAdjacentVoxels(nv, 1);
+			}
+			this.isAirAdjacent = this.nrAdjacentVoxels != 6;
 			return;
 		}
 
@@ -412,7 +354,17 @@ public class VoxelOctreeNode {
 		IVec3 childCoord = this.calcChildCoord(v);
 		if (this.children[childInd] == null) {
 			this.nrEmptySubtrees--;
-			this.children[childInd] = new VoxelOctreeNode(this);
+			IVec3 childRelOffset = new IVec3(this.relOffset);
+			if (((childInd >> 0) & 1) == 1) {
+				childRelOffset.x += this.size / 2;
+			}
+			if (((childInd >> 1) & 1) == 1) {
+				childRelOffset.y += this.size / 2;
+			}
+			if (((childInd >> 2) & 1) == 1) {
+				childRelOffset.z += this.size / 2;
+			}
+			this.children[childInd] = new VoxelOctreeNode(this, childRelOffset);
 		}
 		this.children[childInd].addVoxel(childCoord, color, normal);
 	}
@@ -425,31 +377,6 @@ public class VoxelOctreeNode {
 	 * @param z
 	 * @return
 	 */
-//	public boolean removeVoxel(int x, int y, int z) {
-//		//check if is outside range
-//		if (x < 0 || y < 0 || z < 0 || x >= this.size || y >= this.size || z >= this.size) {
-//			//it's outside of the range of the current voxel
-//			assert this.isRoot;
-//			return this.nrEmptySubtrees == 8;
-//		}
-//
-//		if (this.size == 1) {
-//			//we're removing this leaf node
-//			return true;
-//		}
-//
-//		//remove from child
-//		int ind = this.calcChildInd(x, y, z);
-//		IVec3 childCoord = this.calcChildCoord(x, y, z);
-//		if (this.children[ind] != null) {
-//			if (this.children[ind].removeVoxel(childCoord)) {
-//				this.nrEmptySubtrees++;
-//				this.children[ind] = null;
-//			}
-//		}
-//		return this.nrEmptySubtrees == 8;
-//	}
-	
 	public boolean removeVoxel(IVec3 v) {
 		//check if is outside range
 		if (!this.isInside(v)) {
@@ -460,6 +387,15 @@ public class VoxelOctreeNode {
 
 		if (this.size == 1) {
 			//we're removing this leaf node
+
+			//update nr adjacent voxels
+			for (int i = 0; i < 6; i++) {
+				IVec3 nv = new IVec3(this.relOffset);
+				nv.x += adj_dx[i];
+				nv.y += adj_dy[i];
+				nv.z += adj_dz[i];
+				this.root.modifyNrAdjacentVoxels(nv, -1);
+			}
 			return true;
 		}
 
@@ -474,47 +410,76 @@ public class VoxelOctreeNode {
 		}
 		return this.nrEmptySubtrees == 8;
 	}
-	
-//	public boolean doesVoxelExist(int x, int y, int z) {
-//		//check if is outside range
-//		if(x < 0 || y < 0 || z < 0 || x >= this.size || y >= this.size || z >= this.size) {
-//			return false;
-//		}
-//		
-//		//this is the voxel we're looking for
-//		if(this.size == 1) {
-//			return true;
-//		}
-//		
-//		//check child
-//		int ind = this.calcChildInd(x, y, z);
-//		if(this.children[ind] == null) {
-//			return false;
-//		}
-//		IVec3 childCoord = this.calcChildCoord(x, y, z);
-//		return this.children[ind].doesVoxelExist(childCoord);
-//	}
 
-	public boolean doesVoxelExist(IVec3 v) {
+	private void modifyNrAdjacentVoxels(IVec3 v, int increment) {
+		if (!this.isInside(v)) {
+			return;
+		}
+
+		if (this.size == 1) {
+			this.nrAdjacentVoxels += increment;
+			this.isAirAdjacent = this.nrAdjacentVoxels != 6;
+			return;
+		}
+
+		int childInd = this.calcChildInd(v);
+		if (this.children[childInd] == null) {
+			return;
+		}
+		IVec3 childCoord = this.calcChildCoord(v);
+		this.nrAirAdjacentSubtrees -= this.children[childInd].isAirAdjacent ? 1 : 0;
+		this.children[childInd].modifyNrAdjacentVoxels(childCoord, increment);
+		this.nrAirAdjacentSubtrees += this.children[childInd].isAirAdjacent ? 1 : 0;
+		this.isAirAdjacent = this.nrAirAdjacentSubtrees != 0;
+	}
+
+	/**
+	 * Given a relative coordinate, returns whether or not a voxel exists at that coordinate. 
+	 * @param v
+	 * @return
+	 */
+	private boolean doesVoxelExist(IVec3 v) {
 		//check if is outside range
-		if(!this.isInside(v)) {
+		if (!this.isInside(v)) {
 			return false;
 		}
-		
+
 		//this is the voxel we're looking for
-		if(this.size == 1) {
+		if (this.size == 1) {
 			return true;
 		}
-		
+
 		//check child
 		int childInd = this.calcChildInd(v);
-		if(this.children[childInd] == null) {
+		if (this.children[childInd] == null) {
 			return false;
 		}
 		IVec3 childCoord = this.calcChildCoord(v);
 		return this.children[childInd].doesVoxelExist(childCoord);
 	}
-	
+
+	/**
+	 * Given a relative coordinate, returns the VoxelOctreeNode object that represents the leaf at that coordinate,
+	 * or if it doesn't exist, returns null. 
+	 * @param v
+	 */
+	private VoxelOctreeNode getLeaf(IVec3 v) {
+		if (!this.isInside(v)) {
+			return null;
+		}
+
+		if (this.size == 1) {
+			return this;
+		}
+
+		int childInd = this.calcChildInd(v);
+		if (this.children[childInd] == null) {
+			return null;
+		}
+		IVec3 childCoord = this.calcChildCoord(v);
+		return this.children[childInd].getLeaf(childCoord);
+	}
+
 	@Override
 	public boolean equals(Object o) {
 		if (o == null) {
@@ -534,7 +499,7 @@ public class VoxelOctreeNode {
 			if (this.r != n.r || this.g != n.g || this.b != n.b) {
 				return false;
 			}
-			if(this.nx != n.nx || this.ny != n.ny || this.nz != n.nz) {
+			if (this.nx != n.nx || this.ny != n.ny || this.nz != n.nz) {
 				return false;
 			}
 		}

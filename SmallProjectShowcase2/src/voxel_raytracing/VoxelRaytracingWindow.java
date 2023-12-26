@@ -19,9 +19,10 @@ public class VoxelRaytracingWindow extends Window {
 	// - implement chunk system. 
 	// - discussion regarding data streaming : https://www.reddit.com/r/VoxelGameDev/comments/hy5sx4/uploading_voxel_octree_to_opengl/
 	// - also, figure out how to convert 3D meshes into voxel representation
+	//   - https://developer.nvidia.com/content/basics-gpu-voxelization
+	// - point cloud extraction from 2D images
+	//   - https://stackoverflow.com/questions/20314556/generating-point-cloud-from-many-2d-images
 	// - reading google map data might also be fun
-	// - ok, pivoting. Instead of rendering terrain and stuff, I want to be able to convert 3D models into voxels, and
-	//   render them out. This means we have to save normal data within voxels. 
 
 	private VoxelRaytracingScreen voxelScreen;
 

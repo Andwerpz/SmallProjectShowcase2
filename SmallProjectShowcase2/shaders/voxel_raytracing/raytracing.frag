@@ -5,10 +5,9 @@ uniform samplerCube skybox_tex;
 uniform vec3 camera_pos;
 uniform vec3 sun_dir;	//direction towards the sun
 
-uniform vec3 svo_offset;	//offset of minimum (x, y, z)
 layout(std430, binding = 1) buffer svo_ssbo
 {
-    int svo_data[];
+    int svo_data[]; 
 };
 
 in vec3 frag_dir;
@@ -77,6 +76,33 @@ float rayAABBBoundsDist(Ray ray, vec3 AABB_bl, int AABB_size) {
 	return -1;
 }
 
+//returns 0, 1, or 2 depending on if the ray hit the x, y, or z, bound of the AABB
+//returns -1 if no hit occurs. 
+int rayAABBBoundsNorm(Ray ray, vec3 AABB_bl, int AABB_size) {
+	//translate ray into AABB space
+	ray.origin -= AABB_bl;
+
+	bool inside = pointInsideAABB(ray.origin, vec3(0), AABB_size);
+	float dir_component[3] = float[](ray.dir.x, ray.dir.y, ray.dir.z);
+	float pos_component[3] = float[](ray.origin.x, ray.origin.y, ray.origin.z);
+	for(int i = 0; i < 3; i++){
+		if(abs(dir_component[i]) == 0) {
+			continue;
+		}
+		float tgt = (inside ^^ (dir_component[i] < 0)) ? AABB_size : 0;
+		float dist = tgt - pos_component[i];
+		float ray_mul = dist / dir_component[i];
+		if(ray_mul < 0){
+			continue;
+		}
+		vec3 test_pos = ray.origin + ray.dir * ray_mul;
+		if(pointInsideAABB(test_pos, vec3(0), AABB_size, 0.0001)) {
+			return i;
+		}
+	}
+	return -1;
+}
+
 //returns the length the ray has to travel to collide with AABB
 //if a negative value is returned, there is no collision
 float rayAABBDist(Ray ray, vec3 AABB_bl, int AABB_size) {
@@ -98,15 +124,17 @@ HitInfo createHitInfo() {
 HitInfo raySVO(Ray ray) {
 	HitInfo result = createHitInfo();
 
-	//translate ray into svo space
-	ray.origin -= svo_offset;
-
-	//read svo size from buffer
+	//read svo size and offset from buffer
 	int svo_size_pow = svo_data[0];
 	int svo_size = (1 << svo_size_pow);
+	vec3 svo_offset = vec3(svo_data[1], svo_data[2], svo_data[3]);
+	
+	//translate ray into svo space
+	ray.origin -= svo_offset;
 	
 	//check if ray will collide with svo at all
 	float ray_AABB_dist = rayAABBDist(ray, vec3(0), svo_size);
+	int last_norm = rayAABBBoundsNorm(ray, vec3(0), svo_size);
 	ray.origin += ray.dir * (ray_AABB_dist + 0.001);
 	if(!pointInsideAABB(ray.origin, vec3(0), svo_size) || ray_AABB_dist < 0) {
 		return result;
@@ -119,12 +147,10 @@ HitInfo raySVO(Ray ray) {
 	int child_ind_stack[64];	//in this parent, what's the index of the child the ray is in?
 	
 	pos_stack[0] = vec3(0);
-	ind_stack[0] = 1;
+	ind_stack[0] = 1 + 3;	//size pow and offset
 	child_ind_stack[0] = computeChildInd(ray, vec3(0), svo_size);
 	int cur_size = svo_size;
 	int iter_cnt = 0;
-	
-	int last_norm = 0;
 	
 	float dir_component[3] = float[](ray.dir.x, ray.dir.y, ray.dir.z);
 	
