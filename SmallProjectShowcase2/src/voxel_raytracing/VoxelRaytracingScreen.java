@@ -52,9 +52,9 @@ public class VoxelRaytracingScreen extends Screen {
 	private Cubemap skybox;
 
 	private VoxelOctreeManager voxelManager;
-	private ShaderStorageBuffer svoSSBO;
 
 	public VoxelRaytracingScreen() {
+		System.out.println("Creating voxel raytracing screen");
 		this.voxelRaytracingShader = ShaderUtils.createShader("/voxel_raytracing/raytracing.vert", "/voxel_raytracing/raytracing.frag");
 
 		this.voxelRaytracingShader.setUniform1i("skybox_tex", 0);
@@ -66,8 +66,8 @@ public class VoxelRaytracingScreen extends Screen {
 		}
 		this.skybox = new Cubemap(skyboxSides);
 
-		this.svoSSBO = new ShaderStorageBuffer();
-		this.voxelManager = new VoxelOctreeManager(this.svoSSBO);
+		System.out.println("Creating voxel manager");
+		this.voxelManager = new VoxelOctreeManager();
 	}
 
 	public void setCameraPos(Vec3 pos) {
@@ -94,7 +94,7 @@ public class VoxelRaytracingScreen extends Screen {
 	@Override
 	protected void _render(Framebuffer outputBuffer) {
 		//TODO move this somewhere else
-		this.voxelManager.updateSVOSSBO(this.camera.getPos());
+		this.voxelManager.updateSSBO(this.camera.getPos());
 
 		Vec3 sun_dir = new Vec3(0.2, 1, 0.7);
 		sun_dir.normalize();
@@ -107,7 +107,7 @@ public class VoxelRaytracingScreen extends Screen {
 		this.voxelRaytracingShader.setUniform3f("sun_dir", sun_dir);
 
 		this.skybox.bind(GL_TEXTURE0);
-		this.svoSSBO.bindToBase(1);
+		this.voxelManager.getSSBO().bindToBase(1);
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_CULL_FACE);
 		glDisable(GL_BLEND);
@@ -119,6 +119,8 @@ public class VoxelRaytracingScreen extends Screen {
 		this.voxelRaytracingShader.kill();
 
 		this.skybox.kill();
+
+		this.voxelManager.kill();
 	}
 
 }

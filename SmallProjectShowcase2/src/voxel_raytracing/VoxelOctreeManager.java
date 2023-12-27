@@ -1,6 +1,28 @@
 package voxel_raytracing;
 
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL13.*;
+import static org.lwjgl.opengl.GL15.*;
+import static org.lwjgl.opengl.GL20.*;
+import static org.lwjgl.opengl.GL21.*;
+import static org.lwjgl.opengl.GL30.*;
+import static org.lwjgl.opengl.GL31.*;
+import static org.lwjgl.opengl.GL32.*;
+import static org.lwjgl.opengl.GL33.*;
+import static org.lwjgl.opengl.GL43.*;
+import static org.lwjgl.opengl.GL15.*;
+import static org.lwjgl.opengl.GL20.*;
+import static org.lwjgl.opengl.GL30.*;
+import static org.lwjgl.opengl.GL31.*;
+import static org.lwjgl.opengl.GL33.*;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Queue;
+
+import com.sun.jna.platform.win32.Wincon.COORD;
 
 import lwjglengine.graphics.ShaderStorageBuffer;
 import myutils.math.IVec3;
@@ -11,51 +33,135 @@ import myutils.misc.Triple;
 public class VoxelOctreeManager {
 
 	//TODO
-	// - figure out how to serialize multiple chunks at once, in a way that can allow the fragment shader to 
-	//   quickly render
+	// - move generating chunks to the gpu, and do that on another thread. 
+	// - move updating ssbo to another thread, or at least make it extremely fast
+	// - when generating chunks, we quickly run out of JVM heap space. 
+	//   - one idea is to save chunks that are pretty far away in the hard drive, and load them when we need them again.
+	//   - another idea is to try to reduce the amount of memory required to store the chunks, but this one is pretty hard.
 
 	//currently worst case is around 700K ints for a 64^3 volume
 	//allocate 1M ints for each chunk. 
 
+	//block 0 is used for chunk indexing information. 
+
 	private static final int CHUNK_SIZE = 64;
+	private static final long CHUNK_BLOCK_SIZE_INTS = (1 << 20); //allocate 1M ints for each chunk
+	private static final long CHUNK_BLOCK_SIZE_BYTES = CHUNK_BLOCK_SIZE_INTS * 4l;
+	private static final long NR_BUFFER_BLOCKS = 1000;
 
-	private HashMap<String, VoxelOctreeNode> chunks;
+	private Queue<Integer> availableBlocks;
 
-	private ShaderStorageBuffer svoSSBO;
+	//if a chunk is in the ssbo, then it is present in this map. 
+	//we can easily find it's block index. 
+	private HashMap<IVec3, Integer> chunkBlockIndexes;
+
+	private HashMap<IVec3, VoxelOctreeNode> chunks;
+
+	private ShaderStorageBuffer ssbo;
 
 	private IVec3 playerCurChunkCoord;
+	private int viewDist = 2;
 
-	public VoxelOctreeManager(ShaderStorageBuffer svoSSBO) {
+	public VoxelOctreeManager() {
+		System.out.println("Creating voxel chunk manager");
 		this.chunks = new HashMap<>();
 
 		this.playerCurChunkCoord = null;
 
-		this.svoSSBO = svoSSBO;
+		this.ssbo = new ShaderStorageBuffer();
+		this.ssbo.setUsage(GL_DYNAMIC_DRAW);
+		this.ssbo.setSize(CHUNK_BLOCK_SIZE_BYTES * NR_BUFFER_BLOCKS);
+
+		this.availableBlocks = new ArrayDeque<>();
+		for (int i = 1; i < NR_BUFFER_BLOCKS; i++) {
+			this.availableBlocks.add(i);
+		}
+
+		this.chunkBlockIndexes = new HashMap<>();
 	}
 
-	public void updateSVOSSBO(Vec3 playerPos) {
+	public void updateSSBO(Vec3 playerPos) {
 		IVec3 iplayerPos = new IVec3(MathUtils.floor(playerPos.x), MathUtils.floor(playerPos.y), MathUtils.floor(playerPos.z));
 		IVec3 chunkCoord = getChunkCoord(iplayerPos);
 
-		if (!chunkCoord.equals(this.playerCurChunkCoord)) {
-			System.out.println("Update SVO SSBO : " + chunkCoord);
-			if (this.playerCurChunkCoord == null) {
-				this.playerCurChunkCoord = new IVec3();
-			}
-			this.playerCurChunkCoord.set(chunkCoord);
-			boolean[] bits = this.serialize(this.playerCurChunkCoord, -1);
+		if (chunkCoord.equals(this.playerCurChunkCoord)) {
+			//no need for updating
+			return;
+		}
 
-			//convert bits to ints 
+		System.out.println("Update SVO SSBO : " + chunkCoord);
+		long startMillis = System.currentTimeMillis();
+
+		if (this.playerCurChunkCoord == null) {
+			this.playerCurChunkCoord = new IVec3();
+		}
+		this.playerCurChunkCoord.set(chunkCoord);
+
+		HashSet<IVec3> inView = new HashSet<>();
+		for (int i = chunkCoord.x - this.viewDist; i <= chunkCoord.x + this.viewDist; i++) {
+			for (int j = chunkCoord.y - this.viewDist; j <= chunkCoord.y + this.viewDist; j++) {
+				for (int k = chunkCoord.z - this.viewDist; k <= chunkCoord.z + this.viewDist; k++) {
+					inView.add(new IVec3(i, j, k));
+				}
+			}
+		}
+
+		//remove stuff that is not in view
+		System.out.println("Removing stuff in view");
+		HashSet<IVec3> toRemove = new HashSet<>();
+		for (IVec3 coord : this.chunkBlockIndexes.keySet()) {
+			if (inView.contains(coord)) {
+				continue;
+			}
+			toRemove.add(coord);
+		}
+		for (IVec3 coord : toRemove) {
+			this.availableBlocks.add(this.chunkBlockIndexes.get(coord));
+			this.chunkBlockIndexes.remove(coord);
+		}
+
+		//add stuff that is newly in view
+		System.out.println("Adding stuff that is in view");
+		for (IVec3 coord : inView) {
+			if (this.chunkBlockIndexes.containsKey(coord)) {
+				continue;
+			}
+			if (this.availableBlocks.size() == 0) {
+				System.err.println("VoxelOctreeManager : Ran out of blocks in ssbo");
+				break;
+			}
+
+			int blockIndex = this.availableBlocks.poll();
+			this.chunkBlockIndexes.put(coord, blockIndex);
+
+			boolean[] bits = this.getChunkRoot(coord).serialize();
 			int[] data = new int[bits.length / 32];
 			for (int i = 0; i < bits.length; i++) {
 				int bit_ind = i % 32;
 				data[i / 32] = data[i / 32] | ((bits[i] ? 1 : 0) << (31 - bit_ind));
 			}
 
-			System.out.println("Serialized length of chunk " + chunkCoord + " : " + data.length);
-
-			this.svoSSBO.setData(data);
+			System.out.println("Chunk " + coord + " assigned to block " + blockIndex);
+			this.ssbo.setSubData(data, blockIndex * CHUNK_BLOCK_SIZE_BYTES);
 		}
+
+		//update indexing
+		System.out.println("Updating indexing");
+		int[] indexingData = new int[(int) CHUNK_BLOCK_SIZE_INTS];
+		int cubeSize = 2 * this.viewDist + 1;
+		IVec3 cubeBase = chunkCoord.sub(new IVec3(this.viewDist));
+		for (IVec3 coord : inView) {
+			IVec3 cubeOffset = coord.sub(cubeBase);
+			int index = cubeOffset.x + cubeOffset.y * cubeSize + cubeOffset.z * cubeSize * cubeSize;
+			indexingData[index] = this.chunkBlockIndexes.get(coord);
+		}
+
+		indexingData[1000000] = CHUNK_SIZE;
+		indexingData[1000001] = this.viewDist;
+
+		this.ssbo.setSubData(indexingData, 0);
+
+		System.out.println("Updating buffer took : " + (System.currentTimeMillis() - startMillis) + " millis");
 	}
 
 	private VoxelOctreeNode generateChunk(IVec3 chunkCoord) {
@@ -86,19 +192,6 @@ public class VoxelOctreeManager {
 		return root;
 	}
 
-	/**
-	 * Should only serialize all chunks within viewing range of the center coordinate passed in. 
-	 * 
-	 * @param center
-	 * @param chunkViewDist
-	 * @return
-	 */
-	public boolean[] serialize(IVec3 chunkCoord, int chunkViewDist) {
-		//for now, just i'm just going to serialize the center coordinate
-		VoxelOctreeNode root = this.getChunkRoot(chunkCoord);
-		return root.serialize();
-	}
-
 	public static IVec3 getChunkCoord(IVec3 tileCoord) {
 		IVec3 v = new IVec3(tileCoord);
 		int x_off = 0;
@@ -127,15 +220,10 @@ public class VoxelOctreeManager {
 		return tileCoord.sub(chunkCoord.mul(CHUNK_SIZE));
 	}
 
-	public static String getChunkKey(IVec3 chunkCoord) {
-		return chunkCoord.toString();
-	}
-
 	private VoxelOctreeNode getChunkRoot(IVec3 chunkCoord) {
-		String key = getChunkKey(chunkCoord);
+		IVec3 key = new IVec3(chunkCoord);
 		if (!this.chunks.containsKey(key)) {
 			//generate chunk
-			System.out.println("Chunk with key : \"" + key + "\" doesn't exist");
 			this.chunks.put(key, this.generateChunk(chunkCoord));
 		}
 		return this.chunks.get(key);
@@ -153,12 +241,12 @@ public class VoxelOctreeManager {
 		root.removeVoxel(rel);
 	}
 
-	public ShaderStorageBuffer getSVOSSBO() {
-		return this.svoSSBO;
+	public ShaderStorageBuffer getSSBO() {
+		return this.ssbo;
 	}
 
 	public void kill() {
-		this.svoSSBO.kill();
+		this.ssbo.kill();
 	}
 
 }

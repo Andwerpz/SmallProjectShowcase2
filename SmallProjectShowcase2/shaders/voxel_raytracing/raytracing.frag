@@ -121,13 +121,16 @@ HitInfo createHitInfo() {
 	return HitInfo(false, vec3(0), vec3(0), vec3(0));
 }
 
-HitInfo raySVO(Ray ray) {
+const int block_size = (1 << 20);
+
+HitInfo raySVO(Ray ray, int block_index) {
 	HitInfo result = createHitInfo();
+	int block_offset = block_index * block_size;
 
 	//read svo size and offset from buffer
-	int svo_size_pow = svo_data[0];
+	int svo_size_pow = svo_data[block_offset + 0];
 	int svo_size = (1 << svo_size_pow);
-	vec3 svo_offset = vec3(svo_data[1], svo_data[2], svo_data[3]);
+	vec3 svo_offset = vec3(svo_data[block_offset + 1], svo_data[block_offset + 2], svo_data[block_offset + 3]);
 	
 	//translate ray into svo space
 	ray.origin -= svo_offset;
@@ -168,7 +171,7 @@ HitInfo raySVO(Ray ray) {
 		
 		if(cur_size == 1){
 			//we're at a leaf node, find the color and exit
-			int color_bits = svo_data[ind_offset + 0];
+			int color_bits = svo_data[block_offset + ind_offset + 0];
 			int r = (color_bits >> 24) & 0xff;
 			int g = (color_bits >> 16) & 0xff;
 			int b = (color_bits >> 8) & 0xff;
@@ -183,7 +186,7 @@ HitInfo raySVO(Ray ray) {
 		}
 		
 		//check if child exists
-		int child_ind_offset = (svo_data[ind_offset + child_ind] / 32) + ind_offset;
+		int child_ind_offset = (svo_data[block_offset + ind_offset + child_ind] / 32) + ind_offset;
 		if(child_ind_offset != ind_offset){
 			//child exists, push stuff to stack. 
 			vec3 child_pos_offset = pos_offset;
@@ -254,25 +257,101 @@ HitInfo raySVO(Ray ray) {
 	return result;
 }
 
-vec3 traceRay(Ray ray) {
-	HitInfo hit = raySVO(ray);
-	if(hit.did_hit) {
-		float diffuse = dot(hit.normal, sun_dir);
-		float ambient = 1;
-		
-		float exposure = 2;
-		float gamma = 0.5;
-		
-		vec3 final_color = hit.color * (diffuse + ambient);
+ivec3 calcChunkCoord(vec3 pos, int chunk_size) {
+	return ivec3(floor(pos.x / chunk_size), floor(pos.y / chunk_size), floor(pos.z / chunk_size));
+}
 
-    	final_color =  vec3(1.0) - exp(-final_color * exposure); //hdr tonemapping    
-		final_color = pow(final_color, vec3(1.0 / gamma)); //gamma correction
+vec3 traceRay(Ray ray) {
+	vec3 result = texture(skybox_tex, ray.dir).rgb;
+
+	int chunk_size = svo_data[1000000];
+	int view_dist = svo_data[1000001];
+	int cube_size = 2 * view_dist + 1;
 	
-		return final_color;
+	ivec3 camera_chunk_coord = calcChunkCoord(camera_pos, chunk_size);
+	ivec3 ray_chunk_coord = calcChunkCoord(ray.origin, chunk_size);
+	ivec3 cube_ioffset = camera_chunk_coord - ivec3(view_dist);
+	
+	vec3 cube_AABB_offset = cube_ioffset * chunk_size;
+	int cube_AABB_size = cube_size * chunk_size;
+	
+	//check if ray will intersect cube
+	float ray_cube_dist = rayAABBDist(ray, cube_AABB_offset, cube_AABB_size);
+	ray.origin += ray.dir * (ray_cube_dist + 0.0001);
+	if(!pointInsideAABB(ray.origin, cube_AABB_offset, cube_AABB_size) || ray_cube_dist < 0) {
+		return result;
 	}
-	else {
-		return texture(skybox_tex, ray.dir).rgb;
-	}	
+	
+	//ray will intersect cube.
+	float dir_component[3] = float[](ray.dir.x, ray.dir.y, ray.dir.z);
+	
+	ivec3 ray_cube_ioffset = ray_chunk_coord - cube_ioffset;
+	
+	while(true) {
+		int chunk_hash = ray_cube_ioffset.x + ray_cube_ioffset.y * cube_size + ray_cube_ioffset.z * cube_size * cube_size;
+		int chunk_index = svo_data[chunk_hash];
+		
+		HitInfo hit = raySVO(ray, chunk_index);
+		
+		if(hit.did_hit) {
+			float diffuse = dot(hit.normal, sun_dir);
+			float ambient = 1;
+			
+			float exposure = 2;
+			float gamma = 0.5;
+			
+			vec3 final_color = hit.color * (diffuse + ambient);
+	
+	    	final_color =  vec3(1.0) - exp(-final_color * exposure); //hdr tonemapping    
+			final_color = pow(final_color, vec3(1.0 / gamma)); //gamma correction
+		
+			result = final_color;
+			break;
+		}
+		
+		//look for the next chunk
+		float pos_component[3] = float[](ray.origin.x, ray.origin.y, ray.origin.z);
+		float bl_offset_component[3] = float[](0, 0, 0);
+		bl_offset_component[0] = (cube_ioffset.x + ray_cube_ioffset.x) * chunk_size;
+		bl_offset_component[1] = (cube_ioffset.y + ray_cube_ioffset.y) * chunk_size;
+		bl_offset_component[2] = (cube_ioffset.z + ray_cube_ioffset.z) * chunk_size;
+		float min_dist = 1000000000;
+		int which_bound = -1;
+		for(int i = 0; i < 3; i++){
+			if(dir_component[i] == 0){
+				continue;
+			}
+			float tgt = bl_offset_component[i] + (dir_component[i] > 0? chunk_size : 0);
+			float dist = tgt - pos_component[i];
+			float ray_mul = dist / dir_component[i];
+			if(ray_mul < min_dist) {
+				min_dist = ray_mul;
+				which_bound = i;
+			}
+		}
+		
+		//this shouldn't happen
+		if(which_bound == -1){
+			result = vec3(0, 0, 1);
+			break;
+		}
+		
+		//ok, update the ray and the ray cube offset
+		ray.origin += ray.dir * min_dist;
+		if(which_bound == 0){ ray_cube_ioffset.x += (dir_component[0] < 0? -1 : 1); }
+		if(which_bound == 1){ ray_cube_ioffset.y += (dir_component[1] < 0? -1 : 1); }
+		if(which_bound == 2){ ray_cube_ioffset.z += (dir_component[2] < 0? -1 : 1); }
+		
+		//check if the ray is outside of the cube
+		if( ray_cube_ioffset.x < 0 || ray_cube_ioffset.x >= cube_size || 
+			ray_cube_ioffset.y < 0 || ray_cube_ioffset.y >= cube_size ||
+			ray_cube_ioffset.z < 0 || ray_cube_ioffset.z >= cube_size) {
+			//ray is outside of cube
+			break;
+		}
+	}
+	
+	return result;
 }
 
 void main() {   

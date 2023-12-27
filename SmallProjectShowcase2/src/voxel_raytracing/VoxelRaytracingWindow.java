@@ -38,7 +38,7 @@ public class VoxelRaytracingWindow extends Window {
 		this.setUnlockCursorOnEscPressed(true);
 		this.setDeselectOnEscPressed(true);
 
-		this.pic = new PlayerInputController(new Vec3(0));
+		this.pic = new PlayerInputController(new Vec3(32, 96, 32));
 
 		this.voxelScreen = new VoxelRaytracingScreen();
 
