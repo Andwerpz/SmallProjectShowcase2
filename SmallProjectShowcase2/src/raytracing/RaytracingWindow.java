@@ -64,20 +64,29 @@ public class RaytracingWindow extends Window {
 		Material lightMaterial = new Material(new Vec3(10));
 		lightMaterial.setEmissive(new Vec4(1, 1, 1, 10f));
 
-		int edgeSize = 11;
-		float radius = 5f;
-		float gap = 5;
-
-		float edgeLength = (radius * 2 + gap) * (edgeSize - 1);
-
-		for (int i = 0; i < edgeSize; i++) {
-			for (int j = 0; j < edgeSize; j++) {
-				Material m = new Material(new Vec3(Math.random(), Math.random(), Math.random()));
-				m.setRoughness((1.0f / (edgeSize - 1)) * i);
-				m.setSpecularProbability((1.0f / (edgeSize - 1)) * j);
-
-				this.raytracingScreen.addSphere(new Vec3(i * (radius * 2 + gap) - edgeLength / 2.0f, 5, j * (radius * 2 + gap) - edgeLength / 2.0f), radius, m);
-			}
+//		int edgeSize = 11;
+//		float radius = 5f;
+//		float gap = 5;
+//
+//		float edgeLength = (radius * 2 + gap) * (edgeSize - 1);
+//
+//		for (int i = 0; i < edgeSize; i++) {
+//			for (int j = 0; j < edgeSize; j++) {
+//				Material m = new Material(new Vec3(Math.random(), Math.random(), Math.random()));
+//				m.setRoughness((1.0f / (edgeSize - 1)) * i);
+//				m.setSpecularProbability((1.0f / (edgeSize - 1)) * j);
+//
+//				this.raytracingScreen.addSphere(new Vec3(i * (radius * 2 + gap) - edgeLength / 2.0f, 5, j * (radius * 2 + gap) - edgeLength / 2.0f), radius, m);
+//			}
+//		}
+		
+		//add some random balls
+		for(int i = 0; i < 100; i++) {
+			Vec3 center = new Vec3(Math.random() * 100f - 50f, Math.random() * 50f, Math.random() * 100f - 50f);
+			Material m = new Material(new Vec3(Math.random(), Math.random(), Math.random()));
+			m.setRoughness((float) Math.random());
+			m.setSpecularProbability((float) Math.random());
+			this.raytracingScreen.addSphere(center, (float) Math.random() * 5f + 2f, m);
 		}
 
 		Material whiteMaterial = new Material(new Vec3(1, 1, 1));
@@ -132,6 +141,8 @@ public class RaytracingWindow extends Window {
 
 		//big ball
 		//this.raytracingScreen.addSphere(new Vec3(0, 50, 0), 30, sphereMaterial);
+		
+		this.raytracingScreen.buildBVHBuffers();
 
 		AdjustableWindow optionsWindow = new AdjustableWindow("Raytracing Options", new ObjectEditorWindow(this.raytracingScreen.getOptions()), this);
 
