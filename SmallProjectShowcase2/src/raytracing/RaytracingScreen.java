@@ -461,7 +461,7 @@ public class RaytracingScreen extends Screen {
 	public class RaytracingOptions {
 		private float fov = 90f; //in degrees
 
-		private float blurStrength = 0f; //good to keep around 1 to 5 for antialiasing, 3 is good default
+		private float blurStrength = 1.5f; //good to keep around 1 to 5 for antialiasing
 		private float defocusStrength = 0f;
 		private float focusDist = 30f;
 

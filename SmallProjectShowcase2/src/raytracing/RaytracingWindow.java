@@ -11,11 +11,14 @@ import static org.lwjgl.glfw.GLFW.GLFW_KEY_ESCAPE;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
 
 import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
 import lwjglengine.main.Main;
+import lwjglengine.model.Model;
+import lwjglengine.model.VertexArray;
 import lwjglengine.player.PlayerInputController;
 import lwjglengine.scene.Scene;
 import lwjglengine.window.AdjustableWindow;
@@ -62,7 +65,7 @@ public class RaytracingWindow extends Window {
 
 		//set up the scene
 		Material lightMaterial = new Material(new Vec3(10));
-		lightMaterial.setEmissive(new Vec4(1, 1, 1, 10f));
+		lightMaterial.setEmissive(new Vec4(1, 1, 1, 1f));
 
 //		int edgeSize = 11;
 //		float radius = 5f;
@@ -80,14 +83,14 @@ public class RaytracingWindow extends Window {
 //			}
 //		}
 		
-		//add some random balls
-		for(int i = 0; i < 100; i++) {
-			Vec3 center = new Vec3(Math.random() * 100f - 50f, Math.random() * 50f, Math.random() * 100f - 50f);
-			Material m = new Material(new Vec3(Math.random(), Math.random(), Math.random()));
-			m.setRoughness((float) Math.random());
-			m.setSpecularProbability((float) Math.random());
-			this.raytracingScreen.addSphere(center, (float) Math.random() * 5f + 2f, m);
-		}
+//		//add some random balls
+//		for(int i = 0; i < 100; i++) {
+//			Vec3 center = new Vec3(Math.random() * 100f - 50f, Math.random() * 50f, Math.random() * 100f - 50f);
+//			Material m = new Material(new Vec3(Math.random(), Math.random(), Math.random()));
+//			m.setRoughness((float) Math.random());
+//			m.setSpecularProbability((float) Math.random());
+//			this.raytracingScreen.addSphere(center, (float) Math.random() * 5f + 2f, m);
+//		}
 
 		Material whiteMaterial = new Material(new Vec3(1, 1, 1));
 		Material grayMaterial = new Material(Color.GRAY);
@@ -95,52 +98,73 @@ public class RaytracingWindow extends Window {
 		Material greenMaterial = new Material(Color.GREEN);
 		Material redMaterial = new Material(Color.RED);
 		Material sphereMaterial = new Material(Color.WHITE);
+		
+		System.err.println("GREEN DIFFUSE : " + greenMaterial.getDiffuse());
 
 		sphereMaterial.setRoughness(0f);
 		sphereMaterial.setSpecularProbability(0.3f);
 
-		Vec3 v0 = new Vec3(-50, 0, -50);
-		Vec3 v1 = new Vec3(-50, 0, 50);
-		Vec3 v2 = new Vec3(50, 0, 50);
-		Vec3 v3 = new Vec3(50, 0, -50);
-		Vec3 v4 = new Vec3(-50, 100, -50);
-		Vec3 v5 = new Vec3(-50, 100, 50);
-		Vec3 v6 = new Vec3(50, 100, 50);
-		Vec3 v7 = new Vec3(50, 100, -50);
+		Vec3 v0 = new Vec3(-50, -50, -50);
+		Vec3 v1 = new Vec3(-50, -50, 50);
+		Vec3 v2 = new Vec3(50, -50, 50);
+		Vec3 v3 = new Vec3(50, -50, -50);
+		Vec3 v4 = new Vec3(-50, 50, -50);
+		Vec3 v5 = new Vec3(-50, 50, 50);
+		Vec3 v6 = new Vec3(50, 50, 50);
+		Vec3 v7 = new Vec3(50, 50, -50);
 
 		//floor
-		v0.muli(2);
-		v1.muli(2);
-		v2.muli(2);
-		v3.muli(2);
 		this.raytracingScreen.addTriangle(v0, v1, v2, whiteMaterial);
 		this.raytracingScreen.addTriangle(v0, v2, v3, whiteMaterial);
 
-		//		//ceiling
-		//		this.raytracingScreen.addTriangle(v5, v4, v6, whiteMaterial);
-		//		this.raytracingScreen.addTriangle(v6, v4, v7, whiteMaterial);
-		//
-		//		//back wall
-		//		this.raytracingScreen.addTriangle(v0, v3, v7, grayMaterial);
-		//		this.raytracingScreen.addTriangle(v0, v7, v4, grayMaterial);
-		//
-		//		//left wall
-		//		this.raytracingScreen.addTriangle(v1, v0, v4, blueMaterial);
-		//		this.raytracingScreen.addTriangle(v1, v4, v5, blueMaterial);
-		//
-		//		//right wall
-		//		this.raytracingScreen.addTriangle(v2, v7, v3, redMaterial);
-		//		this.raytracingScreen.addTriangle(v2, v6, v7, redMaterial);
-		//
-		//		//front wall
-		//		this.raytracingScreen.addTriangle(v2, v1, v5, whiteMaterial);
-		//		this.raytracingScreen.addTriangle(v2, v5, v6, whiteMaterial);
+		//ceiling
+		this.raytracingScreen.addTriangle(v5, v4, v6, whiteMaterial);
+		this.raytracingScreen.addTriangle(v6, v4, v7, whiteMaterial);
 
-		//ceiling light
-		//this.raytracingScreen.addSphere(new Vec3(250, 300, 150), 25f, lightMaterial);
+		//back wall
+		this.raytracingScreen.addTriangle(v0, v3, v7, whiteMaterial);
+		this.raytracingScreen.addTriangle(v0, v7, v4, whiteMaterial);
+
+		//left wall
+		this.raytracingScreen.addTriangle(v1, v0, v4, redMaterial);
+		this.raytracingScreen.addTriangle(v1, v4, v5, redMaterial);
+
+		//right wall
+		this.raytracingScreen.addTriangle(v2, v7, v3, greenMaterial);
+		this.raytracingScreen.addTriangle(v2, v6, v7, greenMaterial);
+
+		//front wall
+		//this.raytracingScreen.addTriangle(v2, v1, v5, whiteMaterial);
+		//this.raytracingScreen.addTriangle(v2, v5, v6, whiteMaterial);
+
+//		//ceiling light
+		float lightScale = 0.5f;
+		v4.muli(lightScale);
+		v5.muli(lightScale);
+		v6.muli(lightScale);
+		v7.muli(lightScale);
+		v4.y = 49.99f;
+		v5.y = 49.99f;
+		v6.y = 49.99f;
+		v7.y = 49.99f;
+		this.raytracingScreen.addTriangle(v5, v4, v6, lightMaterial);
+		this.raytracingScreen.addTriangle(v6, v4, v7, lightMaterial);
+
+//		this.raytracingScreen.addSphere(new Vec3(0, 50, 0), 10f, lightMaterial);
+		
+		//suzanne
+		Model suzanne = Model.loadModelFile(FileUtils.loadFileRelative("/res/suzanne/suzanne.obj"));
+		{
+			ArrayList<VertexArray> meshes = suzanne.getMeshes();
+			for(VertexArray v : meshes) {
+				float[] vertices = v.getVertices();
+				int[] indices = v.getIndices();
+				
+			}
+		}
 
 		//big ball
-		//this.raytracingScreen.addSphere(new Vec3(0, 50, 0), 30, sphereMaterial);
+		//this.raytracingScreen.addSphere(new Vec3(0, -20, 0), 30, whiteMaterial);
 		
 		this.raytracingScreen.buildBVHBuffers();
 

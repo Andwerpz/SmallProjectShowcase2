@@ -300,6 +300,7 @@ HitInfo rayTriangle(Ray ray, Triangle triangle) {
 	return ret;
 }
 
+//TODO : prune nodes if they are farther away than the current closest hit
 HitInfo calculateRayCollision(Ray ray, inout int max_depth) {
 	HitInfo closest_hit = createHitInfo();
 	closest_hit.dist = 10000000;	//very large number
@@ -343,10 +344,7 @@ HitInfo calculateRayCollision(Ray ray, inout int max_depth) {
 			for(int i = 0; i < nr_primitives; i++){
 				int type = bvhData[bvhPtr ++];
 				HitInfo hit = createHitInfo();
-				if(type == 0) {
-					//bvh instance
-				}
-				else if(type == 1) {
+				if(type == 1) {
 					//sphere
 					Sphere sphere = parseSphere(primitivePtr, materialPtr);
 					hit = raySphere(ray, sphere);
@@ -392,7 +390,9 @@ vec3 traceRay(Ray ray) {
 	for(int i = 0; i < max_bounce_count; i++){
 		int max_depth = 0;
 		HitInfo hit = calculateRayCollision(ray, max_depth);
-		//incomingLight.r += (1.0 / 10.0) * max_depth;
+		//if(i == 0){
+		//	incomingLight.r += (1.0 / 20.0) * max_depth;
+		//}
 		if(hit.didHit) {
 			ray.origin = hit.hitPoint;
 			
