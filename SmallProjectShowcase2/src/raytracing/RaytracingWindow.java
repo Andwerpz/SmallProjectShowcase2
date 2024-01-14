@@ -109,21 +109,21 @@ public class RaytracingWindow extends Window {
 		this.raytracingScreen.addTriangle(v0, v1, v2, whiteMaterial);
 		this.raytracingScreen.addTriangle(v0, v2, v3, whiteMaterial);
 
-		//ceiling
-		this.raytracingScreen.addTriangle(v5, v4, v6, whiteMaterial);
-		this.raytracingScreen.addTriangle(v6, v4, v7, whiteMaterial);
-
-		//back wall
-		this.raytracingScreen.addTriangle(v0, v3, v7, whiteMaterial);
-		this.raytracingScreen.addTriangle(v0, v7, v4, whiteMaterial);
-
-		//left wall
-		this.raytracingScreen.addTriangle(v1, v0, v4, redMaterial);
-		this.raytracingScreen.addTriangle(v1, v4, v5, redMaterial);
-
-		//right wall
-		this.raytracingScreen.addTriangle(v2, v7, v3, greenMaterial);
-		this.raytracingScreen.addTriangle(v2, v6, v7, greenMaterial);
+		//		//ceiling
+		//		this.raytracingScreen.addTriangle(v5, v4, v6, whiteMaterial);
+		//		this.raytracingScreen.addTriangle(v6, v4, v7, whiteMaterial);
+		//
+		//		//back wall
+		//		this.raytracingScreen.addTriangle(v0, v3, v7, whiteMaterial);
+		//		this.raytracingScreen.addTriangle(v0, v7, v4, whiteMaterial);
+		//
+		//		//left wall
+		//		this.raytracingScreen.addTriangle(v1, v0, v4, redMaterial);
+		//		this.raytracingScreen.addTriangle(v1, v4, v5, redMaterial);
+		//
+		//		//right wall
+		//		this.raytracingScreen.addTriangle(v2, v7, v3, greenMaterial);
+		//		this.raytracingScreen.addTriangle(v2, v6, v7, greenMaterial);
 
 		//front wall
 		//this.raytracingScreen.addTriangle(v2, v1, v5, whiteMaterial);
@@ -144,44 +144,47 @@ public class RaytracingWindow extends Window {
 
 		//this.raytracingScreen.addSphere(new Vec3(0, 50, 0), 10f, lightMaterial);
 
-		//suzanne
-		Model suzanne = Model.loadModelFile(FileUtils.loadFileRelative("/res/suzanne/suzanne.obj"));
-		Material monkeyMaterial = Material.defaultMaterial();
-		monkeyMaterial.setSpecular(new Vec3(212, 175, 55).mul(1.0f / 255.0f));
-		monkeyMaterial.setRoughness(0.05f);
-		monkeyMaterial.setMetalness(1f);
-		{
-			Mat4 transform = Mat4.identity();
-			transform.muli(Mat4.scale(30));
-			transform.muli(Mat4.rotateX((float) Math.toRadians(30)));
-			transform.muli(Mat4.translate(new Vec3(0, -20, 0)));
-			ArrayList<VertexArray> meshes = suzanne.getMeshes();
-			for (VertexArray v : meshes) {
-				int[] indices = v.getIndices();
-				Vec3[] vertices = new Vec3[v.getVertices().length / 3];
-				for (int i = 0; i < vertices.length; i++) {
-					float x = v.getVertices()[i * 3 + 0];
-					float y = v.getVertices()[i * 3 + 1];
-					float z = v.getVertices()[i * 3 + 2];
-					vertices[i] = new Vec3(x, y, z);
-				}
-				for (int i = 0; i < indices.length / 3; i++) {
-					Vec3 a = vertices[indices[i * 3 + 0]];
-					Vec3 b = vertices[indices[i * 3 + 1]];
-					Vec3 c = vertices[indices[i * 3 + 2]];
-
-					//apply model transform
-					a = transform.mul(a, 1);
-					b = transform.mul(b, 1);
-					c = transform.mul(c, 1);
-
-					this.raytracingScreen.addTriangle(a, b, c, monkeyMaterial);
-				}
-			}
-		}
+		//		//suzanne
+		//		Model suzanne = Model.loadModelFile(FileUtils.loadFileRelative("/res/suzanne/suzanne.obj"));
+		//		Material monkeyMaterial = Material.defaultMaterial();
+		//		monkeyMaterial.setSpecular(new Vec3(212, 175, 55).mul(1.0f / 255.0f));
+		//		monkeyMaterial.setRoughness(0f);
+		//		monkeyMaterial.setMetalness(0f);
+		//		{
+		//			Mat4 transform = Mat4.identity();
+		//			transform.muli(Mat4.scale(30));
+		//			transform.muli(Mat4.rotateX((float) Math.toRadians(30)));
+		//			transform.muli(Mat4.translate(new Vec3(0, -20, 0)));
+		//			ArrayList<VertexArray> meshes = suzanne.getMeshes();
+		//			for (VertexArray v : meshes) {
+		//				int[] indices = v.getIndices();
+		//				Vec3[] vertices = new Vec3[v.getVertices().length / 3];
+		//				for (int i = 0; i < vertices.length; i++) {
+		//					float x = v.getVertices()[i * 3 + 0];
+		//					float y = v.getVertices()[i * 3 + 1];
+		//					float z = v.getVertices()[i * 3 + 2];
+		//					vertices[i] = new Vec3(x, y, z);
+		//				}
+		//				for (int i = 0; i < indices.length / 3; i++) {
+		//					Vec3 a = vertices[indices[i * 3 + 0]];
+		//					Vec3 b = vertices[indices[i * 3 + 1]];
+		//					Vec3 c = vertices[indices[i * 3 + 2]];
+		//
+		//					//apply model transform
+		//					a = transform.mul(a, 1);
+		//					b = transform.mul(b, 1);
+		//					c = transform.mul(c, 1);
+		//
+		//					this.raytracingScreen.addTriangle(a, b, c, monkeyMaterial);
+		//				}
+		//			}
+		//		}
 
 		//big ball
-		//this.raytracingScreen.addSphere(new Vec3(0, -20, 0), 30, whiteMaterial);
+		whiteMaterial.setRoughness(0f);
+		whiteMaterial.setMetalness(1);
+		//whiteMaterial.setSpecular(new Vec3(212, 175, 55).mul(1.0f / 255.0f));
+		this.raytracingScreen.addSphere(new Vec3(0, -20, 0), 30, whiteMaterial);
 
 		this.raytracingScreen.buildBVHBuffers();
 

@@ -455,6 +455,20 @@ float geometrySmith(vec3 in_dir, vec3 out_dir, vec3 half_dir, vec3 normal, float
 	return geometry1Beckmann(in_dir, half_dir, normal, roughness) * geometry1Beckmann(out_dir, half_dir, normal, roughness);
 }
 
+void geometrySchlickGGX_Cancel(float NdotV, float roughness, inout float num, inout float denom) {
+    float r = (roughness + 1.0);
+    float k = (r * r) / 8.0;
+    num = NdotV;
+    denom = NdotV * (1.0 - k) + k;
+}
+
+void geometrySmithGGX_Cancel(vec3 in_dir, vec3 out_dir, vec3 normal, float roughness, inout float num1, inout float num2, inout float denom1, inout float denom2) {
+    float NdotV = max(dot(normal, out_dir), 0.0);
+    float NdotL = max(dot(normal, in_dir), 0.0);
+  	geometrySchlickGGX_Cancel(NdotV, roughness, num1, denom1);
+    geometrySchlickGGX_Cancel(NdotL, roughness, num2, denom2);
+}
+
 float geometrySchlickGGX(float NdotV, float roughness) {
     float r = (roughness + 1.0);
     float k = (r*r) / 8.0;
@@ -473,33 +487,26 @@ float geometrySmithGGX(vec3 in_dir, vec3 out_dir, vec3 normal, float roughness) 
     return ggx1 * ggx2;
 }
 
-float distribution(vec3 half_dir, vec3 normal, float roughness) {
+void distribution(vec3 half_dir, vec3 normal, float roughness, inout float num, inout float denom1, inout float denom2) {
 	if(roughness == 0.0){
-		return 1.0;
+		num = 1.0;
+		denom1 = 1.0;
+		denom2 = 1.0;
+		return;
 	}
 
 	float cos_theta_m = dot(half_dir, normal);
 	float tan_theta_m = tan(acos(cos_theta_m));
 	
-	float ans = 1.0;
-	if(cos_theta_m <= 0){
-		ans = 0;
-	}
-	ans *= 1.0 / (PI * pow(roughness, 2.0) * pow(cos_theta_m, 4.0));
-	ans *= exp(-pow(tan_theta_m, 2.0) / pow(roughness, 2.0));
+	num = 1.0;
+	denom1 = exp(pow(tan_theta_m, 2.0) / pow(roughness, 2.0));
+	denom2 = (PI * pow(roughness, 2.0) * pow(cos_theta_m, 4.0));
 	
-	return ans;
-}
-
-float cookTorranceBRDF(float roughness, float metalness, vec3 in_dir, vec3 out_dir, vec3 normal) {
-	vec3 half_dir = normal;	//halfway vector
-	if(lengthSq(in_dir + out_dir) != 0){
-		half_dir = normalize(in_dir + out_dir);
+	if(cos_theta_m <= 0){
+		num = 0.0;
+		denom1 = 1.0;
+		denom2 = 1.0;
 	}
-	float F = fresnel(out_dir, half_dir, metalness);
-	float G = geometrySmith(in_dir, out_dir, half_dir, normal, roughness);
-	float D = distribution(half_dir, normal, roughness);
-	return (1.0 - F) * lambertBRDF() + F * G * D / (4.0 * dot(in_dir, normal) * dot(out_dir, normal));
 }
 
 vec3 cookTorranceBRDF_Dir(vec3 out_dir, vec3 normal, float roughness, float metalness, inout vec3 half_dir) {
@@ -516,7 +523,7 @@ vec3 cookTorranceBRDF_Dir(vec3 out_dir, vec3 normal, float roughness, float meta
 	return in_dir;
 }
 
-float cookTorranceBRDF_PDF(vec3 in_dir, vec3 out_dir, vec3 normal, float roughness) {
+void cookTorranceBRDF_PDF(vec3 in_dir, vec3 out_dir, vec3 normal, float roughness, inout float num, inout float denom) {
 	float ans = 1.0;
 	
 	//cook torrance PDF
@@ -524,14 +531,16 @@ float cookTorranceBRDF_PDF(vec3 in_dir, vec3 out_dir, vec3 normal, float roughne
 	if(lengthSq(in_dir + out_dir) != 0){
 		half_dir = normalize(in_dir + out_dir);
 	}
-	float P = distribution(half_dir, normal, roughness) * dot(half_dir, normal) / (4.0 * dot(in_dir, half_dir));
-	ans *= P;
 	
-	return ans;
+	float D_num, D_denom1, D_denom2;
+	distribution(half_dir, normal, roughness, D_num, D_denom1, D_denom2);
+	
+	num = dot(half_dir, normal);
+	denom = D_denom1 * D_denom2 * 4.0 * dot(in_dir, half_dir);
 }
 
 //cook-torrance with importance sampling
-//TODO : make this more numerically stable
+//TODO : circular artifacts on specular reflections when surface is extremely smooth. 
 vec3 traceRay2(Ray ray) {
 	vec3 outputColor = vec3(0);
 	vec3 throughput = vec3(1);
@@ -565,21 +574,38 @@ vec3 traceRay2(Ray ray) {
 		vec3 in_dir = cookTorranceBRDF_Dir(out_dir, normal, roughness, metalness, half_dir);
 		
 		float F = fresnel(out_dir, half_dir, metalness);
-		float G = geometrySmithGGX(in_dir, out_dir, normal, roughness);
-		float D = distribution(half_dir, normal, roughness);
 		
-		float B = 0;
-		float P = 0;
+		float B = 0.0;
+		float P = 1.0;
 		
 		if(randomValue() < F) {
 			//do a specular bounce
 			throughput *= m.specular.xyz;
 			
-			B = G * D / (4.0 * dot(in_dir, normal) * dot(out_dir, normal));
-			if(isinf(B) || isnan(B)) {
-				B = 0;
+			float D_num, D_denom1, D_denom2;
+			float G_num1, G_num2, G_denom1, G_denom2;
+			float P_num, P_denom;
+			
+			geometrySmithGGX_Cancel(in_dir, out_dir, normal, roughness, G_num1, G_num2, G_denom1, G_denom2);
+			distribution(half_dir, normal, roughness, D_num, D_denom1, D_denom2);
+			cookTorranceBRDF_PDF(in_dir, out_dir, normal, roughness, P_num, P_denom);
+			
+			float NdotI = max(dot(normal, in_dir), 0.0);
+			float NdotO = max(dot(normal, out_dir), 0.0);
+			
+			if(NdotI > 0 && NdotO > 0) {
+				//B = G * D / (4.0 * dot(in_dir, normal) * dot(out_dir, normal));
+				
+				float num = D_num * (1.0 / (G_denom1 * G_denom2));
+				float denom = (4.0) * D_denom2 * D_denom1;
+				
+				B = num / denom;
+				P = P_num / P_denom;
+				
+				if(isinf(B) || isnan(B)) {
+					B = 0;
+				}
 			}
-			P = max(0.0001, cookTorranceBRDF_PDF(in_dir, out_dir, normal, roughness));
 		}
 		else {
 			//do a diffuse bounce
@@ -591,10 +617,6 @@ vec3 traceRay2(Ray ray) {
 		}
 		
 		float mult = B / P;
-		if(mult > 1000000) {
-			mult = 0;
-		}
-		
 		throughput *= dot(normal, in_dir) * mult;
 		
 		ray.origin = hit.hitPoint;
@@ -604,7 +626,7 @@ vec3 traceRay2(Ray ray) {
 	return outputColor;
 }
 
-//uses lambertian diffuse with importance sampling
+//lambertian diffuse with importance sampling
 vec3 traceRay(Ray ray) {
 	vec3 outputColor = vec3(0);
 	vec3 throughput = vec3(1);
