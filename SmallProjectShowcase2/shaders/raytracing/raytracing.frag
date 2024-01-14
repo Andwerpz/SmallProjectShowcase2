@@ -1,6 +1,9 @@
 #version 440 core
 layout (location = 0) out vec4 out_tex_0;
 
+const float PI = 3.14159265;
+const float INV_PI = 1.0 / PI;
+
 uniform sampler2D render_tex_0;
 uniform samplerCube skybox_tex;
 
@@ -17,7 +20,7 @@ struct Material {
 	vec4 diffuse;
 	vec4 specular;
 	vec4 emissive;
-	vec4 attr;	//x = shininess, y = roughness, z = specularProbability
+	vec4 attr;	//x = shininess, y = roughness, z = specularProbability, w = metalness
 };
 
 struct HitInfo {
@@ -75,35 +78,15 @@ float randomValue() {
 	return result / 4294967295.0;
 }
 
-float randomValueNormal() {
-	float theta = 2 * 3.1415926 * randomValue();
-	float rho = sqrt(-2 * log(randomValue()));
-	return rho * cos(theta);
-}
-
-vec3 randomDirection() {
-	float x = randomValueNormal();
-	float y = randomValueNormal();
-	float z = randomValueNormal();
-	return normalize(vec3(x, y, z));
-}
-
-vec3 randomPointInSphere() {
-	vec3 ret = randomDirection();
-	ret *= sqrt(randomValue());
-	return ret;
-}
-
-vec3 randomHemisphereDirection(vec3 normal) {
-	vec3 dir = randomDirection();
-	return dir * sign(dot(normal, dir));
-}
-
 vec2 randomPointInCircle() {
 	float angle = randomValue() * 2 * 3.1415926;
 	vec2 pointOnCircle = vec2(cos(angle), sin(angle));
 	pointOnCircle *= sqrt(randomValue());
 	return pointOnCircle;
+}
+
+float lengthSq(vec3 v) {
+	return v.x * v.x + v.y * v.y + v.z * v.z;
 }
 
 Material createMaterial() {
@@ -143,6 +126,7 @@ Material parseMaterial(inout int materialOffset) {
 	mat.attr.r = materialData[materialOffset ++];
 	mat.attr.g = materialData[materialOffset ++];
 	mat.attr.b = materialData[materialOffset ++];
+	mat.attr.a = materialData[materialOffset ++];
 	return mat;
 }
 
@@ -377,58 +361,288 @@ HitInfo calculateRayCollision(Ray ray, inout int max_depth) {
 }
 
 uniform int max_bounce_count;
-
 uniform vec3 sun_dir;	//which direction do you have to face to see the sun
 uniform float sun_strength; //how big and powerful is the sun? owo
-
 uniform float ambient_strength;
 
-vec3 traceRay(Ray ray) {
-	vec3 incomingLight = vec3(0);
-	vec3 rayColor = vec3(1);
+//v is relative to normal, and normal is relative to world. Transform v such that is is relative to world. 
+vec3 transformToWorld(vec3 a, vec3 normal) {
+	//find axis that is not parallel to normal
+	vec3 majorAxis;
+	if(abs(normal.x) < 0.57735026919) {	//1 / sqrt(3)
+		majorAxis = vec3(1, 0, 0);
+	}	
+	else if(abs(normal.y) < 0.57735026919) {
+		majorAxis = vec3(0, 1, 0);
+	}
+	else {
+		majorAxis = vec3(0, 0, 1);
+	}	
+	
+	//use major axis to create coordinate system relative to world space
+	vec3 u = normalize(cross(normal, majorAxis));
+	vec3 v = cross(normal, u);
+	vec3 w = normal;
+	
+	//transform from local to world coordinates
+	return a.x * u + a.y * v + a.z * w;
+}
 
+float lambertBRDF() {
+	return 1.0 / (2.0 * PI);
+}
+
+//vectors returned are more likely to be facing in the direction of the normal.
+//lambertian diffuse assumes that any light incident on a point will be reflected equally in all directions. 
+vec3 lambertBRDF_Dir(vec3 normal) {
+	float rand = randomValue();
+	float r = sqrt(rand);
+	float theta = randomValue() * 2.0 * PI;
+	
+	float x = r * cos(theta);
+	float y = r * sin(theta);
+	float z = sqrt(1.0 - x * x - y * y);
+	
+	return normalize(transformToWorld(vec3(x, y, z), normal));
+}
+
+float lambertBRDF_PDF(vec3 normal, vec3 in_dir) {
+	return dot(in_dir, normal) * INV_PI;
+}
+
+float fresnelSchlick(vec3 out_dir, vec3 half_dir, float metalness) {
+	//F0 is amount of 0 angle reflectance. 
+	//non-metallic surfaces look good with F0 at 0.04, if surface is metallic, we can raise it. 
+	float F0 = mix(0.04, 1.0, metalness);   
+	float C = dot(out_dir, half_dir);
+	
+	float ans = F0 + (1.0 - F0) * pow(1.0 - C, 5.0);
+	
+	return ans;
+}
+
+float fresnel(vec3 out_dir, vec3 half_dir, float metalness) {
+	//F0 is amount of 0 angle reflectance. 
+	//non-metallic surfaces look good with F0 at 0.04, if surface is metallic, we can raise it. 
+	float F0 = mix(0.04, 0.99, metalness);   
+	
+	float n = (1.0 + sqrt(F0)) / (1.0 - sqrt(F0));	//index of refraction
+	float c = dot(out_dir, half_dir);
+	float g = sqrt(n * n + c * c - 1.0);
+	
+	float ans = (1.0 / 2.0) * pow((g - c) / (g + c), 2.0);
+	ans *= 1.0 + pow(((g + c) * c - 1.0) / ((g - c) * c + 1.0), 2.0);
+	
+	return ans;
+}
+
+float geometry1Beckmann(vec3 v, vec3 half_dir, vec3 normal, float roughness) {
+	float theta_v = acos(dot(v, half_dir));
+	float a = 1.0 / (roughness * tan(theta_v));
+	
+	float ans = 1.0;
+	if(dot(v, half_dir) / dot(v, normal) <= 0) {
+		ans = 0;
+	}
+	if(a < 1.6) {
+		ans *= (3.535 * a + 2.181 * a * a) / (1.0 + 2.276 * a + 2.577 * a * a);
+	}
+	
+	return ans;
+}
+
+float geometrySmith(vec3 in_dir, vec3 out_dir, vec3 half_dir, vec3 normal, float roughness) {
+	return geometry1Beckmann(in_dir, half_dir, normal, roughness) * geometry1Beckmann(out_dir, half_dir, normal, roughness);
+}
+
+float geometrySchlickGGX(float NdotV, float roughness) {
+    float r = (roughness + 1.0);
+    float k = (r*r) / 8.0;
+
+    float num   = NdotV;
+    float denom = NdotV * (1.0 - k) + k;
+	
+    return num / denom;
+}
+
+float geometrySmithGGX(vec3 in_dir, vec3 out_dir, vec3 normal, float roughness) {
+    float NdotV = max(dot(normal, out_dir), 0.0);
+    float NdotL = max(dot(normal, in_dir), 0.0);
+    float ggx2  = geometrySchlickGGX(NdotV, roughness);
+    float ggx1  = geometrySchlickGGX(NdotL, roughness);
+    return ggx1 * ggx2;
+}
+
+float distribution(vec3 half_dir, vec3 normal, float roughness) {
+	if(roughness == 0.0){
+		return 1.0;
+	}
+
+	float cos_theta_m = dot(half_dir, normal);
+	float tan_theta_m = tan(acos(cos_theta_m));
+	
+	float ans = 1.0;
+	if(cos_theta_m <= 0){
+		ans = 0;
+	}
+	ans *= 1.0 / (PI * pow(roughness, 2.0) * pow(cos_theta_m, 4.0));
+	ans *= exp(-pow(tan_theta_m, 2.0) / pow(roughness, 2.0));
+	
+	return ans;
+}
+
+float cookTorranceBRDF(float roughness, float metalness, vec3 in_dir, vec3 out_dir, vec3 normal) {
+	vec3 half_dir = normal;	//halfway vector
+	if(lengthSq(in_dir + out_dir) != 0){
+		half_dir = normalize(in_dir + out_dir);
+	}
+	float F = fresnel(out_dir, half_dir, metalness);
+	float G = geometrySmith(in_dir, out_dir, half_dir, normal, roughness);
+	float D = distribution(half_dir, normal, roughness);
+	return (1.0 - F) * lambertBRDF() + F * G * D / (4.0 * dot(in_dir, normal) * dot(out_dir, normal));
+}
+
+vec3 cookTorranceBRDF_Dir(vec3 out_dir, vec3 normal, float roughness, float metalness, inout vec3 half_dir) {
+	//cook torrance importance sampling
+	float r1 = randomValue();
+	float r2 = randomValue();
+	float phi = atan(sqrt(-(roughness * roughness) * log(1.0 - r1)));
+	float theta = 2.0 * PI * r2;
+	
+	half_dir = vec3(sin(phi) * cos(theta), sin(phi) * sin(theta), cos(phi));
+	half_dir = normalize(transformToWorld(half_dir, normal));
+	vec3 in_dir = 2.0 * dot(half_dir, out_dir) * half_dir - out_dir;
+	
+	return in_dir;
+}
+
+float cookTorranceBRDF_PDF(vec3 in_dir, vec3 out_dir, vec3 normal, float roughness) {
+	float ans = 1.0;
+	
+	//cook torrance PDF
+	vec3 half_dir = normal;	//halfway vector
+	if(lengthSq(in_dir + out_dir) != 0){
+		half_dir = normalize(in_dir + out_dir);
+	}
+	float P = distribution(half_dir, normal, roughness) * dot(half_dir, normal) / (4.0 * dot(in_dir, half_dir));
+	ans *= P;
+	
+	return ans;
+}
+
+//cook-torrance with importance sampling
+//TODO : make this more numerically stable
+vec3 traceRay2(Ray ray) {
+	vec3 outputColor = vec3(0);
+	vec3 throughput = vec3(1);
+	
 	for(int i = 0; i < max_bounce_count; i++){
 		int max_depth = 0;
 		HitInfo hit = calculateRayCollision(ray, max_depth);
-		//if(i == 0){
-		//	incomingLight.r += (1.0 / 20.0) * max_depth;
-		//}
-		if(hit.didHit) {
-			ray.origin = hit.hitPoint;
-			
-			vec3 diffuseDir = normalize(hit.hitNormal + randomDirection());
-			vec3 specularDir = reflect(ray.dir, hit.hitNormal);
-			
-			Material m = hit.hitMaterial;
-			float roughness = m.attr.y;
-			float specularProbability = m.attr.z;
-			
-			bool isSpecularBounce = specularProbability >= randomValue();
-			
-			ray.dir = mix(diffuseDir, specularDir, (1.0 - roughness) * float(isSpecularBounce));
-			
-			vec3 emittedLight = m.emissive.xyz * m.emissive.w;
-			incomingLight += emittedLight * rayColor;
-			if(isSpecularBounce) {
-				rayColor *= m.specular.xyz;
-			} else {
-				rayColor *= m.diffuse.xyz;
-			}
-		}
-		else {
-			//sample skybox texture
+		if(!hit.didHit) {
+			//sample skybox
 			vec3 emittedLight = texture(skybox_tex, ray.dir).xyz * ambient_strength;	//skybox 'emits' ambient light
 			
 			vec3 sunLight = max(0, (dot(ray.dir, sun_dir) - 0.99) * sun_strength) * vec3(1);
 			emittedLight += sunLight;
 			
-			incomingLight += emittedLight * rayColor;
+			outputColor += emittedLight * throughput;
 			break;
 		}
 		
-	}	
+		//otherwise, we hit some object
+		Material m = hit.hitMaterial;
+		float roughness = max(0.001, m.attr.g);	//to prevent divide by 0
+		float metalness = m.attr.a;
+		
+		//send emitted light back to camera
+		vec3 emittedLight = m.emissive.xyz * m.emissive.w;
+		outputColor += emittedLight * throughput;
+		
+		vec3 normal = hit.hitNormal;
+		vec3 half_dir = vec3(0);	//which way is the microfacet facing?
+		vec3 out_dir = -ray.dir;
+		vec3 in_dir = cookTorranceBRDF_Dir(out_dir, normal, roughness, metalness, half_dir);
+		
+		float F = fresnel(out_dir, half_dir, metalness);
+		float G = geometrySmithGGX(in_dir, out_dir, normal, roughness);
+		float D = distribution(half_dir, normal, roughness);
+		
+		float B = 0;
+		float P = 0;
+		
+		if(randomValue() < F) {
+			//do a specular bounce
+			throughput *= m.specular.xyz;
+			
+			B = G * D / (4.0 * dot(in_dir, normal) * dot(out_dir, normal));
+			if(isinf(B) || isnan(B)) {
+				B = 0;
+			}
+			P = max(0.0001, cookTorranceBRDF_PDF(in_dir, out_dir, normal, roughness));
+		}
+		else {
+			//do a diffuse bounce
+			throughput *= m.diffuse.xyz;
+			
+			in_dir = lambertBRDF_Dir(normal);
+			B = lambertBRDF();
+			P = max(0.0001, lambertBRDF_PDF(normal, in_dir));
+		}
+		
+		float mult = B / P;
+		if(mult > 1000000) {
+			mult = 0;
+		}
+		
+		throughput *= dot(normal, in_dir) * mult;
+		
+		ray.origin = hit.hitPoint;
+		ray.dir = in_dir;
+	}
 	
-	return incomingLight;
+	return outputColor;
+}
+
+//uses lambertian diffuse with importance sampling
+vec3 traceRay(Ray ray) {
+	vec3 outputColor = vec3(0);
+	vec3 throughput = vec3(1);
+	
+	for(int i = 0; i < max_bounce_count; i++){
+		int max_depth = 0;
+		HitInfo hit = calculateRayCollision(ray, max_depth);
+		if(!hit.didHit) {
+			//sample skybox
+			vec3 emittedLight = texture(skybox_tex, ray.dir).xyz * ambient_strength;	//skybox 'emits' ambient light
+			
+			vec3 sunLight = max(0, (dot(ray.dir, sun_dir) - 0.99) * sun_strength) * vec3(1);
+			emittedLight += sunLight;
+			
+			outputColor += emittedLight * throughput;
+			break;
+		}
+		
+		//otherwise, we hit some object
+		Material m = hit.hitMaterial;
+		float roughness = m.attr.y;
+		float metalness = m.attr.w;
+		
+		vec3 emittedLight = m.emissive.xyz * m.emissive.w;
+		outputColor += emittedLight * throughput;
+		throughput *= m.diffuse.xyz;
+		
+		vec3 in_dir = lambertBRDF_Dir(hit.hitNormal);
+		
+		float F = lambertBRDF();
+		float P = max(0.00001, lambertBRDF_PDF(hit.hitNormal, in_dir));
+		throughput *= dot(hit.hitNormal, in_dir) * (F / P);
+		
+		ray.origin = hit.hitPoint;
+		ray.dir = in_dir;
+	}
+	
+	return outputColor;
 }
 
 uniform int num_rays_per_pixel;
@@ -449,16 +663,20 @@ void main() {
 		vec3 rayDir = normalize(focusPos - rayOrigin) + camera_right * blurJitter.x + camera_up * blurJitter.y;
 		
 		Ray fragRay = Ray(rayOrigin, rayDir);
+		vec3 rayColor = traceRay2(fragRay);
 		
-		traceColor += traceRay(fragRay);
+		if(isnan(rayColor.x) || isinf(rayColor.x)) {
+			continue;
+		}
+		
+		traceColor += rayColor;
 	}
 	traceColor /= num_rays_per_pixel;
 	
 	vec4 oldColor = texture(render_tex_0, vec2(gl_FragCoord.x / window_width, gl_FragCoord.y / window_height)).xyzw;
-	
 	vec4 newColor = vec4(traceColor, 1);
 	
-	float weight = 1.0 / (num_rendered_frames + 1);
+	float weight = 1.0 / (num_rendered_frames + 1.0);
 	vec4 avg = oldColor * (1.0 - weight) + newColor * weight;
 	
 	out_tex_0.rgba = avg;

@@ -40,7 +40,7 @@ public class RaytracingScreen extends Screen {
 	// - read triangles in from attached raytracing scene. 
 	// - construct BVH so that ray collisions are fast
 
-	//Preview Mode - camera can move around, and minimal rays are sent
+	//Preview Mode - camera can move around, and minimal rays are sebnt
 	//Render Mode - camera cannot move around, and previous frames get blended with new frames to create the render
 	//Display Prev Render Mode - look at the previous render, and tweak postprocessing stuff.
 
@@ -71,7 +71,7 @@ public class RaytracingScreen extends Screen {
 	private Texture postprocessTempMap;
 
 	private int raytracingScene;
-	
+
 	private BVHManager bvhManager;
 
 	private int numRenderedFrames;
@@ -89,7 +89,7 @@ public class RaytracingScreen extends Screen {
 
 		this.raytracingGeometryShader.setUniform1i("render_tex_0", 0);
 		this.raytracingGeometryShader.setUniform1i("skybox_tex", 1);
-		
+
 		this.bvhManager = new BVHManager();
 
 		this.numRenderedFrames = 0;
@@ -115,7 +115,7 @@ public class RaytracingScreen extends Screen {
 		this.raytracingExtractBloomShader.kill();
 		this.raytracingHDRShader.kill();
 		this.raytracingGeometryShader.kill();
-		
+
 		this.bvhManager.kill();
 	}
 
@@ -199,70 +199,6 @@ public class RaytracingScreen extends Screen {
 		this.camera.setFacing(facing);
 	}
 
-	public void incrementExposure(float inc) {
-		this.options.exposure += inc;
-	}
-
-//	private void buildObjectBuffers() {
-//		if (this.spheres == null) {
-//			this.spheres = new ArrayList<>();
-//			this.triangles = new ArrayList<>();
-//		}
-//
-//		if (this.sphereBuffer == -1) {
-//			this.sphereBuffer = glGenBuffers();
-//		}
-//
-//		if (this.triangleBuffer == -1) {
-//			this.triangleBuffer = glGenBuffers();
-//		}
-//
-//		int sizeofSphere = 4 + 16;
-//		float[] sphereData = new float[this.spheres.size() * sizeofSphere];
-//		for (int i = 0; i < this.spheres.size(); i++) {
-//			Sphere s = this.spheres.get(i);
-//			sphereData[i * sizeofSphere + 0] = s.center.x;
-//			sphereData[i * sizeofSphere + 1] = s.center.y;
-//			sphereData[i * sizeofSphere + 2] = s.center.z;
-//			sphereData[i * sizeofSphere + 3] = s.radius;
-//			float[] matArr = s.material.toFloatArr();
-//			for (int j = 0; j < matArr.length; j++) {
-//				sphereData[i * sizeofSphere + 4 + j] = matArr[j];
-//			}
-//			sphereData[i * sizeofSphere + 19] = 0;
-//		}
-//		glBindBuffer(GL_SHADER_STORAGE_BUFFER, this.sphereBuffer);
-//		glBufferData(GL_SHADER_STORAGE_BUFFER, BufferUtils.createFloatBuffer(sphereData), GL_STATIC_DRAW);
-//
-//		int sizeofTriangle = 12 + 16;
-//		float[] triangleData = new float[this.triangles.size() * sizeofTriangle];
-//		for (int i = 0; i < this.triangles.size(); i++) {
-//			Triangle t = this.triangles.get(i);
-//			triangleData[i * sizeofTriangle + 0] = t.a.x;
-//			triangleData[i * sizeofTriangle + 1] = t.a.y;
-//			triangleData[i * sizeofTriangle + 2] = t.a.z;
-//			triangleData[i * sizeofTriangle + 3] = 0;
-//			triangleData[i * sizeofTriangle + 4] = t.b.x;
-//			triangleData[i * sizeofTriangle + 5] = t.b.y;
-//			triangleData[i * sizeofTriangle + 6] = t.b.z;
-//			triangleData[i * sizeofTriangle + 7] = 0;
-//			triangleData[i * sizeofTriangle + 8] = t.c.x;
-//			triangleData[i * sizeofTriangle + 9] = t.c.y;
-//			triangleData[i * sizeofTriangle + 10] = t.c.z;
-//			triangleData[i * sizeofTriangle + 11] = 0;
-//			float[] matArr = t.material.toFloatArr();
-//			for (int j = 0; j < matArr.length; j++) {
-//				triangleData[i * sizeofTriangle + 12 + j] = matArr[j];
-//			}
-//			triangleData[i * sizeofTriangle + 27] = 0;
-//		}
-//
-//		glBindBuffer(GL_SHADER_STORAGE_BUFFER, this.triangleBuffer);
-//		glBufferData(GL_SHADER_STORAGE_BUFFER, BufferUtils.createFloatBuffer(triangleData), GL_STATIC_DRAW);
-//
-//		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-//	}
-	
 	public void addBVHInstance(BVH bvh, Mat4 transform) {
 		this.bvhManager.addBVHInstance(bvh, transform);
 	}
@@ -274,7 +210,7 @@ public class RaytracingScreen extends Screen {
 	public void addTriangle(Vec3 a, Vec3 b, Vec3 c, Material material) {
 		this.bvhManager.addTriangle(a, b, c, material);
 	}
-	
+
 	public void buildBVHBuffers() {
 		this.bvhManager.build();
 	}
@@ -457,7 +393,7 @@ public class RaytracingScreen extends Screen {
 	public int getRenderMode() {
 		return this.renderMode;
 	}
-	
+
 	public class RaytracingOptions {
 		private float fov = 90f; //in degrees
 
@@ -465,7 +401,7 @@ public class RaytracingScreen extends Screen {
 		private float defocusStrength = 0f;
 		private float focusDist = 30f;
 
-		private float ambientStrength = 1;
+		private float ambientStrength = 2;
 		private float sunStrength = 1000;
 		private Vec3 sunDir = new Vec3(1, 1, 0.4f);
 
