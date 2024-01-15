@@ -248,15 +248,6 @@ public class BVHManager {
 		long timeElapsed = System.currentTimeMillis() - startTime;
 		System.out.println("BVHManager : End Build, " + timeElapsed + " millis");
 		System.out.println("BVH Buffer Length : " + bvhInts.length);
-
-		//		for(int i : bvhData) {
-		//			System.out.println(i);
-		//		}
-		//		for(float i : boundingBoxData) {
-		//			System.out.println(i);
-		//		}
-		//		System.exit(0);
-
 	}
 
 	//returns the next free index in the buffer

@@ -20,7 +20,7 @@ struct Material {
 	vec4 diffuse;
 	vec4 specular;
 	vec4 emissive;
-	vec4 attr;	//x = shininess, y = roughness, z = specularProbability, w = metalness
+	vec4 attr;	//x = shininess, y = roughness, z = metalness, w = refractive index
 };
 
 struct HitInfo {
@@ -29,6 +29,7 @@ struct HitInfo {
 	vec3 hitPoint;
 	vec3 hitNormal;
 	Material hitMaterial;
+	bool is_internal;
 };
 
 struct Sphere {
@@ -98,7 +99,7 @@ BoundingBox createBoundingBox() {
 }
 
 HitInfo createHitInfo() {
-	return HitInfo(false, 0, vec3(0), vec3(0), createMaterial());
+	return HitInfo(false, 0, vec3(0), vec3(0), createMaterial(), false);
 }
 
 Sphere createSphere() {
@@ -211,20 +212,35 @@ HitInfo raySphere(Ray ray, Sphere sphere) {
 	vec3 offsetRayOrigin = ray.origin - sphereCenter;
 	
 	float a = dot(ray.dir, ray.dir);
-	float b = 2 * dot(offsetRayOrigin, ray.dir);
+	float b = 2.0 * dot(offsetRayOrigin, ray.dir);
 	float c = dot(offsetRayOrigin, offsetRayOrigin) - sphereRadius * sphereRadius;
 	
-	float d = b * b - 4 * a * c;
+	float d = b * b - 4.0 * a * c;
 	
 	if(d >= 0){
-		float dist = (-b - sqrt(d)) / (2 * a);
+		float dist = (-b - sqrt(d)) / (2.0 * a);
 		
-		if(dist > 0) {
+		if(dist > 0.0001){
+			//we must be outside the sphere
+			
 			ret.didHit = true;
 			ret.dist = dist;
 			ret.hitPoint = ray.origin + ray.dir * dist;
 			ret.hitNormal = normalize(ret.hitPoint - sphereCenter);
 			ret.hitMaterial = sphere.material;
+		}
+		else {
+			//we are inside the sphere
+			dist = (-b + sqrt(d)) / (2.0 * a);
+			
+			if(dist > 0.0001) {
+				ret.is_internal = true;
+				ret.didHit = true;
+				ret.dist = dist;
+				ret.hitPoint = ray.origin + ray.dir * dist;
+				ret.hitNormal = -normalize(ret.hitPoint - sphereCenter);
+				ret.hitMaterial = sphere.material;
+			}
 		}
 	}
 	return ret;
@@ -245,9 +261,26 @@ HitInfo rayTriangle(Ray ray, Triangle triangle) {
 	vec3 plane_normal = normalize(cross(d0, d1));
 	
 	if(dot(plane_normal, ray.dir) > 0) {
-		//ray dir and plane normal are facing in the same direction, so we shouldn't be able to see this 
-		return ret;
+		//ray dir and plane normal are facing in the same direction, so it must be an internal hit
+		ret.is_internal = true;
+		
+		//reverse plane normal so that the rest of calculations work
+		t0 = triangle.a.xyz;
+		t1 = triangle.c.xyz;
+		t2 = triangle.b.xyz;
+		
+		d0 = normalize(t1 - t0);
+		d1 = normalize(t2 - t1);
+		d2 = normalize(t0 - t2);
+		
+		plane_origin = t0;
+		plane_normal = normalize(cross(d0, d1));
 	}
+	
+	//see if ray origin is already past the plane
+	if(dot(plane_normal, ray.origin - plane_origin) < 0.0001) {
+		return ret;
+	} 
 
 	//calculate intersection point between ray and plane defined by triangle
 	float ray_dirStepRatio = dot(plane_normal, ray.dir);	// for each step in ray_dir, you go ray_dirStepRatio steps towards the plane
@@ -258,11 +291,6 @@ HitInfo rayTriangle(Ray ray, Triangle triangle) {
 	}
 	
 	float t = dot(plane_origin - ray.origin, plane_normal) / ray_dirStepRatio;
-	if (t < 0) {
-		// the plane intersection is behind the ray origin
-		return ret;
-	}
-	
 	vec3 plane_intersect = ray.origin + (ray.dir * t);
 
 	// now, we just have to make sure that the intersection point is inside the triangle.
@@ -410,23 +438,9 @@ float lambertBRDF_PDF(vec3 normal, vec3 in_dir) {
 	return dot(in_dir, normal) * INV_PI;
 }
 
-float fresnelSchlick(vec3 out_dir, vec3 half_dir, float metalness) {
-	//F0 is amount of 0 angle reflectance. 
-	//non-metallic surfaces look good with F0 at 0.04, if surface is metallic, we can raise it. 
-	float F0 = mix(0.04, 1.0, metalness);   
-	float C = dot(out_dir, half_dir);
-	
-	float ans = F0 + (1.0 - F0) * pow(1.0 - C, 5.0);
-	
-	return ans;
-}
-
-float fresnel(vec3 out_dir, vec3 half_dir, float metalness) {
-	//F0 is amount of 0 angle reflectance. 
-	//non-metallic surfaces look good with F0 at 0.04, if surface is metallic, we can raise it. 
-	float F0 = mix(0.04, 0.99, metalness);   
-	
-	float n = (1.0 + sqrt(F0)) / (1.0 - sqrt(F0));	//index of refraction
+//r1 is the current refractive index, r2 is the index of the material we're going into
+float fresnel(vec3 out_dir, vec3 half_dir, float n1, float n2) {
+	float n = n2 / n1;
 	float c = dot(out_dir, half_dir);
 	float g = sqrt(n * n + c * c - 1.0);
 	
@@ -434,6 +448,16 @@ float fresnel(vec3 out_dir, vec3 half_dir, float metalness) {
 	ans *= 1.0 + pow(((g + c) * c - 1.0) / ((g - c) * c + 1.0), 2.0);
 	
 	return ans;
+}
+
+//assume that the material we come from has ior of 1
+//TODO : make sure that this assumption is correct
+float fresnelOpaque(vec3 out_dir, vec3 half_dir, float metalness) {
+	//F0 is amount of 0 angle reflectance. 
+	//non-metallic surfaces look good with F0 at 0.04, if surface is metallic, we can raise it. 
+	float F0 = mix(0.04, 0.99, metalness);   
+	float n2 = (1.0 + sqrt(F0)) / (1.0 - sqrt(F0));	//index of refraction
+	return fresnel(out_dir, half_dir, 1.0, n2);	
 }
 
 float geometry1Beckmann(vec3 v, vec3 half_dir, vec3 normal, float roughness) {
@@ -539,11 +563,40 @@ void cookTorranceBRDF_PDF(vec3 in_dir, vec3 out_dir, vec3 normal, float roughnes
 	denom = D_denom1 * D_denom2 * 4.0 * dot(in_dir, half_dir);
 }
 
+//returns true if can transmit
+bool refract(vec3 normal, vec3 incident, float n1, float n2, inout vec3 ans) {
+	float cos_theta_i = dot(normal, incident);
+	float n = n2 / n1;
+	
+	//potentially flip orientation for snells law
+	if(cos_theta_i < 0){
+		n = n1 / n2;
+		cos_theta_i = -cos_theta_i;
+		normal *= -1;
+	}
+	
+	//compute cos_theta_t
+	float sin2_theta_i = max(0.0, 1.0 - cos_theta_i * cos_theta_i);
+	float sin2_theta_t = sin2_theta_i / (n * n);
+	
+	//handle total internal reflection
+	if(sin2_theta_t >= 1.0){
+		return false;
+	}
+	float cos_theta_t = sqrt(max(0.0, 1.0 - sin2_theta_t));
+	
+	ans = -incident / n + (dot(incident, normal) / n - cos_theta_t) * normal;
+	return true;
+}
+
 //cook-torrance with importance sampling
-//TODO : circular artifacts on specular reflections when surface is extremely smooth. 
+//TODO
+// - circular artifacts on specular reflections when surface is extremely smooth. 
+// - wavelength dependent IOR
 vec3 traceRay2(Ray ray) {
 	vec3 outputColor = vec3(0);
 	vec3 throughput = vec3(1);
+	float prev_refractive_index = 1.0;
 	
 	for(int i = 0; i < max_bounce_count; i++){
 		int max_depth = 0;
@@ -561,66 +614,139 @@ vec3 traceRay2(Ray ray) {
 		
 		//otherwise, we hit some object
 		Material m = hit.hitMaterial;
-		float roughness = max(0.001, m.attr.g);	//to prevent divide by 0
-		float metalness = m.attr.a;
+		float roughness = max(0.001, m.attr.y);	//to prevent divide by 0
+		float metalness = m.attr.z;
+		float next_refractive_index = m.attr.w;
 		
-		//send emitted light back to camera
-		vec3 emittedLight = m.emissive.xyz * m.emissive.w;
-		outputColor += emittedLight * throughput;
+		//for now, assume that transmissive materials can't contain each other. 
+		//later, we should check what material the ray is exiting into
+		if(hit.is_internal) {
+			next_refractive_index = 1.0;
+		}
 		
 		vec3 normal = hit.hitNormal;
 		vec3 half_dir = vec3(0);	//which way is the microfacet facing?
 		vec3 out_dir = -ray.dir;
 		vec3 in_dir = cookTorranceBRDF_Dir(out_dir, normal, roughness, metalness, half_dir);
 		
-		float F = fresnel(out_dir, half_dir, metalness);
+		//send emitted light back to camera
+		vec3 emittedLight = m.emissive.xyz * m.emissive.w;
+		outputColor += emittedLight * throughput;
 		
 		float B = 0.0;
 		float P = 1.0;
 		
-		if(randomValue() < F) {
-			//do a specular bounce
-			throughput *= m.specular.xyz;
+		if(next_refractive_index < 1.0) {
+			//material is opaque
+			float F = fresnelOpaque(out_dir, half_dir, metalness);
 			
-			float D_num, D_denom1, D_denom2;
-			float G_num1, G_num2, G_denom1, G_denom2;
-			float P_num, P_denom;
-			
-			geometrySmithGGX_Cancel(in_dir, out_dir, normal, roughness, G_num1, G_num2, G_denom1, G_denom2);
-			distribution(half_dir, normal, roughness, D_num, D_denom1, D_denom2);
-			cookTorranceBRDF_PDF(in_dir, out_dir, normal, roughness, P_num, P_denom);
-			
-			float NdotI = max(dot(normal, in_dir), 0.0);
-			float NdotO = max(dot(normal, out_dir), 0.0);
-			
-			if(NdotI > 0 && NdotO > 0) {
-				//B = G * D / (4.0 * dot(in_dir, normal) * dot(out_dir, normal));
+			if(randomValue() < F) {
+				//do a specular bounce
+				throughput *= m.specular.xyz;
 				
-				float num = D_num * (1.0 / (G_denom1 * G_denom2));
-				float denom = (4.0) * D_denom2 * D_denom1;
+				float D_num, D_denom1, D_denom2;
+				float G_num1, G_num2, G_denom1, G_denom2;
+				float P_num, P_denom;
 				
-				B = num / denom;
-				P = P_num / P_denom;
+				geometrySmithGGX_Cancel(in_dir, out_dir, normal, roughness, G_num1, G_num2, G_denom1, G_denom2);
+				distribution(half_dir, normal, roughness, D_num, D_denom1, D_denom2);
+				cookTorranceBRDF_PDF(in_dir, out_dir, normal, roughness, P_num, P_denom);
 				
-				if(isinf(B) || isnan(B)) {
-					B = 0;
+				float NdotI = max(dot(normal, in_dir), 0.0);
+				float NdotO = max(dot(normal, out_dir), 0.0);
+				
+				if(NdotI > 0 && NdotO > 0) {
+					//B = G * D / (4.0 * dot(in_dir, normal) * dot(out_dir, normal));
+					
+					float num = D_num;
+					float denom = (4.0) * D_denom2 * D_denom1 * (G_denom1 * G_denom2);
+					
+					B = num / denom;
+					P = P_num / P_denom;
+					
+					if(isinf(B) || isnan(B)) {
+						B = 0;
+					}
 				}
 			}
+			else {
+				//do a diffuse bounce
+				throughput *= m.diffuse.xyz;
+				
+				in_dir = lambertBRDF_Dir(normal);
+				B = lambertBRDF();
+				P = max(0.0001, lambertBRDF_PDF(normal, in_dir));
+			}
+			
+			float mult = B / P;
+			throughput *= dot(normal, in_dir) * mult;
+			
+			ray.dir = in_dir;
+			ray.origin = hit.hitPoint;
 		}
 		else {
-			//do a diffuse bounce
-			throughput *= m.diffuse.xyz;
+			//material is transmissive
+			float F = fresnel(out_dir, half_dir, prev_refractive_index, next_refractive_index);
 			
-			in_dir = lambertBRDF_Dir(normal);
-			B = lambertBRDF();
-			P = max(0.0001, lambertBRDF_PDF(normal, in_dir));
+			vec3 transmit_dir;
+			bool can_transmit = refract(half_dir, out_dir, prev_refractive_index, next_refractive_index, transmit_dir);
+			
+			if(!can_transmit || randomValue() < F) {
+				
+				//do a specular bounce
+				throughput *= m.specular.xyz;
+				
+				float D_num, D_denom1, D_denom2;
+				float G_num1, G_num2, G_denom1, G_denom2;
+				float P_num, P_denom;
+				
+				geometrySmithGGX_Cancel(in_dir, out_dir, normal, roughness, G_num1, G_num2, G_denom1, G_denom2);
+				distribution(half_dir, normal, roughness, D_num, D_denom1, D_denom2);
+				cookTorranceBRDF_PDF(in_dir, out_dir, normal, roughness, P_num, P_denom);
+				
+				float NdotI = max(dot(normal, in_dir), 0.0);
+				float NdotO = max(dot(normal, out_dir), 0.0);
+				
+				if(NdotI > 0 && NdotO > 0) {
+					//B = G * D / (4.0 * dot(in_dir, normal) * dot(out_dir, normal));
+					
+					float num = D_num;
+					float denom = (4.0) * D_denom2 * D_denom1 * (G_denom1 * G_denom2);
+					
+					B = num / denom;
+					P = P_num / P_denom;
+					
+					if(isinf(B) || isnan(B)) {
+						B = 0;
+					}
+				}
+				
+				float mult = B / P;
+				throughput *= dot(normal, in_dir) * mult;
+				
+				ray.dir = in_dir;
+				ray.origin = hit.hitPoint;
+			}
+			else {
+				//transmit light
+				//TODO : make sure this is correct
+				
+				//note that fresnel is already accounted for here
+				throughput *= 1.0f;
+				
+				float P_num, P_denom;
+				cookTorranceBRDF_PDF(in_dir, out_dir, normal, roughness, P_num, P_denom);
+				
+				B = 1.0;
+				P = P_num / P_denom;
+				
+				//TODO : why don't we multiply throughput by P or dot(transmit_dir, normal)?
+				//       is it because no energy is lost when transmitting, and all i'm doing is just changing the direction?				
+				ray.dir = transmit_dir;
+				ray.origin = hit.hitPoint;
+				prev_refractive_index = next_refractive_index;
+			}
 		}
-		
-		float mult = B / P;
-		throughput *= dot(normal, in_dir) * mult;
-		
-		ray.origin = hit.hitPoint;
-		ray.dir = in_dir;
 	}
 	
 	return outputColor;
@@ -648,7 +774,6 @@ vec3 traceRay(Ray ray) {
 		//otherwise, we hit some object
 		Material m = hit.hitMaterial;
 		float roughness = m.attr.y;
-		float metalness = m.attr.w;
 		
 		vec3 emittedLight = m.emissive.xyz * m.emissive.w;
 		outputColor += emittedLight * throughput;
@@ -660,8 +785,8 @@ vec3 traceRay(Ray ray) {
 		float P = max(0.00001, lambertBRDF_PDF(hit.hitNormal, in_dir));
 		throughput *= dot(hit.hitNormal, in_dir) * (F / P);
 		
-		ray.origin = hit.hitPoint;
 		ray.dir = in_dir;
+		ray.origin = hit.hitPoint;
 	}
 	
 	return outputColor;

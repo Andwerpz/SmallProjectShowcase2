@@ -93,9 +93,6 @@ public class RaytracingWindow extends Window {
 		Material redMaterial = new Material(Color.RED);
 		Material sphereMaterial = new Material(Color.WHITE);
 
-		sphereMaterial.setRoughness(0f);
-		sphereMaterial.setSpecularProbability(0.3f);
-
 		Vec3 v0 = new Vec3(-50, -50, -50);
 		Vec3 v1 = new Vec3(-50, -50, 50);
 		Vec3 v2 = new Vec3(50, -50, 50);
@@ -109,21 +106,21 @@ public class RaytracingWindow extends Window {
 		this.raytracingScreen.addTriangle(v0, v1, v2, whiteMaterial);
 		this.raytracingScreen.addTriangle(v0, v2, v3, whiteMaterial);
 
-		//		//ceiling
-		//		this.raytracingScreen.addTriangle(v5, v4, v6, whiteMaterial);
-		//		this.raytracingScreen.addTriangle(v6, v4, v7, whiteMaterial);
-		//
-		//		//back wall
-		//		this.raytracingScreen.addTriangle(v0, v3, v7, whiteMaterial);
-		//		this.raytracingScreen.addTriangle(v0, v7, v4, whiteMaterial);
-		//
-		//		//left wall
-		//		this.raytracingScreen.addTriangle(v1, v0, v4, redMaterial);
-		//		this.raytracingScreen.addTriangle(v1, v4, v5, redMaterial);
-		//
-		//		//right wall
-		//		this.raytracingScreen.addTriangle(v2, v7, v3, greenMaterial);
-		//		this.raytracingScreen.addTriangle(v2, v6, v7, greenMaterial);
+		//ceiling
+		this.raytracingScreen.addTriangle(v5, v4, v6, whiteMaterial);
+		this.raytracingScreen.addTriangle(v6, v4, v7, whiteMaterial);
+
+		//back wall
+		this.raytracingScreen.addTriangle(v0, v3, v7, whiteMaterial);
+		this.raytracingScreen.addTriangle(v0, v7, v4, whiteMaterial);
+
+		//left wall
+		this.raytracingScreen.addTriangle(v1, v0, v4, redMaterial);
+		this.raytracingScreen.addTriangle(v1, v4, v5, redMaterial);
+
+		//right wall
+		this.raytracingScreen.addTriangle(v2, v7, v3, greenMaterial);
+		this.raytracingScreen.addTriangle(v2, v6, v7, greenMaterial);
 
 		//front wall
 		//this.raytracingScreen.addTriangle(v2, v1, v5, whiteMaterial);
@@ -142,14 +139,13 @@ public class RaytracingWindow extends Window {
 		this.raytracingScreen.addTriangle(v5, v4, v6, lightMaterial);
 		this.raytracingScreen.addTriangle(v6, v4, v7, lightMaterial);
 
-		//this.raytracingScreen.addSphere(new Vec3(0, 50, 0), 10f, lightMaterial);
-
 		//		//suzanne
 		//		Model suzanne = Model.loadModelFile(FileUtils.loadFileRelative("/res/suzanne/suzanne.obj"));
 		//		Material monkeyMaterial = Material.defaultMaterial();
-		//		monkeyMaterial.setSpecular(new Vec3(212, 175, 55).mul(1.0f / 255.0f));
+		//		//monkeyMaterial.setSpecular(new Vec3(212, 175, 55).mul(1.0f / 255.0f));
 		//		monkeyMaterial.setRoughness(0f);
-		//		monkeyMaterial.setMetalness(0f);
+		//		monkeyMaterial.setMetalness(1f);
+		//		//monkeyMaterial.setRefractiveIndex(2.5f);
 		//		{
 		//			Mat4 transform = Mat4.identity();
 		//			transform.muli(Mat4.scale(30));
@@ -182,7 +178,8 @@ public class RaytracingWindow extends Window {
 
 		//big ball
 		whiteMaterial.setRoughness(0f);
-		whiteMaterial.setMetalness(1);
+		whiteMaterial.setMetalness(0);
+		whiteMaterial.setRefractiveIndex(1.5f);
 		//whiteMaterial.setSpecular(new Vec3(212, 175, 55).mul(1.0f / 255.0f));
 		this.raytracingScreen.addSphere(new Vec3(0, -20, 0), 30, whiteMaterial);
 
