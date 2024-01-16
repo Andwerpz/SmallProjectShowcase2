@@ -44,6 +44,8 @@ public class BackgroundWindow extends Window {
 	// - Layered Material Painting? 
 	//   - need to find the proper name for this
 	//   - https://www.youtube.com/watch?v=On64nNkjJpQ
+	// - Recreating images but with limited tools
+	//   - https://www.youtube.com/watch?v=6aXx6RA1IK4
 
 	private final int BACKGROUND_SCENE = Scene.generateScene();
 	private final int TEXT_SCENE = Scene.generateScene();

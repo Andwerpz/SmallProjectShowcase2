@@ -438,26 +438,72 @@ float lambertBRDF_PDF(vec3 normal, vec3 in_dir) {
 	return dot(in_dir, normal) * INV_PI;
 }
 
-//r1 is the current refractive index, r2 is the index of the material we're going into
-float fresnel(vec3 out_dir, vec3 half_dir, float n1, float n2) {
+//n1 is the material we're currently in, n2 is the one we're going into
+float fresnelDielectric(vec3 incident, vec3 normal, float n1, float n2) {
+	float cos_theta_i = dot(incident, normal);
 	float n = n2 / n1;
-	float c = dot(out_dir, half_dir);
-	float g = sqrt(n * n + c * c - 1.0);
 	
-	float ans = (1.0 / 2.0) * pow((g - c) / (g + c), 2.0);
-	ans *= 1.0 + pow(((g + c) * c - 1.0) / ((g - c) * c + 1.0), 2.0);
+	//incident and normal are facing opposite directions, reverse orientation of normal. 
+	if(cos_theta_i < 0){
+		normal *= -1;
+		cos_theta_i = dot(incident, normal);
+		n = n1 / n2;
+	}
 	
-	return ans;
+	//compute cos_theta_t
+	float sin2_theta_i = max(0.0, 1.0 - cos_theta_i * cos_theta_i);
+	float sin2_theta_t = sin2_theta_i / (n * n);
+	if(sin2_theta_t >= 1.0){	//handle total internal reflection
+		return 1.0;
+	}
+	float cos_theta_t = sqrt(max(0.0, 1.0 - sin2_theta_t));
+	
+	//compute ans
+	float r_parl = (n * cos_theta_i - cos_theta_t) / (n * cos_theta_i + cos_theta_t);
+    float r_perp = (cos_theta_i - n * cos_theta_t) / (cos_theta_i + n * cos_theta_t);
+    return (r_parl * r_parl + r_perp * r_perp) / 2.0;
 }
 
+//ior is now defined as n - ik; n is our index of refraction, and k is called the absorption coefficient. 
+//depending on the wavelength, n and k can change drastically, and this is what gives conductors their different colors. 
+//float fresnelMetallic(vec3 incident, vec3 normal, float n1, float n2) {}
+
 //assume that the material we come from has ior of 1
-//TODO : make sure that this assumption is correct
-float fresnelOpaque(vec3 out_dir, vec3 half_dir, float metalness) {
+//for now, just use dielectric fresnel for metallics
+float fresnelOpaque(vec3 incident, vec3 normal, float metalness) {
 	//F0 is amount of 0 angle reflectance. 
 	//non-metallic surfaces look good with F0 at 0.04, if surface is metallic, we can raise it. 
+	//F0 = 0.04 corresponds with ior = 1.5, porcelain has an ior of 1.504
+	//as F0 tends towards 1.0, ior goes to infinity
 	float F0 = mix(0.04, 0.99, metalness);   
 	float n2 = (1.0 + sqrt(F0)) / (1.0 - sqrt(F0));	//index of refraction
-	return fresnel(out_dir, half_dir, 1.0, n2);	
+	return fresnelDielectric(incident, normal, 1.0, n2);
+}
+
+//returns true if can transmit
+bool refract(vec3 incident, vec3 normal, float n1, float n2, inout vec3 ans) {
+	float cos_theta_i = dot(normal, incident);
+	float n = n2 / n1;
+	
+	//potentially flip orientation for snells law
+	if(cos_theta_i < 0){
+		n = n1 / n2;
+		cos_theta_i = -cos_theta_i;
+		normal *= -1;
+	}
+	
+	//compute cos_theta_t
+	float sin2_theta_i = max(0.0, 1.0 - cos_theta_i * cos_theta_i);
+	float sin2_theta_t = sin2_theta_i / (n * n);
+	
+	//handle total internal reflection
+	if(sin2_theta_t >= 1.0){
+		return false;
+	}
+	float cos_theta_t = sqrt(max(0.0, 1.0 - sin2_theta_t));
+	
+	ans = -incident / n + (dot(incident, normal) / n - cos_theta_t) * normal;
+	return true;
 }
 
 float geometry1Beckmann(vec3 v, vec3 half_dir, vec3 normal, float roughness) {
@@ -563,36 +609,13 @@ void cookTorranceBRDF_PDF(vec3 in_dir, vec3 out_dir, vec3 normal, float roughnes
 	denom = D_denom1 * D_denom2 * 4.0 * dot(in_dir, half_dir);
 }
 
-//returns true if can transmit
-bool refract(vec3 normal, vec3 incident, float n1, float n2, inout vec3 ans) {
-	float cos_theta_i = dot(normal, incident);
-	float n = n2 / n1;
-	
-	//potentially flip orientation for snells law
-	if(cos_theta_i < 0){
-		n = n1 / n2;
-		cos_theta_i = -cos_theta_i;
-		normal *= -1;
-	}
-	
-	//compute cos_theta_t
-	float sin2_theta_i = max(0.0, 1.0 - cos_theta_i * cos_theta_i);
-	float sin2_theta_t = sin2_theta_i / (n * n);
-	
-	//handle total internal reflection
-	if(sin2_theta_t >= 1.0){
-		return false;
-	}
-	float cos_theta_t = sqrt(max(0.0, 1.0 - sin2_theta_t));
-	
-	ans = -incident / n + (dot(incident, normal) / n - cos_theta_t) * normal;
-	return true;
-}
-
 //cook-torrance with importance sampling
 //TODO
+// - read theory and understand what's going on with my BSDF
+//   - especially how does light interact with conductors. Fresnel with conductors is weird D:
 // - circular artifacts on specular reflections when surface is extremely smooth. 
 // - wavelength dependent IOR
+//   - hero sampling? https://dl.acm.org/doi/10.1111/cgf.12419
 vec3 traceRay2(Ray ray) {
 	vec3 outputColor = vec3(0);
 	vec3 throughput = vec3(1);
@@ -686,10 +709,10 @@ vec3 traceRay2(Ray ray) {
 		}
 		else {
 			//material is transmissive
-			float F = fresnel(out_dir, half_dir, prev_refractive_index, next_refractive_index);
+			float F = fresnelDielectric(out_dir, half_dir, prev_refractive_index, next_refractive_index);
 			
 			vec3 transmit_dir;
-			bool can_transmit = refract(half_dir, out_dir, prev_refractive_index, next_refractive_index, transmit_dir);
+			bool can_transmit = refract(out_dir, half_dir, prev_refractive_index, next_refractive_index, transmit_dir);
 			
 			if(!can_transmit || randomValue() < F) {
 				
