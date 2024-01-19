@@ -3,6 +3,7 @@ package window;
 import java.awt.Color;
 import java.awt.Font;
 
+import genetic_image_builder.GeneticImageBuilder;
 import hydraulic_terrain.HydraulicTerrainWindow;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
@@ -44,8 +45,6 @@ public class BackgroundWindow extends Window {
 	// - Layered Material Painting? 
 	//   - need to find the proper name for this
 	//   - https://www.youtube.com/watch?v=On64nNkjJpQ
-	// - Recreating images but with limited tools
-	//   - https://www.youtube.com/watch?v=6aXx6RA1IK4
 
 	private final int BACKGROUND_SCENE = Scene.generateScene();
 	private final int TEXT_SCENE = Scene.generateScene();
@@ -109,6 +108,7 @@ public class BackgroundWindow extends Window {
 			projectPicker.addToList("Vector Art");
 			projectPicker.addToList("SPH Water");
 			projectPicker.addToList("Voxel Raytracing");
+			projectPicker.addToList("Genetic Image Builder");
 			break;
 		}
 
@@ -177,6 +177,11 @@ public class BackgroundWindow extends Window {
 
 		case "Voxel Raytracing": {
 			AdjustableWindow window = new AdjustableWindow(new VoxelRaytracingWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Genetic Image Builder": {
+			AdjustableWindow window = new AdjustableWindow(new GeneticImageBuilder(x, y, width, height, null), this);
 			break;
 		}
 		}

@@ -1,0 +1,53 @@
+#version 430 core
+
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+uniform int canvas_width;
+uniform int canvas_height;
+
+uniform mat4 inv_model_mat;
+uniform vec4 sprite_material;
+uniform vec2 uv_00;
+uniform vec2 uv_11;
+
+layout(rgba32f, binding = 0) uniform image2D tex_canvas;
+layout(binding = 1) uniform sampler2D tex_spritesheet;
+
+void main() {
+	int sprite_id = int(gl_GlobalInvocationID.x);
+	
+	vec3 sprite_hue = sprite_material.rgb;
+	float sprite_alpha = sprite_material.a;
+	
+	for(int i = 0; i < canvas_height; i++){
+		for(int j = 0; j < canvas_width; j++){
+			int x = j;
+			int y = i;
+		
+			//check if sprite covers this pixel
+			vec4 canvas_coord = vec4(x + 0.5, y + 0.5, 0, 1);
+			vec2 model_coord = (canvas_coord * inv_model_mat).xy;
+			
+			//if model space coordinates are outside of 1x1 box, then this pixel is outside of the sprite. 
+			if(model_coord.x < 0.0 || model_coord.x > 1.0 || model_coord.y < 0.0 || model_coord.y > 1.0) {
+				continue;
+			}
+			
+			//get color of canvas
+			vec3 canvas = imageLoad(tex_canvas, ivec2(x, y)).rgb;
+			
+			//compute color of sprite at this location
+			vec2 uv = vec2(mix(uv_00.x, uv_11.x, model_coord.x), mix(uv_00.y, uv_11.y, model_coord.y));
+			vec4 sprite_color = texture(tex_spritesheet, uv);
+			
+			vec3 color = sprite_color.rgb * sprite_hue;
+			float alpha = sprite_color.a * sprite_alpha;
+			
+			//apply sprite to canvas color
+			canvas = mix(canvas, color, alpha);
+			
+			//save to canvas
+			imageStore(tex_canvas, ivec2(x, y), vec4(canvas, 1));
+		}
+	}
+}

@@ -94,8 +94,8 @@ public class SumOfSinesWaterScreen extends Screen {
 		}
 
 		this.waterBuffer = new Framebuffer(waterTextureResolution, waterTextureResolution);
-		this.waterHeightMap = new Texture(GL_RGBA32F, waterTextureResolution, waterTextureResolution, GL_RGBA, GL_FLOAT);
-		this.waterNormalMap = new Texture(GL_RGBA32F, waterTextureResolution, waterTextureResolution, GL_RGBA, GL_FLOAT);
+		this.waterHeightMap = new Texture(GL_RGBA32F, waterTextureResolution, waterTextureResolution, GL_RGBA, GL_FLOAT, GL_LINEAR);
+		this.waterNormalMap = new Texture(GL_RGBA32F, waterTextureResolution, waterTextureResolution, GL_RGBA, GL_FLOAT, GL_LINEAR);
 		this.waterHeightMap.setWrapping(GL_CLAMP_TO_EDGE);
 		this.waterNormalMap.setWrapping(GL_CLAMP_TO_EDGE);
 		this.waterBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.waterHeightMap.getID());
@@ -249,8 +249,8 @@ public class SumOfSinesWaterScreen extends Screen {
 		this.geometryPositionMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
 		this.geometryNormalMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
 		this.geometrySpecularMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
-		this.geometryColorMap = new Texture(GL_RGBA, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
-		this.geometryColorIDMap = new Texture(GL_RGBA, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
+		this.geometryColorMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
+		this.geometryColorIDMap = new Texture(GL_RGBA8, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
 		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.geometryPositionMap.getID());
 		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, this.geometryNormalMap.getID());
 		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, this.geometrySpecularMap.getID());
@@ -261,7 +261,7 @@ public class SumOfSinesWaterScreen extends Screen {
 		this.geometryBuffer.isComplete();
 
 		this.lightingBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
-		this.lightingColorMap = new Texture(GL_RGBA, this.screenWidth, this.screenHeight, GL_RGBA, GL_UNSIGNED_BYTE);
+		this.lightingColorMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_UNSIGNED_BYTE);
 		this.lightingBrightnessMap = new Texture(GL_RGBA16F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
 		this.lightingBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.lightingColorMap.getID());
 		this.lightingBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, this.lightingBrightnessMap.getID());
@@ -269,8 +269,8 @@ public class SumOfSinesWaterScreen extends Screen {
 		this.lightingBuffer.isComplete();
 
 		this.shadowBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
-		this.shadowDepthMap = new Texture(GL_DEPTH_COMPONENT, this.screenWidth, this.screenHeight, GL_DEPTH_COMPONENT, GL_FLOAT);
-		this.shadowBackfaceMap = new Texture(GL_RGBA16F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
+		this.shadowDepthMap = new Texture(GL_DEPTH_COMPONENT32F, this.screenWidth, this.screenHeight, GL_DEPTH_COMPONENT, GL_FLOAT);
+		this.shadowBackfaceMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
 		this.shadowBuffer.bindTextureToBuffer(GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, this.shadowDepthMap.getID());
 		this.shadowBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.shadowBackfaceMap.getID());
 		this.shadowBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
@@ -278,7 +278,7 @@ public class SumOfSinesWaterScreen extends Screen {
 		this.shadowCubemap = new Cubemap(GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_FLOAT);
 
 		this.skyboxBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
-		this.skyboxColorMap = new Texture(GL_RGBA, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
+		this.skyboxColorMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
 		this.skyboxBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.skyboxColorMap.getID());
 		this.skyboxBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
 		this.skyboxBuffer.isComplete();

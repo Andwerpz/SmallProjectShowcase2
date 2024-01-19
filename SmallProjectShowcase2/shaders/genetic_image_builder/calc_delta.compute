@@ -1,0 +1,69 @@
+#version 430 core
+
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+uniform int canvas_width;
+uniform int canvas_height;
+
+layout(std430, binding = 0) buffer inv_model_buffer { mat4 inv_model_data[]; };
+layout(std430, binding = 1) buffer material_buffer { vec4 material_data[]; };
+layout(std430, binding = 2) buffer uv_buffer { vec4 uv_data[]; };
+layout(std430, binding = 3) buffer score_buffer { float score_data[]; };
+
+layout(rgba32f, binding = 4) uniform image2D tex_canvas;
+layout(rgba32f, binding = 5) uniform image2D tex_target;
+
+layout(binding = 6) uniform sampler2D tex_spritesheet;
+
+float calcDiff(vec3 a, vec3 b) {
+	vec3 diff = a - b;
+	return abs(diff.x) + abs(diff.y) + abs(diff.z);
+}
+
+void main() {
+	int sprite_id = int(gl_GlobalInvocationID.x);
+	float score = 0.0;
+	
+	mat4 inv_model_mat = inv_model_data[sprite_id];
+	vec3 sprite_hue = material_data[sprite_id].rgb;
+	float sprite_alpha = material_data[sprite_id].a;
+	vec2 uv_00 = uv_data[sprite_id].xy;
+	vec2 uv_11 = uv_data[sprite_id].zw;
+	
+	for(int i = 0; i < canvas_height; i++){
+		for(int j = 0; j < canvas_width; j++){
+			int x = j;
+			int y = i;
+		
+			//check if sprite covers this pixel
+			vec4 canvas_coord = vec4(x + 0.5, y + 0.5, 0, 1);
+			vec2 model_coord = (canvas_coord * inv_model_mat).xy;
+			
+			//if model space coordinates are outside of 1x1 box, then this pixel is outside of the sprite. 
+			if(model_coord.x < 0.0 || model_coord.x > 1.0 || model_coord.y < 0.0 || model_coord.y > 1.0) {
+				continue;
+			}
+			
+			//get color of canvas and target
+			vec3 canvas = imageLoad(tex_canvas, ivec2(x, y)).rgb;
+			vec3 target = imageLoad(tex_target, ivec2(x, y)).rgb;
+			
+			//compute color of sprite at this location
+			vec2 uv = vec2(mix(uv_00.x, uv_11.x, model_coord.x), mix(uv_00.y, uv_11.y, model_coord.y));
+			vec4 sprite_color = texture(tex_spritesheet, uv);
+			
+			vec3 color = sprite_color.rgb * sprite_hue;
+			float alpha = sprite_color.a * sprite_alpha;
+			
+			//apply sprite to canvas color
+			vec3 new_canvas = mix(canvas, color, alpha);
+			
+			//compute delta, and save to buffer
+			float init_diff = calcDiff(canvas, target);
+			float final_diff = calcDiff(new_canvas, target);
+			score += final_diff - init_diff;
+		}
+	}
+	
+	score_data[sprite_id] = score;
+}

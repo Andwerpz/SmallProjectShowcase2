@@ -2,9 +2,12 @@ package pbr_rendering;
 
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL30.*;
-import static org.lwjgl.opengl.GL32.GL_TEXTURE_CUBE_MAP_SEAMLESS;
+import static org.lwjgl.opengl.GL31.*;
+import static org.lwjgl.opengl.GL32.*;
 import static org.lwjgl.opengl.GL13.*;
 import static org.lwjgl.opengl.GL12.*;
+import static org.lwjgl.opengl.GL14.*;
+import static org.lwjgl.opengl.GL15.*;
 
 import java.nio.FloatBuffer;
 import java.util.ArrayList;
@@ -152,8 +155,8 @@ public class PBRRenderingScreen extends Screen {
 		this.geometryPositionMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
 		this.geometryNormalMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
 		this.geometryAttrMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
-		this.geometryColorMap = new Texture(GL_RGBA, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
-		this.geometryColorIDMap = new Texture(GL_RGBA, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
+		this.geometryColorMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
+		this.geometryColorIDMap = new Texture(GL_RGBA8, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
 		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.geometryPositionMap.getID());
 		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, this.geometryNormalMap.getID());
 		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, this.geometryAttrMap.getID());
@@ -164,14 +167,14 @@ public class PBRRenderingScreen extends Screen {
 		this.geometryBuffer.isComplete();
 
 		this.lightingBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
-		this.lightingColorMap = new Texture(GL_RGBA, this.screenWidth, this.screenHeight, GL_RGBA, GL_UNSIGNED_BYTE);
+		this.lightingColorMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_UNSIGNED_BYTE);
 		this.lightingBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.lightingColorMap.getID());
 		this.lightingBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
 		this.lightingBuffer.isComplete();
 
 		this.shadowBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
-		this.shadowDepthMap = new Texture(GL_DEPTH_COMPONENT, this.screenWidth, this.screenHeight, GL_DEPTH_COMPONENT, GL_FLOAT);
-		this.shadowBackfaceMap = new Texture(GL_RGBA16F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
+		this.shadowDepthMap = new Texture(GL_DEPTH_COMPONENT32F, this.screenWidth, this.screenHeight, GL_DEPTH_COMPONENT, GL_FLOAT);
+		this.shadowBackfaceMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
 		this.shadowBuffer.bindTextureToBuffer(GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, this.shadowDepthMap.getID());
 		this.shadowBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.shadowBackfaceMap.getID());
 		this.shadowBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
@@ -179,7 +182,7 @@ public class PBRRenderingScreen extends Screen {
 		this.shadowCubemap = new Cubemap(GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_FLOAT);
 
 		this.skyboxBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
-		this.skyboxColorMap = new Texture(GL_RGBA, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
+		this.skyboxColorMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
 		this.skyboxBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.skyboxColorMap.getID());
 		this.skyboxBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
 		this.skyboxBuffer.isComplete();
