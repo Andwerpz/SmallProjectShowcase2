@@ -1,4 +1,5 @@
 #version 430 core
+#extension GL_NV_shader_atomic_float : enable
 
 layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
@@ -8,7 +9,7 @@ uniform int canvas_height;
 layout(std430, binding = 0) buffer inv_model_buffer { mat4 inv_model_data[]; };
 layout(std430, binding = 1) buffer material_buffer { vec4 material_data[]; };
 layout(std430, binding = 2) buffer uv_buffer { vec4 uv_data[]; };
-layout(std430, binding = 3) buffer score_buffer { float score_data[]; };
+layout(std430, binding = 3) coherent buffer score_buffer { float score_data[]; };
 
 layout(rgba32f, binding = 4) uniform image2D tex_canvas;
 layout(rgba32f, binding = 5) uniform image2D tex_target;
@@ -65,5 +66,6 @@ void main() {
 		}
 	}
 	
-	score_data[sprite_id] = score;
+	atomicExchange(score_data[sprite_id], score);
+	
 }

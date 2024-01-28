@@ -106,52 +106,87 @@ public class RaytracingWindow extends Window {
 		this.raytracingScreen.addTriangle(v0, v1, v2, whiteMaterial);
 		this.raytracingScreen.addTriangle(v0, v2, v3, whiteMaterial);
 
-		//ceiling
-		this.raytracingScreen.addTriangle(v5, v4, v6, whiteMaterial);
-		this.raytracingScreen.addTriangle(v6, v4, v7, whiteMaterial);
-
-		//back wall
-		this.raytracingScreen.addTriangle(v0, v3, v7, whiteMaterial);
-		this.raytracingScreen.addTriangle(v0, v7, v4, whiteMaterial);
-
-		//left wall
-		this.raytracingScreen.addTriangle(v1, v0, v4, redMaterial);
-		this.raytracingScreen.addTriangle(v1, v4, v5, redMaterial);
-
-		//right wall
-		this.raytracingScreen.addTriangle(v2, v7, v3, greenMaterial);
-		this.raytracingScreen.addTriangle(v2, v6, v7, greenMaterial);
+		//		//ceiling
+		//		this.raytracingScreen.addTriangle(v5, v4, v6, whiteMaterial);
+		//		this.raytracingScreen.addTriangle(v6, v4, v7, whiteMaterial);
+		//
+		//		//back wall
+		//		this.raytracingScreen.addTriangle(v0, v3, v7, whiteMaterial);
+		//		this.raytracingScreen.addTriangle(v0, v7, v4, whiteMaterial);
+		//
+		//		//left wall
+		//		this.raytracingScreen.addTriangle(v1, v0, v4, redMaterial);
+		//		this.raytracingScreen.addTriangle(v1, v4, v5, redMaterial);
+		//
+		//		//right wall
+		//		this.raytracingScreen.addTriangle(v2, v7, v3, greenMaterial);
+		//		this.raytracingScreen.addTriangle(v2, v6, v7, greenMaterial);
 
 		//front wall
 		//this.raytracingScreen.addTriangle(v2, v1, v5, whiteMaterial);
 		//this.raytracingScreen.addTriangle(v2, v5, v6, whiteMaterial);
 
-		//ceiling light
-		float lightScale = 0.5f;
-		v4.muli(lightScale);
-		v5.muli(lightScale);
-		v6.muli(lightScale);
-		v7.muli(lightScale);
-		v4.y = 49.99f;
-		v5.y = 49.99f;
-		v6.y = 49.99f;
-		v7.y = 49.99f;
-		this.raytracingScreen.addTriangle(v5, v4, v6, lightMaterial);
-		this.raytracingScreen.addTriangle(v6, v4, v7, lightMaterial);
+		//		//ceiling light
+		//		float lightScale = 0.5f;
+		//		v4.muli(lightScale);
+		//		v5.muli(lightScale);
+		//		v6.muli(lightScale);
+		//		v7.muli(lightScale);
+		//		v4.y = 49.99f;
+		//		v5.y = 49.99f;
+		//		v6.y = 49.99f;
+		//		v7.y = 49.99f;
+		//		this.raytracingScreen.addTriangle(v5, v4, v6, lightMaterial);
+		//		this.raytracingScreen.addTriangle(v6, v4, v7, lightMaterial);
 
-		//suzanne
-		Model suzanne = Model.loadModelFile(FileUtils.loadFileRelative("/res/suzanne/suzanne.obj"));
-		Material monkeyMaterial = Material.defaultMaterial();
-		//monkeyMaterial.setSpecular(new Vec3(212, 175, 55).mul(1.0f / 255.0f));
-		monkeyMaterial.setRoughness(0f);
-		monkeyMaterial.setMetalness(0f);
-		monkeyMaterial.setRefractiveIndex(1.3f);
+		//		//suzanne
+		//		Model suzanne = Model.loadModelFile(FileUtils.loadFileRelative("/res/suzanne/suzanne.obj"));
+		//		Material monkeyMaterial = Material.defaultMaterial();
+		//		monkeyMaterial.setSpecular(new Vec3(212, 175, 55).mul(1.0f / 255.0f));
+		//		monkeyMaterial.setRoughness(0f);
+		//		monkeyMaterial.setMetalness(1f);
+		//		//monkeyMaterial.setRefractiveIndex(1.3f);
+		//		{
+		//			Mat4 transform = Mat4.identity();
+		//			transform.muli(Mat4.scale(30));
+		//			transform.muli(Mat4.rotateX((float) Math.toRadians(30)));
+		//			transform.muli(Mat4.translate(new Vec3(0, -20, 0)));
+		//			ArrayList<VertexArray> meshes = suzanne.getMeshes();
+		//			for (VertexArray v : meshes) {
+		//				int[] indices = v.getIndices();
+		//				Vec3[] vertices = new Vec3[v.getVertices().length / 3];
+		//				for (int i = 0; i < vertices.length; i++) {
+		//					float x = v.getVertices()[i * 3 + 0];
+		//					float y = v.getVertices()[i * 3 + 1];
+		//					float z = v.getVertices()[i * 3 + 2];
+		//					vertices[i] = new Vec3(x, y, z);
+		//				}
+		//				for (int i = 0; i < indices.length / 3; i++) {
+		//					Vec3 a = vertices[indices[i * 3 + 0]];
+		//					Vec3 b = vertices[indices[i * 3 + 1]];
+		//					Vec3 c = vertices[indices[i * 3 + 2]];
+		//
+		//					//apply model transform
+		//					a = transform.mul(a, 1);
+		//					b = transform.mul(b, 1);
+		//					c = transform.mul(c, 1);
+		//
+		//					this.raytracingScreen.addTriangle(a, b, c, monkeyMaterial);
+		//				}
+		//			}
+		//		}
+
+		//stanford dragon
+		Model dragon = Model.loadModelFile(FileUtils.loadFileRelative("/res/stanford_dragon/stanford_dragon.obj"));
+		Material dragonMaterial = Material.defaultMaterial();
+		dragonMaterial.setRoughness(0);
+		dragonMaterial.setMetalness(0);
+		dragonMaterial.setRefractiveIndex(1.5f);
 		{
 			Mat4 transform = Mat4.identity();
 			transform.muli(Mat4.scale(30));
-			transform.muli(Mat4.rotateX((float) Math.toRadians(30)));
-			transform.muli(Mat4.translate(new Vec3(0, -20, 0)));
-			ArrayList<VertexArray> meshes = suzanne.getMeshes();
+			transform.muli(Mat4.translate(new Vec3(0, -50, 0)));
+			ArrayList<VertexArray> meshes = dragon.getMeshes();
 			for (VertexArray v : meshes) {
 				int[] indices = v.getIndices();
 				Vec3[] vertices = new Vec3[v.getVertices().length / 3];
@@ -171,7 +206,7 @@ public class RaytracingWindow extends Window {
 					b = transform.mul(b, 1);
 					c = transform.mul(c, 1);
 
-					this.raytracingScreen.addTriangle(a, b, c, monkeyMaterial);
+					this.raytracingScreen.addTriangle(a, b, c, dragonMaterial);
 				}
 			}
 		}

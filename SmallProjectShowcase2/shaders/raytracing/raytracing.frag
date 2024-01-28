@@ -694,7 +694,7 @@ vec3 traceRay2(Ray ray) {
 			}
 			else {
 				//do a diffuse bounce
-				throughput *= m.diffuse.xyz;
+				throughput *= m.diffuse.xyz * (1 - metalness);
 				
 				in_dir = lambertBRDF_Dir(normal);
 				B = lambertBRDF();

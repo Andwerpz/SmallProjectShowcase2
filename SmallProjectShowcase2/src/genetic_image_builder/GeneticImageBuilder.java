@@ -1,7 +1,14 @@
 package genetic_image_builder;
 
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
+
+import javax.imageio.ImageIO;
 
 import static org.lwjgl.glfw.GLFW.*;
 
@@ -23,13 +30,21 @@ import static org.lwjgl.opengl.GL20.*;
 import static org.lwjgl.opengl.GL30.*;
 import static org.lwjgl.opengl.GL31.*;
 import static org.lwjgl.opengl.GL33.*;
+import static org.lwjgl.opengl.GL15.*;
+import static org.lwjgl.opengl.GL20.*;
+import static org.lwjgl.opengl.GL30.*;
+import static org.lwjgl.opengl.GL31.*;
+import static org.lwjgl.opengl.GL33.*;
 
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Shader;
 import lwjglengine.graphics.ShaderStorageBuffer;
 import lwjglengine.graphics.Texture;
+import lwjglengine.screen.ScreenQuad;
+import lwjglengine.util.BufferUtils;
 import lwjglengine.util.ShaderUtils;
 import lwjglengine.window.AdjustableWindow;
+import lwjglengine.window.FileExplorerWindow;
 import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
 import myutils.file.FileUtils;
@@ -44,33 +59,37 @@ import myutils.math.Vec4;
 
 public class GeneticImageBuilder extends Window {
 
-	//TODO 
-	// - get atomic floats to work
-	//   - GL_NV_shader_atomic_float
-	//   - only works on NVIDIA hardware
-	// - move this to the vertex / fragment shader pipeline so that we don't have to loop through all canvas pixels. 
-	//   - probably will have to implement custom vertex array
-	//   - per instance model transforms, hues, uvs.
-	//   - don't need projection matrix, we'll save that for the rendering step
-	//   - target and canvas provided through uniforms
-	//   - score kept through ssbo of atomic floats. 
-
 	private Texture spriteTexture;
 	private Sprite[] sprites;
 
 	private static final int NR_GENERATIONS = 16;
 	private static final int GENERATION_POPULATION = 1024;
-	private static final float SURVIVE_SCORE_THRESHOLD = -50;
-	private static final int SURVIVE_MAX = 32;
+	private static final float SURVIVE_SCORE_THRESHOLD = 5;
+	private static final float PASS_SCORE_THRESHOLD = -5;
+	private static final int SURVIVE_MAX = 64;
+	private static final int GENERATION_CUTOFF = 500;
 
 	private Texture target, canvas;
+	private AdjustableWindow targetW, canvasW;
 	private int canvasWidth, canvasHeight;
 
 	private ShaderStorageBuffer invMat4Buffer, materialBuffer, uvBuffer, scoreBuffer;
 
-	private Shader deltaShader, drawShader;
+	private Shader scoreShader, drawShader;
 
 	private boolean isBuilding = false;
+	private int nrBuiltSprites = 0;
+
+	//vertex array buffer handles
+	private int vao, vbo, ibo;
+	private int mat4bo, huebo, uvbo;
+
+	private Framebuffer canvasFramebuffer;
+
+	private static final int VERTEX_LOC = 0;
+	private static final int INSTANCED_MAT4_LOC = 1; //takes 4 slots, 16 floats. 
+	private static final int INSTANCED_HUE_LOC = 5;
+	private static final int INSTANCED_UV_LOC = 6;
 
 	public GeneticImageBuilder(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
@@ -81,7 +100,7 @@ public class GeneticImageBuilder extends Window {
 		//load spritesheet xml
 		XMLNode root = null;
 		{
-			String xmlString = FileUtils.loadAsStringRelative("/res/GD_decor/GJ_GameSheet-hd.plist");
+			String xmlString = FileUtils.loadStringRelative("/res/GD_decor/GJ_GameSheet-hd.plist");
 			root = XMLReader.parseStringAsXML(xmlString);
 		}
 
@@ -119,8 +138,8 @@ public class GeneticImageBuilder extends Window {
 			}
 
 			//size
-			int sx = loc.get(2);
-			int sy = loc.get(3);
+			int sx = loc.get(3);
+			int sy = loc.get(2);
 
 			//offset from top left
 			int ox = loc.get(0);
@@ -145,15 +164,20 @@ public class GeneticImageBuilder extends Window {
 		}
 
 		//choose target
-		this.target = new Texture("/res/laugh-point.png", 0, GL_RGBA32F, GL_NEAREST, GL_NEAREST, 1);
+		this.target = new Texture("/res/astolfo 11.jpg", 0, GL_RGBA32F, GL_NEAREST, GL_NEAREST, 1);
 		this.canvasWidth = this.target.getWidth();
 		this.canvasHeight = this.target.getHeight();
-		this.canvas = new Texture(GL_RGBA32F, this.canvasWidth, this.canvasHeight, GL_RGBA, GL_FLOAT);
+		this.canvas = new Texture(GL_RGBA32F, this.canvasWidth, this.canvasHeight, 0, 0, 0, 255);
+
+		this.canvasFramebuffer = new Framebuffer(this.canvasWidth, this.canvasHeight);
+		this.canvasFramebuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.canvas.getID());
+		this.canvasFramebuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
+		this.canvasFramebuffer.isComplete();
 
 		//display target and canvas to user
 		{
-			AdjustableWindow targetV = new AdjustableWindow("Target", new TextureViewerWindow(this.target), this);
-			AdjustableWindow canvasV = new AdjustableWindow("Canvas", new TextureViewerWindow(this.canvas), this);
+			this.targetW = new AdjustableWindow("Target", new TextureViewerWindow(this.target), this);
+			this.canvasW = new AdjustableWindow("Canvas", new TextureViewerWindow(this.canvas), this);
 		}
 
 		//set up shader buffers
@@ -173,14 +197,83 @@ public class GeneticImageBuilder extends Window {
 		this.scoreBuffer.setSize(GENERATION_POPULATION * 4);//float for each sprite
 
 		//init shaders
-		this.deltaShader = ShaderUtils.createShader("/genetic_image_builder/calc_delta.compute", GL_COMPUTE_SHADER);
-		this.drawShader = ShaderUtils.createShader("/genetic_image_builder/draw_sprite.compute", GL_COMPUTE_SHADER);
+		this.scoreShader = ShaderUtils.createShader("/genetic_image_builder/calc_score.vert", "/genetic_image_builder/calc_score.frag");
+		this.scoreShader.setUniform1i("tex_spritesheet", 0);
+		this.drawShader = ShaderUtils.createShader("/genetic_image_builder/draw_sprite.vert", "/genetic_image_builder/draw_sprite.frag");
+		this.drawShader.setUniform1i("tex_spritesheet", 0);
+
+		//set up vertex array buffers
+		float[] vertices = new float[] { 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, };
+		int[] indices = new int[] { 0, 1, 2, 0, 2, 3, };
+
+		this.vao = glGenVertexArrays();
+		glBindVertexArray(this.vao);
+
+		this.vbo = glGenBuffers(); //vertices
+		glBindBuffer(GL_ARRAY_BUFFER, this.vbo);
+		glBufferData(GL_ARRAY_BUFFER, BufferUtils.createFloatBuffer(vertices), GL_STATIC_DRAW);
+		glVertexAttribPointer(VERTEX_LOC, 3, GL_FLOAT, false, 0, 0);
+		glEnableVertexAttribArray(VERTEX_LOC);
+
+		this.ibo = glGenBuffers(); //indices
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, BufferUtils.createIntBuffer(indices), GL_STATIC_DRAW);
+
+		this.mat4bo = glGenBuffers(); //model mat4s
+		glBindBuffer(GL_ARRAY_BUFFER, this.mat4bo);
+		glBufferData(GL_ARRAY_BUFFER, GENERATION_POPULATION * 16 * 4, GL_DYNAMIC_DRAW);
+
+		this.huebo = glGenBuffers(); //hue
+		glBindBuffer(GL_ARRAY_BUFFER, this.huebo);
+		glBufferData(GL_ARRAY_BUFFER, GENERATION_POPULATION * 4 * 4, GL_DYNAMIC_DRAW);
+
+		this.uvbo = glGenBuffers(); //uvs
+		glBindBuffer(GL_ARRAY_BUFFER, this.uvbo);
+		glBufferData(GL_ARRAY_BUFFER, GENERATION_POPULATION * 4 * 4, GL_DYNAMIC_DRAW);
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
+	}
+
+	@Override
+	public void handleFiles(File[] files) {
+		if (files.length != 1) {
+			return;
+		}
+
+		//parse as buffered image
+		BufferedImage img = FileUtils.loadImage(files[0]);
+		this.setTarget(img);
+	}
+
+	private void setTarget(BufferedImage img) {
+		this.isBuilding = false;
+
+		this.canvasFramebuffer.kill();
+		this.target.kill();
+
+		this.target = new Texture(img, 0, GL_RGBA32F, GL_NEAREST, GL_NEAREST, 1);
+		this.canvasWidth = this.target.getWidth();
+		this.canvasHeight = this.target.getHeight();
+		this.canvas = new Texture(GL_RGBA32F, this.canvasWidth, this.canvasHeight, 0, 0, 0, 255);
+
+		this.canvasFramebuffer = new Framebuffer(this.canvasWidth, this.canvasHeight);
+		this.canvasFramebuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.canvas.getID());
+		this.canvasFramebuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
+		this.canvasFramebuffer.isComplete();
+
+		((TextureViewerWindow) this.targetW.getContentWindow()).setTexture(this.target);
+		((TextureViewerWindow) this.canvasW.getContentWindow()).setTexture(this.canvas);
+
+		this.nrBuiltSprites = 0;
 	}
 
 	@Override
 	protected void _kill() {
 		this.target.kill();
 		this.canvas.kill();
+		this.canvasFramebuffer.kill();
 		this.spriteTexture.kill();
 
 		this.invMat4Buffer.kill();
@@ -188,7 +281,7 @@ public class GeneticImageBuilder extends Window {
 		this.uvBuffer.kill();
 		this.scoreBuffer.kill();
 
-		this.deltaShader.kill();
+		this.scoreShader.kill();
 		this.drawShader.kill();
 	}
 
@@ -205,6 +298,15 @@ public class GeneticImageBuilder extends Window {
 	@Override
 	protected void _update() {
 		if (this.isBuilding) {
+			//set some opengl stuff
+			glViewport(0, 0, this.canvasWidth, this.canvasHeight);
+			glDisable(GL_DEPTH_TEST);
+			glEnable(GL_BLEND);
+			glDisable(GL_CULL_FACE);
+			glDisable(GL_BLEND);
+			glPolygonMode(GL_FRONT, GL_FILL);
+			Mat4 pr_matrix = Mat4.orthographic(0, this.canvasWidth, 0, this.canvasHeight, -100, 100);
+
 			//initialize population
 			SpriteInstance[] pop = new SpriteInstance[GENERATION_POPULATION];
 			for (int i = 0; i < pop.length; i++) {
@@ -212,46 +314,59 @@ public class GeneticImageBuilder extends Window {
 			}
 
 			int gen_cnt = 0;
-			for (int i = 0; i < NR_GENERATIONS || pop[0].score > SURVIVE_SCORE_THRESHOLD; i++) {
+			for (int i = 0; (i < NR_GENERATIONS || pop[0].score > PASS_SCORE_THRESHOLD) && (gen_cnt < GENERATION_CUTOFF); i++) {
 				gen_cnt++;
 
 				//populate buffers
-				float[] invMat4Data = new float[GENERATION_POPULATION * 16];
-				float[] materialData = new float[GENERATION_POPULATION * 4];
-				float[] uvData = new float[GENERATION_POPULATION * 4];
+				Mat4[] mat4s = new Mat4[GENERATION_POPULATION];
+				Vec4[] hues = new Vec4[GENERATION_POPULATION];
+				Vec4[] uvs = new Vec4[GENERATION_POPULATION];
+				int[] sprite_ids = new int[GENERATION_POPULATION];
+
 				for (int j = 0; j < pop.length; j++) {
-					float[] matFloats = pop[j].generateInvTransform().toFloatArray();
-					for (int k = 0; k < 16; k++) {
-						invMat4Data[j * 16 + k] = matFloats[k];
-					}
-					materialData[j * 4 + 0] = pop[j].hue.x;
-					materialData[j * 4 + 1] = pop[j].hue.y;
-					materialData[j * 4 + 2] = pop[j].hue.z;
-					materialData[j * 4 + 3] = pop[j].hue.w;
-					uvData[j * 4 + 0] = this.sprites[pop[j].ID].uv_00.x;
-					uvData[j * 4 + 1] = this.sprites[pop[j].ID].uv_00.y;
-					uvData[j * 4 + 2] = this.sprites[pop[j].ID].uv_11.x;
-					uvData[j * 4 + 3] = this.sprites[pop[j].ID].uv_11.y;
+					mat4s[j] = pop[j].generateTransform();
+					hues[j] = pop[j].hue;
+					uvs[j] = new Vec4(this.sprites[pop[j].ID].uv_00, this.sprites[pop[j].ID].uv_11);
+					sprite_ids[j] = j;
 				}
-				this.invMat4Buffer.setSubData(invMat4Data, 0);
-				this.materialBuffer.setSubData(materialData, 0);
-				this.uvBuffer.setSubData(uvData, 0);
+
+				glBindVertexArray(this.vao);
+				glBindBuffer(GL_ARRAY_BUFFER, this.mat4bo);
+				glBufferSubData(GL_ARRAY_BUFFER, 0, BufferUtils.createFloatBuffer(mat4s));
+				for (int j = 0; j < 4; j++) {
+					glVertexAttribPointer(INSTANCED_MAT4_LOC + j, 4, GL_FLOAT, false, 16 * 4, 16 * j);
+					glVertexAttribDivisor(INSTANCED_MAT4_LOC + j, 1);
+					glEnableVertexAttribArray(INSTANCED_MAT4_LOC + j);
+				}
+
+				glBindBuffer(GL_ARRAY_BUFFER, this.huebo);
+				glBufferSubData(GL_ARRAY_BUFFER, 0, BufferUtils.createFloatBuffer(hues));
+				glVertexAttribPointer(INSTANCED_HUE_LOC, 4, GL_FLOAT, false, 4 * 4, 0);
+				glVertexAttribDivisor(INSTANCED_HUE_LOC, 1);
+				glEnableVertexAttribArray(INSTANCED_HUE_LOC);
+
+				glBindBuffer(GL_ARRAY_BUFFER, this.uvbo);
+				glBufferSubData(GL_ARRAY_BUFFER, 0, BufferUtils.createFloatBuffer(uvs));
+				glVertexAttribPointer(INSTANCED_UV_LOC, 4, GL_FLOAT, false, 4 * 4, 0);
+				glVertexAttribDivisor(INSTANCED_UV_LOC, 1);
+				glEnableVertexAttribArray(INSTANCED_UV_LOC);
+
+				this.scoreBuffer.setSubData(new float[GENERATION_POPULATION], 0);
 
 				//compute scores
-				this.deltaShader.enable();
-				this.deltaShader.setUniform1i("canvas_width", this.canvasWidth);
-				this.deltaShader.setUniform1i("canvas_height", this.canvasHeight);
-
-				this.invMat4Buffer.bindToBase(0);
-				this.materialBuffer.bindToBase(1);
-				this.uvBuffer.bindToBase(2);
+				this.canvasFramebuffer.bind();
+				this.scoreShader.enable();
+				this.scoreShader.setUniformMat4("pr_matrix", pr_matrix);
+				this.scoreShader.setUniform1i("canvas_width", this.canvasWidth);
+				this.scoreShader.setUniform1i("canvas_height", this.canvasHeight);
+				this.spriteTexture.bind(GL_TEXTURE0);
+				glBindImageTexture(1, this.canvas.getID(), 0, true, 0, GL_READ_WRITE, GL_RGBA32F);
+				glBindImageTexture(2, this.target.getID(), 0, true, 0, GL_READ_WRITE, GL_RGBA32F);
 				this.scoreBuffer.bindToBase(3);
-				glBindImageTexture(4, this.canvas.getID(), 0, true, 0, GL_READ_WRITE, GL_RGBA32F);
-				glBindImageTexture(5, this.target.getID(), 0, true, 0, GL_READ_ONLY, GL_RGBA32F);
-				this.spriteTexture.bind(GL_TEXTURE6);
 
-				glDispatchCompute(GENERATION_POPULATION, 1, 1);
-				glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+				glBindVertexArray(this.vao);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this.ibo);
+				glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, GENERATION_POPULATION);
 
 				//reproduce
 				float[] scoreData = new float[GENERATION_POPULATION];
@@ -260,6 +375,7 @@ public class GeneticImageBuilder extends Window {
 					pop[j].score = scoreData[j];
 				}
 				Arrays.sort(pop, (a, b) -> Float.compare(a.score, b.score));
+				System.out.println("Generation " + gen_cnt + " best score : " + pop[0].score);
 				int nr_survived = pop.length;
 				for (int j = 0; j < pop.length; j++) {
 					if (pop[j].score > SURVIVE_SCORE_THRESHOLD) {
@@ -294,29 +410,32 @@ public class GeneticImageBuilder extends Window {
 				if (nr_survived == 0) {
 					i--;
 				}
-				System.out.println("Generation " + gen_cnt + " best score : " + pop[0].score);
 			}
 
-			System.out.println("Found score : " + pop[0].score + " after " + gen_cnt + " generations");
-			System.out.println(pop[0].scale + " " + pop[0].rot + " " + pop[0].offset + " " + pop[0].hue);
+			if (gen_cnt == GENERATION_CUTOFF) {
+				System.out.println("Spent " + GENERATION_CUTOFF + " generations, but nothing passed. Toggling off building.");
+				this.isBuilding = false;
+			}
+			else {
+				this.nrBuiltSprites++;
+				System.out.println("Found sprite no. " + this.nrBuiltSprites + " score " + pop[0].score + " after " + gen_cnt + " generations");
 
-			//choose sprite with best score and add to canvas
-			this.drawShader.enable();
-			this.drawShader.setUniform1i("canvas_width", this.canvas.getWidth());
-			this.drawShader.setUniform1i("canvas_height", this.canvas.getHeight());
+				//choose sprite with best score and add to canvas
+				this.canvasFramebuffer.bind();
+				this.drawShader.enable();
+				this.drawShader.setUniformMat4("md_matrix", pop[0].generateTransform());
+				this.drawShader.setUniform4f("hue", pop[0].hue);
+				this.drawShader.setUniform4f("uv", new Vec4(this.sprites[pop[0].ID].uv_00, this.sprites[pop[0].ID].uv_11));
+				this.drawShader.setUniformMat4("pr_matrix", pr_matrix);
+				this.spriteTexture.bind(GL_TEXTURE0);
+				glBindImageTexture(1, this.canvas.getID(), 0, true, 0, GL_READ_WRITE, GL_RGBA32F);
+				glBindImageTexture(2, this.target.getID(), 0, true, 0, GL_READ_WRITE, GL_RGBA32F);
 
-			Mat4 inv = pop[0].generateInvTransform();
-			inv.transpose();
-			this.drawShader.setUniformMat4("inv_model_mat", inv);
-			this.drawShader.setUniform4f("sprite_material", pop[0].hue);
-			this.drawShader.setUniform2f("uv_00", this.sprites[pop[0].ID].uv_00);
-			this.drawShader.setUniform2f("uv_11", this.sprites[pop[0].ID].uv_11);
+				glBindVertexArray(this.vao);
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this.ibo);
+				glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+			}
 
-			glBindImageTexture(0, this.canvas.getID(), 0, true, 0, GL_READ_WRITE, GL_RGBA32F);
-			this.spriteTexture.bind(GL_TEXTURE1);
-
-			glDispatchCompute(1, 1, 1);
-			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 		}
 	}
 
@@ -380,6 +499,10 @@ public class GeneticImageBuilder extends Window {
 		case GLFW_KEY_T:
 			this.isBuilding = !this.isBuilding;
 			break;
+
+		case GLFW_KEY_C:
+			AdjustableWindow adj = new AdjustableWindow("Select Target Image", new FileExplorerWindow(this), this);
+			break;
 		}
 	}
 
@@ -398,17 +521,12 @@ public class GeneticImageBuilder extends Window {
 
 		//generate with some random attributes
 		public SpriteInstance() {
-			//			this.ID = 0;
-			//			this.rot = 0;
-			//			this.scale = 50;
-			//			this.offset = new Vec2(MathUtils.random(0, canvasWidth), MathUtils.random(0, canvasHeight));
-			//			this.hue = new Vec4(1);
-
 			this.ID = (int) (Math.random() * sprites.length);
 			this.rot = (float) (Math.random() * Math.PI * 2.0);
-			this.scale = MathUtils.random(25, 500);
+			this.scale = MathUtils.random(5, 100);
 			this.offset = new Vec2(MathUtils.random(0, canvasWidth), MathUtils.random(0, canvasHeight));
 			this.hue = new Vec4(Math.random(), Math.random(), Math.random(), 1);
+			this.hue.w = 1;
 		}
 
 		public SpriteInstance(SpriteInstance other) {
@@ -450,6 +568,7 @@ public class GeneticImageBuilder extends Window {
 			else if (p < 0.50) {
 				//modify scale
 				this.scale *= MathUtils.random(0.75f, 1.33f);
+				this.scale = Math.min(this.scale, 500);
 			}
 			else if (p < 0.75) {
 				//modify offset
