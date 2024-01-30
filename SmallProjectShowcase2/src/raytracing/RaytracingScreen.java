@@ -214,6 +214,10 @@ public class RaytracingScreen extends Screen {
 		this.bvhManager.build();
 	}
 
+	public Texture getPrevRenderColorMap() {
+		return this.prevRenderColorMap;
+	}
+
 	private void setRaytracingShaderUniforms() {
 		this.camera.setProjectionMatrix(Mat4.perspective((float) Math.toRadians(this.options.fov), this.screenWidth, this.screenHeight, 0.1f, 200f));
 		Vec3 cameraRight = this.camera.getFacing().cross(this.camera.getUp());

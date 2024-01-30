@@ -36,14 +36,13 @@ public class BackgroundWindow extends Window {
 	// - 3D Model Animations
 	// - Doom style level editor
 	// - Gaussian Splatting
-	//   - this one is a stretch lol
+	//   - this one is a stretch lol, but as i'm doing research in this area, maybe??
 	// - Tile based bread board
 	// - Wave Function Collapse
 	// - 3D mesh rigid and softbody physics
 	// - 2D Terrain Shadow Casting
 	//   - https://www.youtube.com/watch?v=bMTeCqNkId8
-	// - Layered Material Painting? 
-	//   - need to find the proper name for this
+	// - Vertex Painting
 	//   - https://www.youtube.com/watch?v=On64nNkjJpQ
 
 	private final int BACKGROUND_SCENE = Scene.generateScene();

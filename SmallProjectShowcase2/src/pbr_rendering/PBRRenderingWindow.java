@@ -42,6 +42,7 @@ import lwjglengine.screen.SkyboxCube;
 import lwjglengine.util.BufferUtils;
 import lwjglengine.window.AdjustableWindow;
 import lwjglengine.window.FileExplorerWindow;
+import lwjglengine.window.FileSelectorWindow;
 import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
@@ -184,7 +185,7 @@ public class PBRRenderingWindow extends Window {
 	public void handleContextMenuAction(String action) {
 		switch (action) {
 		case "Load File": {
-			FileExplorerWindow fileExplorer = new FileExplorerWindow(this);
+			FileSelectorWindow fileExplorer = new FileSelectorWindow(this);
 			AdjustableWindow fileExplorerAdj = new AdjustableWindow("Select File", fileExplorer, this);
 			fileExplorer.setSingleEntrySelection(true);
 			break;

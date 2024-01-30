@@ -18,6 +18,7 @@ import lwjglengine.ui.UIFilledRectangle;
 import lwjglengine.ui.UISection;
 import lwjglengine.window.AdjustableWindow;
 import lwjglengine.window.FileExplorerWindow;
+import lwjglengine.window.FileSelectorWindow;
 import lwjglengine.window.TextEditorWindow;
 import lwjglengine.window.Window;
 import myutils.file.FileUtils;
@@ -66,7 +67,7 @@ public class VectorArtWindow extends Window {
 	public void handleContextMenuAction(String action) {
 		switch (action) {
 		case "Load svg": {
-			FileExplorerWindow fileExplorer = new FileExplorerWindow(this);
+			FileSelectorWindow fileExplorer = new FileSelectorWindow(this);
 			fileExplorer.setSingleEntrySelection(true);
 			AdjustableWindow adjWindow = new AdjustableWindow(fileExplorer, this);
 			break;

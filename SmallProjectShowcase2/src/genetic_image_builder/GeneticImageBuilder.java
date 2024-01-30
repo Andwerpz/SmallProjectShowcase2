@@ -44,7 +44,9 @@ import lwjglengine.screen.ScreenQuad;
 import lwjglengine.util.BufferUtils;
 import lwjglengine.util.ShaderUtils;
 import lwjglengine.window.AdjustableWindow;
+import lwjglengine.window.FileCreatorWindow;
 import lwjglengine.window.FileExplorerWindow;
+import lwjglengine.window.FileSelectorWindow;
 import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
 import myutils.file.FileUtils;
@@ -65,9 +67,9 @@ public class GeneticImageBuilder extends Window {
 	private static final int NR_GENERATIONS = 16;
 	private static final int GENERATION_POPULATION = 1024;
 	private static final float SURVIVE_SCORE_THRESHOLD = 5;
-	private static final float PASS_SCORE_THRESHOLD = -5;
+	private static final float PASS_SCORE_THRESHOLD = -3;
 	private static final int SURVIVE_MAX = 64;
-	private static final int GENERATION_CUTOFF = 500;
+	private static final int GENERATION_CUTOFF = 1000;
 
 	private Texture target, canvas;
 	private AdjustableWindow targetW, canvasW;
@@ -500,9 +502,16 @@ public class GeneticImageBuilder extends Window {
 			this.isBuilding = !this.isBuilding;
 			break;
 
-		case GLFW_KEY_C:
-			AdjustableWindow adj = new AdjustableWindow("Select Target Image", new FileExplorerWindow(this), this);
+		case GLFW_KEY_C: {
+			AdjustableWindow adj = new AdjustableWindow("Select Target Image", new FileSelectorWindow(this), this);
 			break;
+		}
+
+		case GLFW_KEY_S: {
+			BufferedImage img = this.canvas.toBufferedImage();
+			AdjustableWindow adj = new AdjustableWindow("Save Image As", new FileCreatorWindow(img), this);
+			break;
+		}
 		}
 	}
 
