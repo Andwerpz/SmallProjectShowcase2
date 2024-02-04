@@ -47,6 +47,7 @@ import lwjglengine.window.AdjustableWindow;
 import lwjglengine.window.FileCreatorWindow;
 import lwjglengine.window.FileExplorerWindow;
 import lwjglengine.window.FileSelectorWindow;
+import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
 import myutils.file.FileUtils;
@@ -64,12 +65,9 @@ public class GeneticImageBuilder extends Window {
 	private Texture spriteTexture;
 	private Sprite[] sprites;
 
-	private static final int NR_GENERATIONS = 16;
 	private static final int GENERATION_POPULATION = 1024;
-	private static final float SURVIVE_SCORE_THRESHOLD = 5;
-	private static final float PASS_SCORE_THRESHOLD = -3;
-	private static final int SURVIVE_MAX = 64;
-	private static final int GENERATION_CUTOFF = 1000;
+
+	private RenderOptions renderOptions;
 
 	private Texture target, canvas;
 	private AdjustableWindow targetW, canvasW;
@@ -95,6 +93,13 @@ public class GeneticImageBuilder extends Window {
 
 	public GeneticImageBuilder(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
+
+		this.renderOptions = new RenderOptions();
+
+		//options menu
+		{
+			AdjustableWindow adj = new AdjustableWindow("Rendering Options", new ObjectEditorWindow(this.renderOptions), this);
+		}
 
 		//load spritesheet
 		this.spriteTexture = new Texture("/res/GD_decor/GJ_GameSheet-hd.png");
@@ -249,15 +254,8 @@ public class GeneticImageBuilder extends Window {
 		this.setTarget(img);
 	}
 
-	private void setTarget(BufferedImage img) {
-		this.isBuilding = false;
-
+	private void resetCanvas() {
 		this.canvasFramebuffer.kill();
-		this.target.kill();
-
-		this.target = new Texture(img, 0, GL_RGBA32F, GL_NEAREST, GL_NEAREST, 1);
-		this.canvasWidth = this.target.getWidth();
-		this.canvasHeight = this.target.getHeight();
 		this.canvas = new Texture(GL_RGBA32F, this.canvasWidth, this.canvasHeight, 0, 0, 0, 255);
 
 		this.canvasFramebuffer = new Framebuffer(this.canvasWidth, this.canvasHeight);
@@ -265,8 +263,23 @@ public class GeneticImageBuilder extends Window {
 		this.canvasFramebuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
 		this.canvasFramebuffer.isComplete();
 
-		((TextureViewerWindow) this.targetW.getContentWindow()).setTexture(this.target);
 		((TextureViewerWindow) this.canvasW.getContentWindow()).setTexture(this.canvas);
+
+		this.nrBuiltSprites = 0;
+	}
+
+	private void setTarget(BufferedImage img) {
+		this.isBuilding = false;
+
+		this.target.kill();
+
+		this.target = new Texture(img, 0, GL_RGBA32F, GL_NEAREST, GL_NEAREST, 1);
+		this.canvasWidth = this.target.getWidth();
+		this.canvasHeight = this.target.getHeight();
+
+		((TextureViewerWindow) this.targetW.getContentWindow()).setTexture(this.target);
+
+		this.resetCanvas();
 
 		this.nrBuiltSprites = 0;
 	}
@@ -316,7 +329,7 @@ public class GeneticImageBuilder extends Window {
 			}
 
 			int gen_cnt = 0;
-			for (int i = 0; (i < NR_GENERATIONS || pop[0].score > PASS_SCORE_THRESHOLD) && (gen_cnt < GENERATION_CUTOFF); i++) {
+			for (int i = 0; (i < this.renderOptions.nrGenerations || pop[0].score > this.renderOptions.passScoreThreshold) && (gen_cnt < this.renderOptions.generationCutoff); i++) {
 				gen_cnt++;
 
 				//populate buffers
@@ -380,12 +393,12 @@ public class GeneticImageBuilder extends Window {
 				System.out.println("Generation " + gen_cnt + " best score : " + pop[0].score);
 				int nr_survived = pop.length;
 				for (int j = 0; j < pop.length; j++) {
-					if (pop[j].score > SURVIVE_SCORE_THRESHOLD) {
+					if (pop[j].score > this.renderOptions.surviveScoreThreshold) {
 						nr_survived = j;
 						break;
 					}
 				}
-				nr_survived = Math.min(nr_survived, SURVIVE_MAX);
+				nr_survived = Math.min(nr_survived, this.renderOptions.surviveMax);
 				if (nr_survived == 0) {
 					//regenerate everyone
 					for (int j = 0; j < pop.length; j++) {
@@ -414,8 +427,8 @@ public class GeneticImageBuilder extends Window {
 				}
 			}
 
-			if (gen_cnt == GENERATION_CUTOFF) {
-				System.out.println("Spent " + GENERATION_CUTOFF + " generations, but nothing passed. Toggling off building.");
+			if (gen_cnt == this.renderOptions.generationCutoff) {
+				System.out.println("Spent " + this.renderOptions.generationCutoff + " generations, but nothing passed. Toggling off building.");
 				this.isBuilding = false;
 			}
 			else {
@@ -510,6 +523,11 @@ public class GeneticImageBuilder extends Window {
 		case GLFW_KEY_S: {
 			BufferedImage img = this.canvas.toBufferedImage();
 			AdjustableWindow adj = new AdjustableWindow("Save Image As", new FileCreatorWindow(img), this);
+			break;
+		}
+
+		case GLFW_KEY_R: {
+			this.resetCanvas();
 			break;
 		}
 		}
@@ -613,4 +631,55 @@ public class GeneticImageBuilder extends Window {
 		}
 	}
 
+	public class RenderOptions {
+		public int nrGenerations = 16;
+		public float surviveScoreThreshold = 5;
+		public float passScoreThreshold = -30;
+		public int surviveMax = 64;
+		public int generationCutoff = 1000;
+
+		public RenderOptions() {
+
+		}
+
+		public int getNrGenerations() {
+			return nrGenerations;
+		}
+
+		public void setNrGenerations(int nrGenerations) {
+			this.nrGenerations = nrGenerations;
+		}
+
+		public float getSurviveScoreThreshold() {
+			return surviveScoreThreshold;
+		}
+
+		public void setSurviveScoreThreshold(float surviveScoreThreshold) {
+			this.surviveScoreThreshold = surviveScoreThreshold;
+		}
+
+		public float getPassScoreThreshold() {
+			return passScoreThreshold;
+		}
+
+		public void setPassScoreThreshold(float passScoreThreshold) {
+			this.passScoreThreshold = passScoreThreshold;
+		}
+
+		public int getSurviveMax() {
+			return surviveMax;
+		}
+
+		public void setSurviveMax(int surviveMax) {
+			this.surviveMax = surviveMax;
+		}
+
+		public int getGenerationCutoff() {
+			return generationCutoff;
+		}
+
+		public void setGenerationCutoff(int generationCutoff) {
+			this.generationCutoff = generationCutoff;
+		}
+	}
 }
