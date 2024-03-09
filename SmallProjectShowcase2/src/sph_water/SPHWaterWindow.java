@@ -464,23 +464,23 @@ public class SPHWaterWindow extends Window {
 	}
 
 	public class SPHWaterSettings {
-		private Vec2 gravity = new Vec2(0, -30);
+		public Vec2 gravity = new Vec2(0, -30);
 
-		private float boundaryDamping = 0.5f;
+		public float boundaryDamping = 0.5f;
 
-		private float viscosityStrength = 0.25f;
+		public float viscosityStrength = 0.25f;
 
-		private float pressureMultiplier = 50f;
-		private float nearPressureMultiplier = 0.1f;
-		private float predictDeltaTime = 1.0f / 60.0f;
+		public float pressureMultiplier = 50f;
+		public float nearPressureMultiplier = 0.1f;
+		public float predictDeltaTime = 1.0f / 60.0f;
 
-		private float targetDensity = 1f;
+		public float targetDensity = 1f;
 
-		private float interactionStrength = 150f;
-		private float interactionRadius = 25f;
+		public float interactionStrength = 150f;
+		public float interactionRadius = 25f;
 
-		private boolean renderMetaballs = true;
-		private boolean renderParticles = false;
+		public boolean renderMetaballs = true;
+		public boolean renderParticles = false;
 
 		public SPHWaterSettings() {
 			gravity = new Vec2(0, -30);

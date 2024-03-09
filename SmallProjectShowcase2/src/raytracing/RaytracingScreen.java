@@ -188,14 +188,22 @@ public class RaytracingScreen extends Screen {
 		if (this.renderMode == RENDER_MODE_RENDER) {
 			return;
 		}
+		if (this.camera.getPos().equals(pos)) {
+			return;
+		}
 		this.camera.setPos(pos);
+		this.numRenderedFrames = 0;
 	}
 
 	public void setCameraFacing(Vec3 facing) {
 		if (this.renderMode == RENDER_MODE_RENDER) {
 			return;
 		}
+		if (this.camera.getFacing().equals(facing)) {
+			return;
+		}
 		this.camera.setFacing(facing);
+		this.numRenderedFrames = 0;
 	}
 
 	public void addBVHInstance(BVH bvh, Mat4 transform) {
@@ -258,9 +266,6 @@ public class RaytracingScreen extends Screen {
 		//at the end, the hdr output should be in prevRenderColorMap
 		switch (this.renderMode) {
 		case RENDER_MODE_PREVIEW: {
-			this.numRenderedFrames = 0;
-
-			//render
 			renderBuffer.bind();
 			glDisable(GL_DEPTH_TEST);
 			glDisable(GL_CULL_FACE);
@@ -274,6 +279,18 @@ public class RaytracingScreen extends Screen {
 			this.prevRenderColorMap.bind(GL_TEXTURE0);
 			Scene.skyboxes.get(this.raytracingScene).bind(GL_TEXTURE1);
 			SkyboxCube.skyboxCube.render();
+
+			this.numRenderedFrames++;
+
+			//render to prev buffer
+			prevRenderBuffer.bind();
+			glClear(GL_COLOR_BUFFER_BIT);
+			glDisable(GL_DEPTH_TEST);
+			glEnable(GL_BLEND);
+			this.renderColorMap.bind(GL_TEXTURE0);
+			Shader.SPLASH.enable();
+			Shader.SPLASH.setUniform1f("alpha", 1f);
+			screenQuad.render();
 
 			this.outputBuffer.bind();
 			glClear(GL_COLOR_BUFFER_BIT);
@@ -391,6 +408,7 @@ public class RaytracingScreen extends Screen {
 
 	public void setRenderMode(int renderMode) {
 		this.renderMode = renderMode;
+		this.numRenderedFrames = 0;
 	}
 
 	public int getRenderMode() {
