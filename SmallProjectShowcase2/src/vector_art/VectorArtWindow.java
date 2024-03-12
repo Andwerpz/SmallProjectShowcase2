@@ -64,15 +64,20 @@ public class VectorArtWindow extends Window {
 	//     the other. 
 	//   - if both of them are valid, then we need to determine the correct ordering. This shouldn't be too hard, as the vector
 	//     in the correct order should be facing in the direction from v0 to v3. 
+	// - fix path polygon generation
+	//   - my assumption that v0 and v3 are automatically in the polygon is false; this is only the case
+	//     when the convex hull for the curve includes v0 and v3. 
 
 	private final int CONTROL_SCENE = Scene.generateScene();
 	private final int CONVEX_HULL_SCENE = Scene.generateScene();
 	private final int POLY_SCENE = Scene.generateScene();
+	private final int TRIANGLE_SCENE = Scene.generateScene();
 	private final int GRIDLINE_SCENE = Scene.generateScene();
 
 	private boolean renderControlScene = true;
 	private boolean renderConvexHullScene = false;
 	private boolean renderPolyScene = false;
+	private boolean renderTriangleScene = false;
 
 	private UIScreen uiScreen;
 	private UISection uiSection;
@@ -186,6 +191,8 @@ public class VectorArtWindow extends Window {
 		Scene.removeScene(CONTROL_SCENE);
 		Scene.removeScene(GRIDLINE_SCENE);
 		Scene.removeScene(CONVEX_HULL_SCENE);
+		Scene.removeScene(POLY_SCENE);
+		Scene.removeScene(TRIANGLE_SCENE);
 	}
 
 	@Override
@@ -326,21 +333,26 @@ public class VectorArtWindow extends Window {
 
 		this.uiScreen.setUIScene(GRIDLINE_SCENE);
 		this.uiScreen.render(outputBuffer);
-
-		if (this.renderControlScene) {
-			this.uiScreen.setUIScene(CONTROL_SCENE);
+		
+		if(this.renderTriangleScene) {
+			this.uiScreen.setUIScene(TRIANGLE_SCENE);
 			this.uiScreen.render(outputBuffer);
 		}
-
+		
+		if (this.renderPolyScene) {
+			this.uiScreen.setUIScene(POLY_SCENE);
+			this.uiScreen.render(outputBuffer);
+		}
+		
 		if (this.renderConvexHullScene) {
 			this.uiScreen.setUIScene(CONVEX_HULL_SCENE);
 			this.uiScreen.render(outputBuffer);
 		}
 
-		if (this.renderPolyScene) {
-			this.uiScreen.setUIScene(POLY_SCENE);
+		if (this.renderControlScene) {
+			this.uiScreen.setUIScene(CONTROL_SCENE);
 			this.uiScreen.render(outputBuffer);
-		}
+		}		
 
 		this.uiSection.render(outputBuffer, this.getWindowMousePos());
 	}
@@ -426,6 +438,10 @@ public class VectorArtWindow extends Window {
 		case GLFW_KEY_P:
 			this.renderPolyScene = !this.renderPolyScene;
 			break;
+			
+		case GLFW_KEY_T:
+			this.renderTriangleScene = !this.renderTriangleScene;
+			break;
 		}
 	}
 
@@ -433,12 +449,14 @@ public class VectorArtWindow extends Window {
 	protected void _keyReleased(int key) {
 		this.uiSection.keyReleased(key);
 	}
-
+	
+	//winding order for path is always CCW
 	class Path {
 		boolean isVisible = false;
 		ArrayList<Curve> curves;
 
 		ArrayList<ModelInstance> poly_lines;
+		ArrayList<ModelInstance> tri_lines;
 
 		Path(Path other) {
 			this.curves = new ArrayList<>();
@@ -448,6 +466,7 @@ public class VectorArtWindow extends Window {
 			this.setVisible(other.isVisible);
 
 			this.poly_lines = new ArrayList<>();
+			this.tri_lines = new ArrayList<>();
 		}
 
 		Path(List<Vec2[]> cubics) {
@@ -460,8 +479,24 @@ public class VectorArtWindow extends Window {
 				}
 				this.curves.add(new Curve(v));
 			}
+			
+			//make sure winding order is CCW
+			{
+				ArrayList<Vec2> poly = new ArrayList<>();
+				for(Curve c : this.curves) {
+					poly.add(c.v0);
+				}
+				if(!MathUtils.isCounterClockwiseWinding(poly)) {
+					//reverse everything 
+					for(Curve c : this.curves) {
+						c.reverse();
+					}
+					Collections.reverse(this.curves);
+				}
+			}
 
 			this.poly_lines = new ArrayList<>();
+			this.tri_lines = new ArrayList<>();
 		}
 
 		void setVisible(boolean b) {
@@ -470,6 +505,11 @@ public class VectorArtWindow extends Window {
 					m.kill();
 				}
 				this.poly_lines.clear();
+				
+				for(ModelInstance m : this.tri_lines) {
+					m.kill();
+				}
+				this.tri_lines.clear();
 			}
 
 			this.isVisible = b;
@@ -478,6 +518,7 @@ public class VectorArtWindow extends Window {
 			}
 
 			if (this.isVisible) {
+				//polygon lines
 				ArrayList<Vec2> poly = this.generatePolygon();
 				for (int i = 0; i < poly.size(); i++) {
 					Vec2 v0 = poly.get(i);
@@ -485,6 +526,44 @@ public class VectorArtWindow extends Window {
 					ModelInstance m = Line.addLine(v0, v1, POLY_SCENE);
 					m.setMaterial(new Material(Color.BLUE));
 					this.poly_lines.add(m);
+				}
+				
+				//triangle lines
+				ArrayList<int[]> tris = MathUtils.calculateTrianglePartition(poly);
+				for(int i = 0; i < tris.size(); i++) {
+					int[] inds = tris.get(i);
+					Vec2 t0 = poly.get(inds[0]);
+					Vec2 t1 = poly.get(inds[1]);
+					Vec2 t2 = poly.get(inds[2]);
+					ModelInstance l0 = Line.addLine(t0, t1, TRIANGLE_SCENE);
+					ModelInstance l1 = Line.addLine(t1, t2, TRIANGLE_SCENE);
+					ModelInstance l2 = Line.addLine(t2, t0, TRIANGLE_SCENE);
+					l0.setMaterial(new Material(Color.DARK_GRAY));
+					l1.setMaterial(new Material(Color.DARK_GRAY));
+					l2.setMaterial(new Material(Color.DARK_GRAY));
+					this.tri_lines.add(l0);
+					this.tri_lines.add(l1);
+					this.tri_lines.add(l2);
+				}
+				
+				for(Curve c : this.curves) {
+					ArrayList<Vec2> hull = c.generateHull();
+					ArrayList<int[]> hull_tris = MathUtils.calculateTrianglePartition(hull);
+					for(int i = 0; i < hull_tris.size(); i++) {
+						int[] inds = hull_tris.get(i);
+						Vec2 t0 = hull.get(inds[0]);
+						Vec2 t1 = hull.get(inds[1]);
+						Vec2 t2 = hull.get(inds[2]);
+						ModelInstance l0 = Line.addLine(t0, t1, TRIANGLE_SCENE);
+						ModelInstance l1 = Line.addLine(t1, t2, TRIANGLE_SCENE);
+						ModelInstance l2 = Line.addLine(t2, t0, TRIANGLE_SCENE);
+						l0.setMaterial(new Material(Color.LIGHT_GRAY));
+						l1.setMaterial(new Material(Color.LIGHT_GRAY));
+						l2.setMaterial(new Material(Color.LIGHT_GRAY));
+						this.tri_lines.add(l0);
+						this.tri_lines.add(l1);
+						this.tri_lines.add(l2);
+					}
 				}
 			}
 		}
@@ -514,19 +593,22 @@ public class VectorArtWindow extends Window {
 
 		//assuming that this path is closed, returns a polygon that corresponds to the purely filled in portion of the path. 
 		//the non-purely filled in portions are the curves, and we need to render those seperately. 
-		//fills should be wound CCW and holes CW. 
-		//under this assumption, the polygon should consist of all vertices on the right side of the curves. 
-		//in the convex hull for each curve, this is all points from v0 -> v3 assuming the hull is wound CCW
+		//in the convex hull for each curve, this is all points from v3 -> v0 assuming the hull is wound CCW
 		ArrayList<Vec2> generatePolygon() {
 			ArrayList<Vec2> v_list = new ArrayList<>();
 			for (Curve c : this.curves) {
 				ArrayList<Vec2> hull = c.generateHull();
+				Collections.reverse(hull);
 				int ptr = -1;
 				for (int i = 0; i < hull.size(); i++) {
 					if (hull.get(i).equals(c.v0)) {
 						ptr = i;
 						break;
 					}
+				}
+				if(ptr == -1) {
+					System.err.println("VectorArtWindow : Could not find v0");
+					continue;
 				}
 				while (true) {
 					Vec2 v = hull.get(ptr % hull.size());
@@ -576,6 +658,19 @@ public class VectorArtWindow extends Window {
 
 		void kill() {
 			this.setVisible(false);
+		}
+		
+		void reverse() {
+			{
+				Vec2 tmp = new Vec2(v0);
+				v0.set(v3);
+				v3.set(tmp);
+			}
+			{
+				Vec2 tmp = new Vec2(v1);
+				v1.set(v2);
+				v2.set(tmp);
+			}
 		}
 
 		void setVisible(boolean b) {
