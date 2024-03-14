@@ -1,4 +1,4 @@
-package logic_simulator.logic_component;
+package logic_simulator.component;
 
 public enum TruthValue {
 	TRUE, FALSE, ERROR

@@ -1,8 +1,8 @@
-package logic_simulator.logic_component.logic_gate;
+package logic_simulator.component.gate;
 
-import logic_simulator.logic_component.LogicComponent;
-import logic_simulator.logic_component.LogicComponentInstance;
-import logic_simulator.logic_component.TruthValue;
+import logic_simulator.component.LogicComponent;
+import logic_simulator.component.TruthValue;
+import logic_simulator.component.instance.LogicComponentInstance;
 
 public abstract class LogicGate extends LogicComponent {
 	//most basic logic components. 
