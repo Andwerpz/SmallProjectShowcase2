@@ -442,7 +442,7 @@ public class ProceduralTreesWindow extends Window {
 			private void updateModel() {
 				if (this.branchModelInstance == null) {
 					this.branchModelInstance = new ModelInstance(cylinderModel, WORLD_SCENE);
-					this.lineModelInstance = Line.addLine(this.pos, this.getEndPos(), WORLD_SCENE);
+					this.lineModelInstance = Line.addDefaultLine(this.pos, this.getEndPos(), WORLD_SCENE);
 				}
 
 				float radius = (float) Math.sqrt(this.area / Math.PI);

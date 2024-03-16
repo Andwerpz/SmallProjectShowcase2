@@ -92,7 +92,7 @@ public class CloudBoundingBox {
 		if (this.boundingLines == null) {
 			this.boundingLines = new ModelInstance[12];
 			for (int i = 0; i < this.boundingLines.length; i++) {
-				this.boundingLines[i] = Line.addLine(new Vec3(0), new Vec3(0), this.lineScene);
+				this.boundingLines[i] = Line.addDefaultLine(new Vec3(0), new Vec3(0), this.lineScene);
 			}
 		}
 

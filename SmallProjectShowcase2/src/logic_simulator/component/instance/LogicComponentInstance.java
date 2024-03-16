@@ -18,8 +18,7 @@ import myutils.math.IVec2;
 import myutils.misc.Pair;
 
 public abstract class LogicComponentInstance {
-	//a logic component instance should store exactly 1 gate, or a collection of logic component instances, with the 
-	//runtime values saved. 
+	//a logic component instance should be a self-contained circuit. 
 
 	protected TruthValue[] inputs, outputs;
 

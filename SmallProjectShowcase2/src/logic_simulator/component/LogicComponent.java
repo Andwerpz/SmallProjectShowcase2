@@ -32,6 +32,13 @@ public class LogicComponent {
 
 		this.inputOffsets = new IVec2[nr_inputs];
 		this.outputOffsets = new IVec2[nr_outputs];
+
+		for (int i = 0; i < nr_inputs; i++) {
+			this.inputOffsets[i] = new IVec2(0, 0);
+		}
+		for (int i = 0; i < nr_outputs; i++) {
+			this.outputOffsets[i] = new IVec2(0, 0);
+		}
 	}
 
 	public int getNrInputs() {

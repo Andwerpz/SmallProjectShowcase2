@@ -284,7 +284,7 @@ public class VectorArtWindow extends Window {
 					color = minorColor;
 					z = 0;
 				}
-				ModelInstance line = Line.addLine(x, -1e9f, z, x, 1e9f, z, GRIDLINE_SCENE);
+				ModelInstance line = Line.addDefaultLine(x, -1e9f, z, x, 1e9f, z, GRIDLINE_SCENE);
 				line.setMaterial(new Material(new Vec3(color)));
 				this.verticalGridlines.put(x, line);
 			}
@@ -305,7 +305,7 @@ public class VectorArtWindow extends Window {
 					color = minorColor;
 					z = 0;
 				}
-				ModelInstance line = Line.addLine(-1e9f, y, z, 1e9f, y, z, GRIDLINE_SCENE);
+				ModelInstance line = Line.addDefaultLine(-1e9f, y, z, 1e9f, y, z, GRIDLINE_SCENE);
 				line.setMaterial(new Material(new Vec3(color)));
 				this.horizontalGridlines.put(y, line);
 			}
@@ -523,7 +523,7 @@ public class VectorArtWindow extends Window {
 				for (int i = 0; i < poly.size(); i++) {
 					Vec2 v0 = poly.get(i);
 					Vec2 v1 = poly.get((i + 1) % poly.size());
-					ModelInstance m = Line.addLine(v0, v1, POLY_SCENE);
+					ModelInstance m = Line.addDefaultLine(v0, v1, POLY_SCENE);
 					m.setMaterial(new Material(Color.BLUE));
 					this.poly_lines.add(m);
 				}
@@ -535,9 +535,9 @@ public class VectorArtWindow extends Window {
 					Vec2 t0 = poly.get(inds[0]);
 					Vec2 t1 = poly.get(inds[1]);
 					Vec2 t2 = poly.get(inds[2]);
-					ModelInstance l0 = Line.addLine(t0, t1, TRIANGLE_SCENE);
-					ModelInstance l1 = Line.addLine(t1, t2, TRIANGLE_SCENE);
-					ModelInstance l2 = Line.addLine(t2, t0, TRIANGLE_SCENE);
+					ModelInstance l0 = Line.addDefaultLine(t0, t1, TRIANGLE_SCENE);
+					ModelInstance l1 = Line.addDefaultLine(t1, t2, TRIANGLE_SCENE);
+					ModelInstance l2 = Line.addDefaultLine(t2, t0, TRIANGLE_SCENE);
 					l0.setMaterial(new Material(Color.DARK_GRAY));
 					l1.setMaterial(new Material(Color.DARK_GRAY));
 					l2.setMaterial(new Material(Color.DARK_GRAY));
@@ -554,9 +554,9 @@ public class VectorArtWindow extends Window {
 						Vec2 t0 = hull.get(inds[0]);
 						Vec2 t1 = hull.get(inds[1]);
 						Vec2 t2 = hull.get(inds[2]);
-						ModelInstance l0 = Line.addLine(t0, t1, TRIANGLE_SCENE);
-						ModelInstance l1 = Line.addLine(t1, t2, TRIANGLE_SCENE);
-						ModelInstance l2 = Line.addLine(t2, t0, TRIANGLE_SCENE);
+						ModelInstance l0 = Line.addDefaultLine(t0, t1, TRIANGLE_SCENE);
+						ModelInstance l1 = Line.addDefaultLine(t1, t2, TRIANGLE_SCENE);
+						ModelInstance l2 = Line.addDefaultLine(t2, t0, TRIANGLE_SCENE);
 						l0.setMaterial(new Material(Color.LIGHT_GRAY));
 						l1.setMaterial(new Material(Color.LIGHT_GRAY));
 						l2.setMaterial(new Material(Color.LIGHT_GRAY));
@@ -689,10 +689,10 @@ public class VectorArtWindow extends Window {
 			this.isVisible = b;
 
 			if (this.isVisible) {
-				this.l0 = Line.addLine(v0, v1, CONTROL_SCENE);
-				this.l1 = Line.addLine(v1, v2, CONTROL_SCENE);
-				this.l2 = Line.addLine(v2, v3, CONTROL_SCENE);
-				this.l3 = Line.addLine(v3, v0, CONTROL_SCENE);
+				this.l0 = Line.addDefaultLine(v0, v1, CONTROL_SCENE);
+				this.l1 = Line.addDefaultLine(v1, v2, CONTROL_SCENE);
+				this.l2 = Line.addDefaultLine(v2, v3, CONTROL_SCENE);
+				this.l3 = Line.addDefaultLine(v3, v0, CONTROL_SCENE);
 
 				this.l0.setMaterial(new Material(Color.WHITE));
 				this.l1.setMaterial(new Material(Color.WHITE));
@@ -701,7 +701,7 @@ public class VectorArtWindow extends Window {
 
 				ArrayList<Vec2> convex_hull = this.generateHull();
 				for (int i = 0; i < convex_hull.size(); i++) {
-					ModelInstance m = Line.addLine(convex_hull.get(i), convex_hull.get((i + 1) % convex_hull.size()), CONVEX_HULL_SCENE);
+					ModelInstance m = Line.addDefaultLine(convex_hull.get(i), convex_hull.get((i + 1) % convex_hull.size()), CONVEX_HULL_SCENE);
 					m.setMaterial(new Material(Color.GREEN));
 					this.hull_lines.add(m);
 				}

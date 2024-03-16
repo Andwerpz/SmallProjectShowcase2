@@ -5,6 +5,7 @@ import java.awt.Font;
 
 import genetic_image_builder.GeneticImageBuilder;
 import hydraulic_terrain.HydraulicTerrainWindow;
+import logic_simulator.LogicSimulatorWindow;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
 import lwjglengine.main.Main;
@@ -112,6 +113,7 @@ public class BackgroundWindow extends Window {
 			projectPicker.addToList("SPH Water");
 			projectPicker.addToList("Voxel Raytracing");
 			projectPicker.addToList("Genetic Image Builder");
+			projectPicker.addToList("Logic Simulator");
 			break;
 		}
 
@@ -185,6 +187,11 @@ public class BackgroundWindow extends Window {
 
 		case "Genetic Image Builder": {
 			AdjustableWindow window = new AdjustableWindow(new GeneticImageBuilder(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Logic Simulator": {
+			AdjustableWindow window = new AdjustableWindow(new LogicSimulatorWindow(x, y, width, height, null), this);
 			break;
 		}
 		}

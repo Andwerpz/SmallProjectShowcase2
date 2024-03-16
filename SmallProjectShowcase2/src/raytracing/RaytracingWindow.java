@@ -127,18 +127,18 @@ public class RaytracingWindow extends Window {
 		//this.raytracingScreen.addTriangle(v2, v1, v5, whiteMaterial);
 		//this.raytracingScreen.addTriangle(v2, v5, v6, whiteMaterial);
 
-		//ceiling light
-		float lightScale = 0.5f;
-		v4.muli(lightScale);
-		v5.muli(lightScale);
-		v6.muli(lightScale);
-		v7.muli(lightScale);
-		v4.y = 49.99f;
-		v5.y = 49.99f;
-		v6.y = 49.99f;
-		v7.y = 49.99f;
-		this.raytracingScreen.addTriangle(v5, v4, v6, lightMaterial);
-		this.raytracingScreen.addTriangle(v6, v4, v7, lightMaterial);
+		//		//ceiling light
+		//		float lightScale = 0.5f;
+		//		v4.muli(lightScale);
+		//		v5.muli(lightScale);
+		//		v6.muli(lightScale);
+		//		v7.muli(lightScale);
+		//		v4.y = 49.99f;
+		//		v5.y = 49.99f;
+		//		v6.y = 49.99f;
+		//		v7.y = 49.99f;
+		//		this.raytracingScreen.addTriangle(v5, v4, v6, lightMaterial);
+		//		this.raytracingScreen.addTriangle(v6, v4, v7, lightMaterial);
 
 		//suzanne
 		Model suzanne = Model.loadModelFile(FileUtils.loadFileRelative("/res/suzanne/suzanne.obj"));
@@ -146,7 +146,7 @@ public class RaytracingWindow extends Window {
 		//monkeyMaterial.setSpecular(new Vec3(212, 175, 55).mul(1.0f / 255.0f));
 		monkeyMaterial.setRoughness(0f);
 		//monkeyMaterial.setMetalness(1f);
-		monkeyMaterial.setRefractiveIndex(1.5f);
+		monkeyMaterial.setRefractiveIndex(1.3f);
 		{
 			Mat4 transform = Mat4.identity();
 			transform.muli(Mat4.scale(30));
@@ -212,12 +212,13 @@ public class RaytracingWindow extends Window {
 		//			}
 		//		}
 
-		//		//big ball
-		//		whiteMaterial.setRoughness(0f);
-		//		whiteMaterial.setMetalness(0);
+		//big ball
+		whiteMaterial.setRoughness(0f);
+		whiteMaterial.setMetalness(0);
+		whiteMaterial.setDiffuse(new Vec3(1, 1, 1));
 		//		whiteMaterial.setRefractiveIndex(1.5f);
-		//		//whiteMaterial.setSpecular(new Vec3(212, 175, 55).mul(1.0f / 255.0f));
-		//		this.raytracingScreen.addSphere(new Vec3(0, -20, 0), 30, whiteMaterial);
+		//whiteMaterial.setSpecular(new Vec3(212, 175, 55).mul(1.0f / 255.0f));
+		this.raytracingScreen.addSphere(new Vec3(0, -20, 0), 30, whiteMaterial);
 
 		this.raytracingScreen.buildBVHBuffers();
 

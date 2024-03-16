@@ -12,6 +12,8 @@ import myutils.math.IVec2;
 public class LogicCircuitBlueprint {
 	//responsible for storing the inner workings of a LogicCircuit
 
+	private String name;
+
 	//for each logic component, have a map of locations. 
 	//each location is the bottom left corner of that component. 
 	private HashSet<LogicComponent> components;
@@ -19,10 +21,15 @@ public class LogicCircuitBlueprint {
 	private ArrayList<InputPin> inputPins;
 	private ArrayList<OutputPin> outputPins;
 
-	public LogicCircuitBlueprint() {
+	public LogicCircuitBlueprint(String name) {
+		this.name = name;
 		this.components = new HashSet<>();
 		this.inputPins = new ArrayList<>();
 		this.outputPins = new ArrayList<>();
+	}
+
+	public String getName() {
+		return this.name;
 	}
 
 	public int getNrInputs() {

@@ -22,6 +22,7 @@ import logic_simulator.component.gate.LogicGate;
 import myutils.math.IVec2;
 
 public class LogicCircuitInstance extends LogicComponentInstance {
+	//logic circuit instance should be 'immutable' in the sense that you can't edit the circuit once it's been initialized. 
 
 	private LogicComponentInstance[] components;
 
