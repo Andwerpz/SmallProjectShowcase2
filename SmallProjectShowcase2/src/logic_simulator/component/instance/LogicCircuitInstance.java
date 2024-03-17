@@ -117,7 +117,7 @@ public class LogicCircuitInstance extends LogicComponentInstance {
 				continue;
 			}
 
-			//TODO if outputs changed, put new stuff in queue
+			//if outputs changed, put new stuff in queue
 			IVec2 component_offset = cur_component.getOffset();
 			IVec2[] output_offsets = cur_component.getOutputOffsets();
 			for (int i = 0; i < output_offsets.length; i++) {
@@ -192,7 +192,6 @@ public class LogicCircuitInstance extends LogicComponentInstance {
 		public TruthValue getData() {
 			return this.data;
 		}
-
 	}
 
 }

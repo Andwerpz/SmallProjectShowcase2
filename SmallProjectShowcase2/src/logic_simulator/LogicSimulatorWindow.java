@@ -1,10 +1,15 @@
 package logic_simulator;
 
 import java.awt.Color;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Queue;
 import java.util.TreeMap;
 
+import static logic_simulator.component.TruthValue.ERROR;
+import static logic_simulator.component.TruthValue.FALSE;
+import static logic_simulator.component.TruthValue.TRUE;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL13.*;
 import static org.lwjgl.opengl.GL15.*;
@@ -31,12 +36,14 @@ import static org.lwjgl.opengl.GL42.glMemoryBarrier;
 import static org.lwjgl.opengl.GL30.*;
 
 import logic_simulator.component.LogicComponent;
+import logic_simulator.component.TruthValue;
 import logic_simulator.component.Wire;
 import logic_simulator.component.circuit.LogicCircuit;
 import logic_simulator.component.circuit.LogicCircuitBlueprint;
 import logic_simulator.component.circuit.LogicCircuitManager;
 import logic_simulator.component.instance.LogicCircuitInstance;
 import logic_simulator.component.instance.LogicComponentInstance;
+import logic_simulator.component.instance.WireInstance;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
 import lwjglengine.input.Input;
@@ -86,12 +93,15 @@ public class LogicSimulatorWindow extends Window {
 	private LogicCircuitBlueprint blueprint;
 
 	//we should run our own simulation so that we can add and remove logic components during the simulation. 
-	private HashMap<LogicComponent, LogicComponentInstance> componentInstances;
-	private HashMap<LogicComponent, ComponentDisplay> componentDisplays;
+	private HashMap<LogicComponent, ComponentInstance> componentInstances;
+	private HashMap<IVec2, ArrayList<LogicInput>> locLogicInputs;
+	
+	private HashMap<LogicComponent, Integer> updateQueueCnt;
+	private Queue<LogicComponent> updateQueue;
 
 	//TODO
-	private boolean isDraggingWire = false;
-	private ArrayList<LogicComponent> dragWires;
+//	private boolean isDraggingWire = false;
+//	private ArrayList<LogicComponent> dragWires;
 
 	public LogicSimulatorWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
@@ -114,7 +124,10 @@ public class LogicSimulatorWindow extends Window {
 		this.horizontalGridlines = new TreeMap<>();
 
 		this.componentInstances = new HashMap<>();
-		this.componentDisplays = new HashMap<>();
+		this.locLogicInputs = new HashMap<>();
+		
+		this.updateQueue = new ArrayDeque<>();
+		this.updateQueueCnt = new HashMap<>();
 
 		this.setBlueprint(LogicCircuitManager.getMainBlueprint());
 
@@ -142,25 +155,27 @@ public class LogicSimulatorWindow extends Window {
 		return "Logic Simulator";
 	}
 
-	private ComponentDisplay createComponentDisplay(LogicComponent component) {
-		if (component instanceof Wire) {
-			return new WireDisplay(component);
-		}
-		assert false;
-		return null;
-	}
-
 	private void addComponent(LogicComponent c) {
-		if(this.)
+		if(this.componentInstances.containsKey(c)) {
+			return;
+		}
+		
+		ComponentInstance inst = new ComponentInstance(c);
+		this.componentInstances.put(c, inst);
 	}
 
 	private void removeComponent(LogicComponent c) {
-		if (!this.components.containsKey(c)) {
+		if(!this.componentInstances.containsKey(c)) {
 			return;
 		}
-		this.components.get(c).kill();
-		this.components.remove(c);
-		this.blueprint.removeComponent(c);
+		
+		this.componentInstances.get(c).kill();
+		this.componentInstances.remove(c);
+	}
+	
+	private void addToUpdateQueue(LogicComponent c) {
+		this.updateQueue.add(c);
+		this.updateQueueCnt.put(c, this.updateQueueCnt.getOrDefault(c, 0) + 1);
 	}
 
 	//saves whatever circuit we have into the current active blueprint. 
@@ -170,23 +185,22 @@ public class LogicSimulatorWindow extends Window {
 
 	private void setBlueprint(LogicCircuitBlueprint blueprint) {
 		for (LogicComponent c : this.componentInstances.keySet()) {
-			this.componentDisplays.get(c).kill();
+			this.componentInstances.get(c).kill();
 		}
 		this.componentInstances.clear();
-		this.componentDisplays.clear();
-
-		this.blueprint = blueprint;
-		for (LogicComponent c : this.blueprint.getComponents()) {
-
-			this.components.put(c, this.createComponentDisplay(c));
+		
+		this.blueprint = null;
+		for (LogicComponent c : blueprint.getComponents()) {
+			this.addComponent(c);
 		}
+		this.blueprint = blueprint;
 	}
 
 	private void updateGridlines() {
 		//compute gridline scale
 		int majorGridlineScale, minorGridlineScale;
 		{
-			int scaleMult = 10;
+			int scaleMult = 8;
 			float gridlineScaleRef = this.viewportScale * 750f;
 			majorGridlineScale = scaleMult;
 			while (majorGridlineScale * scaleMult <= gridlineScaleRef) {
@@ -297,6 +311,18 @@ public class LogicSimulatorWindow extends Window {
 		}
 
 		this.updateGridlines();
+		
+		//TODO empty queue
+		while(this.updateQueue.size() != 0) {
+			LogicComponent component = this.updateQueue.poll();
+			this.updateQueueCnt.put(component, this.updateQueueCnt.get(component) - 1);
+			if(this.updateQueueCnt.get(component) != 0) {
+				continue;
+			}
+			
+			ComponentInstance inst = this.componentInstances.get(component);
+			inst.update();
+		}
 	}
 
 	@Override
@@ -391,9 +417,133 @@ public class LogicSimulatorWindow extends Window {
 	protected void _keyReleased(int key) {
 		this.uiSection.keyReleased(key);
 	}
+	
+	private class LogicInput {
+		//helper class responsible for handling the case where there are multiple outputs feeding into an input. 
+		//should behave the same as a wire. 
+
+		public LogicComponent component;
+		public int input_ind;
+		public IVec2 loc;
+
+		private int nr_true, nr_false;
+		private HashMap<LogicComponent, TruthValue> outputMap; //{logic component instance, truth value}
+		private TruthValue data = ERROR;
+
+		public LogicInput(LogicComponent component, int ind, IVec2 loc) {
+			this.component = component;
+			this.input_ind = ind;
+			this.loc = new IVec2(loc);
+
+			this.outputMap = new HashMap<>();
+
+			this.nr_true = 0;
+			this.nr_false = 0;
+			
+			if(!locLogicInputs.containsKey(this.loc)) {
+				locLogicInputs.put(this.loc, new ArrayList<>());
+			}
+			locLogicInputs.get(this.loc).add(this);
+		}
+		
+		public void kill() {
+			locLogicInputs.get(this.loc).remove(this);
+			if(locLogicInputs.get(this.loc).size() == 0) {
+				locLogicInputs.remove(this.loc);
+			}
+		}
+
+		/**
+		 * Returns true if data changes. 
+		 * @param component
+		 * @param val
+		 * @return
+		 */
+		public boolean setOutput(LogicComponent component, TruthValue val) {
+			if (component == this.component) {
+				//in the case that the input and output locations overlap. 
+				return false;
+			}
+			if (this.outputMap.containsKey(component)) {
+				TruthValue old_val = this.outputMap.get(component);
+				this.nr_true -= old_val == TRUE ? 1 : 0;
+				this.nr_false -= old_val == FALSE ? 1 : 0;
+			}
+			this.nr_true += val == TRUE ? 1 : 0;
+			this.nr_false += val == FALSE ? 1 : 0;
+			this.outputMap.put(component, val);
+			TruthValue old_data = this.data;
+			this.data = this.nr_true != 0 ? TRUE : (this.nr_false != 0 ? FALSE : ERROR);
+			return old_data != this.data;
+		}
+
+		public TruthValue getData() {
+			return this.data;
+		}
+	}
 
 	class ComponentInstance {
+		LogicComponent component;
 		ComponentDisplay display;
+		LogicComponentInstance instance;
+		
+		LogicInput[] logicInputs;
+		
+		public ComponentInstance(LogicComponent component) {
+			this.component = component;
+			this.instance = LogicComponentInstance.createLogicComponentInstance(component);
+			
+			if (component instanceof Wire) {
+				this.display = new WireDisplay(this.instance);
+			}
+			else {
+				assert false;
+			}
+			this.display.setVisible(true);
+			this.display.update();
+			
+			//create logic inputs
+			IVec2 component_offset = this.component.getOffset();
+			IVec2[] input_offsets = this.component.getInputOffsets();
+			this.logicInputs = new LogicInput[this.component.getNrInputs()];
+			for(int i = 0; i < this.logicInputs.length; i++) {
+				IVec2 input_loc = component_offset.add(input_offsets[i]);
+				LogicInput l_input = new LogicInput(this.component, i, input_loc);
+				this.logicInputs[i] = l_input;
+			}
+			
+			//TODO add to update queue
+		}
+		
+		/**
+		 * Updates the underlying LogicComponentInstance according to the associated LogicInputs. 
+		 */
+		public void update() {
+			//TODO
+		}
+		
+		public void kill() {
+			this.display.kill();
+			
+			for(LogicInput l : this.logicInputs) {
+				l.kill();
+			}
+			
+			//TODO add to update queue
+		}
+		
+		/**
+		 * Returns true if any output changes
+		 */
+		public boolean setInput(int ind, TruthValue val) {
+			boolean ret = this.setInput(ind, val);
+			this.display.update();
+			return ret;
+		}
+		
+		public TruthValue getOutput(int ind) {
+			return this.instance.getOutput(ind);
+		}
 	}
 
 	private static final Material ERROR_MATERIAL = new Material(Color.RED);
@@ -402,10 +552,10 @@ public class LogicSimulatorWindow extends Window {
 
 	abstract class ComponentDisplay {
 
-		private LogicComponent component;
+		private LogicComponentInstance component;
 		protected boolean isVisible = false;
 
-		public ComponentDisplay(LogicComponent component) {
+		public ComponentDisplay(LogicComponentInstance component) {
 			this.component = component;
 		}
 
@@ -419,23 +569,32 @@ public class LogicSimulatorWindow extends Window {
 	class WireDisplay extends ComponentDisplay {
 		private static final float WIRE_THICKNESS = 0.2f;
 
-		private Wire wire;
+		private WireInstance wire;
 
 		private ModelInstance wireInstance;
 
-		public WireDisplay(LogicComponent component) {
+		public WireDisplay(LogicComponentInstance component) {
 			super(component);
-			this.wire = (Wire) component;
-			this.setVisible(true);
+			this.wire = (WireInstance) component;
 		}
 
 		@Override
 		public void update() {
-			this.setVisible(false);
-			this.setVisible(true);
-
 			if (this.isVisible) {
-				//huh
+				TruthValue data = this.wire.getOutput(0);
+				switch(data) {
+				case TRUE:
+					this.wireInstance.setMaterial(TRUE_MATERIAL);
+					break;
+					
+				case FALSE:
+					this.wireInstance.setMaterial(FALSE_MATERIAL);
+					break;
+					
+				case ERROR:
+					this.wireInstance.setMaterial(ERROR_MATERIAL);
+					break;
+				}
 			}
 		}
 
