@@ -18,4 +18,8 @@ public class LogicGateInstance extends LogicComponentInstance {
 		return this.setOutput(0, this.gate.calcTruthValue(vals));
 	}
 
+	public GateType getType() {
+		return this.gate.getType();
+	}
+
 }

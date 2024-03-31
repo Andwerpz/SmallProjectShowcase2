@@ -3,11 +3,17 @@ package logic_simulator.component.gate;
 import static logic_simulator.component.TruthValue.*;
 
 import logic_simulator.component.TruthValue;
+import myutils.math.IVec2;
 
 public class ORGate extends LogicGate {
 
-	public ORGate() {
-		super(GateType.OR, 2, 1);
+	public ORGate(IVec2 offset) {
+		super(GateType.OR, 2, 1, offset);
+		this.setWidth(3);
+		this.setHeight(2);
+		this.setInputOffset(0, 0, 0);
+		this.setInputOffset(1, 0, 2);
+		this.setOutputOffset(0, 3, 1);
 	}
 
 	@Override

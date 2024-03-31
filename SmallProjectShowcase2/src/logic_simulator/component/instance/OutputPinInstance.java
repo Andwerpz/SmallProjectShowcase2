@@ -17,7 +17,7 @@ public class OutputPinInstance extends LogicComponentInstance {
 	public boolean setInputs(TruthValue[] vals) {
 		//an output pin has no outputs, so result is always false. 
 		assert vals.length == 1;
-		this.setInput(0, vals[0]);
+		this.inputs[0] = vals[0];
 		return false;
 	}
 

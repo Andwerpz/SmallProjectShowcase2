@@ -20,13 +20,13 @@ public class LogicCircuit extends LogicComponent {
 
 	private LogicCircuitBlueprint blueprint;
 
-	public LogicCircuit(LogicCircuit other) {
-		this(other.getBlueprint());
+	public LogicCircuit(LogicCircuit other, IVec2 offset) {
+		this(other.getBlueprint(), offset);
 		this.setOffset(other.getOffset());
 	}
 
-	public LogicCircuit(LogicCircuitBlueprint blueprint) {
-		super(blueprint.getNrInputs(), blueprint.getNrOutputs());
+	public LogicCircuit(LogicCircuitBlueprint blueprint, IVec2 offset) {
+		super(blueprint.getNrInputs(), blueprint.getNrOutputs(), offset);
 		this.blueprint = blueprint;
 
 		//set up input/output locations. 

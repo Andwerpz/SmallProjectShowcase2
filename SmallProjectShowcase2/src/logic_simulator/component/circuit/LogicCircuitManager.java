@@ -7,6 +7,7 @@ import java.util.Queue;
 import java.util.Set;
 
 import logic_simulator.component.LogicComponent;
+import myutils.math.IVec2;
 
 public class LogicCircuitManager {
 	//static class for managing logic circuits since we ideally only want to save 1 copy of each blueprint. 
@@ -43,7 +44,7 @@ public class LogicCircuitManager {
 	}
 
 	public static LogicCircuit getCircuit(String name) {
-		return new LogicCircuit(getBlueprint(name));
+		return new LogicCircuit(getBlueprint(name), new IVec2(0));
 	}
 
 	public static LogicCircuitBlueprint getMainBlueprint() {

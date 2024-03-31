@@ -5,11 +5,15 @@ import myutils.math.IVec2;
 public class InputPin extends LogicComponent {
 	private int inputInd; //which input does this correspond to?
 
-	public InputPin() {
-		super(0, 1);
+	public InputPin(IVec2 offset) {
+		super(0, 1, offset);
 		this.setWidth(3);
 		this.setHeight(2);
 		this.setOutputOffset(0, new IVec2(3, 1));
+	}
+
+	public InputPin(InputPin c) {
+		super(c);
 	}
 
 	public void setInputInd(int ind) {

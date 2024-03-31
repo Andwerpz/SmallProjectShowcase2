@@ -4,10 +4,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 
+import logic_simulator.component.gate.LogicGate;
 import logic_simulator.component.instance.LogicComponentInstance;
 import myutils.math.IVec2;
 
-public class LogicComponent {
+public abstract class LogicComponent {
 	//the external size of a logic component is determined by how many inputs and outputs it has. 
 	//this is why i'm thinking to make the number of inputs and outputs immutable. 
 	//inputs enumerated along the left side, and outputs along the right side by default, just like logisim. 
@@ -22,13 +23,13 @@ public class LogicComponent {
 	private int width, height;
 	private IVec2 offset;
 
-	public LogicComponent(int nr_inputs, int nr_outputs) {
+	public LogicComponent(int nr_inputs, int nr_outputs, IVec2 offset) {
 		this.nrInputs = nr_inputs;
 		this.nrOutputs = nr_outputs;
+		this.offset = new IVec2(offset);
 
 		this.width = 10;
 		this.height = 2;
-		this.offset = new IVec2(0);
 
 		this.inputOffsets = new IVec2[nr_inputs];
 		this.outputOffsets = new IVec2[nr_outputs];
@@ -39,6 +40,42 @@ public class LogicComponent {
 		for (int i = 0; i < nr_outputs; i++) {
 			this.outputOffsets[i] = new IVec2(0, 0);
 		}
+	}
+
+	public LogicComponent(LogicComponent c) {
+		this.nrInputs = c.nrInputs;
+		this.nrOutputs = c.nrOutputs;
+		this.offset = new IVec2(c.offset);
+
+		this.width = c.width;
+		this.height = c.height;
+
+		this.inputOffsets = new IVec2[this.nrInputs];
+		this.outputOffsets = new IVec2[this.nrOutputs];
+
+		for (int i = 0; i < this.nrInputs; i++) {
+			this.inputOffsets[i] = new IVec2(c.inputOffsets[i]);
+		}
+		for (int i = 0; i < this.nrOutputs; i++) {
+			this.outputOffsets[i] = new IVec2(c.outputOffsets[i]);
+		}
+	}
+
+	public static LogicComponent copyComponent(LogicComponent c) {
+		if (c instanceof LogicGate) {
+			return LogicGate.createGate(((LogicGate) c).getType(), c.offset);
+		}
+		else if (c instanceof Wire) {
+			return new Wire((Wire) c);
+		}
+		else if (c instanceof InputPin) {
+			return new InputPin((InputPin) c);
+		}
+		else if (c instanceof OutputPin) {
+			return new OutputPin((OutputPin) c);
+		}
+		assert false;
+		return null;
 	}
 
 	public int getNrInputs() {
@@ -87,5 +124,13 @@ public class LogicComponent {
 
 	public void setOutputOffset(int ind, IVec2 offset) {
 		this.outputOffsets[ind].set(offset);
+	}
+
+	public void setInputOffset(int ind, int x, int y) {
+		this.setInputOffset(ind, new IVec2(x, y));
+	}
+
+	public void setOutputOffset(int ind, int x, int y) {
+		this.setOutputOffset(ind, new IVec2(x, y));
 	}
 }

@@ -25,6 +25,7 @@ public class LogicCircuitInstance extends LogicComponentInstance {
 	//logic circuit instance should be 'immutable' in the sense that you can't edit the circuit once it's been initialized. 
 
 	private LogicComponentInstance[] components;
+	private IVec2[] componentOffsets;
 
 	//for each location, give a list of logic inputs
 	private HashMap<IVec2, ArrayList<LogicInput>> inputMap;
@@ -41,6 +42,7 @@ public class LogicCircuitInstance extends LogicComponentInstance {
 		HashSet<LogicComponent> components = blueprint.getComponents();
 
 		this.components = new LogicComponentInstance[components.size()];
+		this.componentOffsets = new IVec2[components.size()];
 		this.inputPinInds = new int[blueprint.getNrInputs()];
 		this.outputPinInds = new int[blueprint.getNrOutputs()];
 		{
@@ -49,6 +51,7 @@ public class LogicCircuitInstance extends LogicComponentInstance {
 			int ptr = 0;
 			for (LogicComponent c : components) {
 				this.components[ptr] = LogicComponentInstance.createLogicComponentInstance(c);
+				this.componentOffsets[ptr] = c.getOffset();
 				if (c instanceof InputPin) {
 					this.inputPinInds[input_pin_ptr++] = ptr;
 				}
@@ -63,7 +66,7 @@ public class LogicCircuitInstance extends LogicComponentInstance {
 		this.inputMap = new HashMap<>();
 		this.componentLogicInputs = new LogicInput[components.size()][];
 		for (int i = 0; i < this.components.length; i++) {
-			IVec2 component_offset = this.components[i].getOffset();
+			IVec2 component_offset = this.componentOffsets[i];
 			IVec2[] input_offsets = this.components[i].getInputOffsets();
 			this.componentLogicInputs[i] = new LogicInput[input_offsets.length];
 			for (int j = 0; j < input_offsets.length; j++) {
@@ -89,7 +92,7 @@ public class LogicCircuitInstance extends LogicComponentInstance {
 				this.inputs[i] = vals[i];
 				changed = true;
 				InputPinInstance i_pin = (InputPinInstance) this.components[this.inputPinInds[i]];
-				i_pin.setOutput(0, this.inputs[i]);
+				i_pin.setData(this.inputs[i]);
 				q.add(this.inputPinInds[i]);
 				q_cnt[this.inputPinInds[i]]++;
 			}
@@ -118,7 +121,7 @@ public class LogicCircuitInstance extends LogicComponentInstance {
 			}
 
 			//if outputs changed, put new stuff in queue
-			IVec2 component_offset = cur_component.getOffset();
+			IVec2 component_offset = this.componentOffsets[cur];
 			IVec2[] output_offsets = cur_component.getOutputOffsets();
 			for (int i = 0; i < output_offsets.length; i++) {
 				IVec2 output_loc = component_offset.add(output_offsets[i]);

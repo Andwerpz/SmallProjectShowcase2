@@ -23,7 +23,6 @@ public abstract class LogicComponentInstance {
 	protected TruthValue[] inputs, outputs;
 
 	private int width, height;
-	private IVec2 offset;
 
 	private IVec2[] inputOffsets, outputOffsets;
 
@@ -51,7 +50,6 @@ public abstract class LogicComponentInstance {
 	protected LogicComponentInstance(LogicComponent component) {
 		this.width = component.getWidth();
 		this.height = component.getHeight();
-		this.offset = new IVec2(component.getOffset());
 
 		this.inputOffsets = new IVec2[component.getNrInputs()];
 		this.outputOffsets = new IVec2[component.getNrOutputs()];
@@ -84,10 +82,6 @@ public abstract class LogicComponentInstance {
 
 	public int getHeight() {
 		return this.height;
-	}
-
-	public IVec2 getOffset() {
-		return this.offset;
 	}
 
 	public IVec2[] getInputOffsets() {

@@ -49,6 +49,14 @@ public class BackgroundWindow extends Window {
 	// - expression calculator
 	// - Ray Marching Game
 	//   - https://www.youtube.com/watch?v=QhvzmskRiCk&t=14s
+	// - Bundle Adjustment
+	//   - get a live camera feed from a phone or prerecorded video, do feature detection and matching, and perform 
+	//     bundle adjustment to retrieve relative locations of camera positions and feature points in 3D space
+	// - better? fluid simulator
+	//   - Part 1: https://www.youtube.com/watch?v=MXs_vkc8hpY
+	//   - Part 2: https://www.youtube.com/watch?v=4b80sR-joNY
+	//   - Part 3: https://www.youtube.com/watch?v=sSJmUmCHAJY
+	//   - perhaps able to do 2D drag simulations. 
 
 	private final int BACKGROUND_SCENE = Scene.generateScene();
 	private final int TEXT_SCENE = Scene.generateScene();
