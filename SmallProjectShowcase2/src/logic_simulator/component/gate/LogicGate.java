@@ -3,6 +3,7 @@ package logic_simulator.component.gate;
 import logic_simulator.component.LogicComponent;
 import logic_simulator.component.TruthValue;
 import logic_simulator.component.instance.LogicComponentInstance;
+import myutils.file.xml.XMLNode;
 import myutils.math.IVec2;
 
 public abstract class LogicGate extends LogicComponent {
@@ -11,7 +12,7 @@ public abstract class LogicGate extends LogicComponent {
 	private GateType type;
 
 	public LogicGate(GateType type, int nr_inputs, int nr_outputs, IVec2 offset) {
-		super(nr_inputs, nr_outputs, offset);
+		super(ComponentType.GATE, nr_inputs, nr_outputs, offset);
 		this.type = type;
 	}
 
@@ -52,6 +53,11 @@ public abstract class LogicGate extends LogicComponent {
 		ans.x = gate.getWidth();
 		ans.y = gate.getHeight();
 		return ans;
+	}
+
+	@Override
+	protected void _toXML(XMLNode node) {
+		node.addAttribute("gate_type", this.type.toString());
 	}
 
 }

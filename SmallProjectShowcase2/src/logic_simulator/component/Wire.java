@@ -2,6 +2,7 @@ package logic_simulator.component;
 
 import static logic_simulator.component.TruthValue.*;
 
+import myutils.file.xml.XMLNode;
 import myutils.math.IVec2;
 import myutils.math.MathUtils;
 
@@ -15,7 +16,7 @@ public class Wire extends LogicComponent {
 	//a wire should behave the same as two parallel buffers. 
 
 	public Wire(IVec2 e0, IVec2 e1) {
-		super(2, 2, MathUtils.min(e0, e1));
+		super(ComponentType.WIRE, 2, 2, MathUtils.min(e0, e1));
 
 		this.setWidth(Math.abs(e0.x - e1.x));
 		this.setHeight(Math.abs(e0.y - e1.y));
@@ -28,6 +29,11 @@ public class Wire extends LogicComponent {
 
 	public Wire(Wire w) {
 		super(w);
+	}
+
+	@Override
+	protected void _toXML(XMLNode node) {
+
 	}
 
 }

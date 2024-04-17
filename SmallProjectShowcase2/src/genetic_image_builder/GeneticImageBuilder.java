@@ -109,9 +109,19 @@ public class GeneticImageBuilder extends Window {
 		{
 			String xmlString = FileUtils.loadStringRelative("/res/GD_decor/GJ_GameSheet-hd.plist");
 			root = XMLReader.parseStringAsXML(xmlString);
+
+			File test_file = FileUtils.loadFileRelative("/res/test_xml.txt");
+			try {
+				root.saveToFile(test_file);
+			}
+			catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 
 		XMLNode spriteDict = root;
+		spriteDict = spriteDict.getChildren().get(2);
 		spriteDict = spriteDict.getChildren().get(0);
 		spriteDict = spriteDict.getChildren().get(1);
 

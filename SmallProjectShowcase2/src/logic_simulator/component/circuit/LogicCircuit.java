@@ -6,6 +6,7 @@ import java.util.HashSet;
 
 import logic_simulator.component.InputPin;
 import logic_simulator.component.LogicComponent;
+import myutils.file.xml.XMLNode;
 import myutils.math.IVec2;
 
 public class LogicCircuit extends LogicComponent {
@@ -26,7 +27,7 @@ public class LogicCircuit extends LogicComponent {
 	}
 
 	public LogicCircuit(LogicCircuitBlueprint blueprint, IVec2 offset) {
-		super(blueprint.getNrInputs(), blueprint.getNrOutputs(), offset);
+		super(ComponentType.CIRCUIT, blueprint.getNrInputs(), blueprint.getNrOutputs(), offset);
 		this.blueprint = blueprint;
 
 		//set up input/output locations. 
@@ -44,5 +45,10 @@ public class LogicCircuit extends LogicComponent {
 
 	public LogicCircuitBlueprint getBlueprint() {
 		return this.blueprint;
+	}
+
+	@Override
+	protected void _toXML(XMLNode node) {
+		node.addAttribute("blueprint_name", this.blueprint.getName());
 	}
 }

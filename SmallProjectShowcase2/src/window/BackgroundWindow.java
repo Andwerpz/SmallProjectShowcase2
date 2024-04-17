@@ -41,6 +41,11 @@ public class BackgroundWindow extends Window {
 	// - Tile based bread board
 	// - Wave Function Collapse
 	// - 3D mesh rigid and softbody physics
+	//   - softbody tutorial:
+	//     - https://www.youtube.com/watch?v=Noo5sfGGWe0
+	//   - rigidbody tutorial: 
+	//     - Part 1: https://www.youtube.com/watch?v=4r_EvmPKOvY
+	//     - Part 2: https://www.youtube.com/watch?v=GYc99lMdcFE
 	// - 2D Terrain Shadow Casting
 	//   - https://www.youtube.com/watch?v=bMTeCqNkId8
 	//   - UPDATE : https://www.youtube.com/watch?v=6bnFfE82AJg
@@ -56,7 +61,11 @@ public class BackgroundWindow extends Window {
 	//   - Part 1: https://www.youtube.com/watch?v=MXs_vkc8hpY
 	//   - Part 2: https://www.youtube.com/watch?v=4b80sR-joNY
 	//   - Part 3: https://www.youtube.com/watch?v=sSJmUmCHAJY
+	//	 - another related video: https://www.youtube.com/watch?v=iKAVRgIrUOU
+	//   - look into the lattice boltzmann (algorithm?) we can do a grid based simulation, and then just advect the particle locations. 
 	//   - perhaps able to do 2D drag simulations. 
+	// - Procedural Dungeon Generation
+	//   - https://www.gamedeveloper.com/programming/procedural-dungeon-generation-algorithm
 
 	private final int BACKGROUND_SCENE = Scene.generateScene();
 	private final int TEXT_SCENE = Scene.generateScene();

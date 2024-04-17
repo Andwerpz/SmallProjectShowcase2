@@ -1,6 +1,8 @@
 package logic_simulator;
 
 import java.awt.Color;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,11 +44,11 @@ import static org.lwjgl.glfw.GLFW.*;
 import logic_simulator.component.InputPin;
 import logic_simulator.component.LogicComponent;
 import logic_simulator.component.OutputPin;
+import logic_simulator.component.Project;
 import logic_simulator.component.TruthValue;
 import logic_simulator.component.Wire;
 import logic_simulator.component.circuit.LogicCircuit;
 import logic_simulator.component.circuit.LogicCircuitBlueprint;
-import logic_simulator.component.circuit.LogicCircuitManager;
 import logic_simulator.component.gate.ANDGate;
 import logic_simulator.component.gate.GateType;
 import logic_simulator.component.gate.Inverter;
@@ -170,6 +172,7 @@ public class LogicSimulatorWindow extends Window {
 	private TreeMap<Integer, ModelInstance> verticalGridlines, horizontalGridlines;
 
 	//the active blueprint that we are editing. 
+	private Project project;
 	private LogicCircuitBlueprint blueprint;
 
 	//we should run our own simulation so that we can add and remove logic components during the simulation. 
@@ -224,28 +227,29 @@ public class LogicSimulatorWindow extends Window {
 
 		this.selectedComponents = new HashSet<>();
 
-		this.setBlueprint(LogicCircuitManager.getMainBlueprint());
+		this.project = new Project(FileUtils.loadFileRelative("/res/logic_simulator/projects/test.xml"));
+		this.setBlueprint(this.project.getMainBlueprint());
 
-		//SR latch
-		this.addComponent(new InputPin(new IVec2(0, 8)));
-		this.addComponent(new Wire(new IVec2(3, 9), new IVec2(4, 9)));
-		this.addComponent(new InputPin(new IVec2(0, 0)));
-		this.addComponent(new Wire(new IVec2(3, 1), new IVec2(4, 1)));
-
-		this.addComponent(new NORGate(new IVec2(4, 1)));
-		this.addComponent(new NORGate(new IVec2(4, 7)));
-
-		this.addComponent(new Wire(new IVec2(8, 8), new IVec2(8, 4)));
-		this.addComponent(new Wire(new IVec2(8, 4), new IVec2(4, 4)));
-		this.addComponent(new Wire(new IVec2(4, 4), new IVec2(4, 3)));
-
-		this.addComponent(new Wire(new IVec2(8, 2), new IVec2(9, 2)));
-		this.addComponent(new Wire(new IVec2(9, 2), new IVec2(9, 6)));
-		this.addComponent(new Wire(new IVec2(9, 6), new IVec2(4, 6)));
-		this.addComponent(new Wire(new IVec2(4, 6), new IVec2(4, 7)));
-
-		//		this.addComponent(new InputPin(new IVec2(0, 10)));
+		//		//SR latch
+		//		this.addComponent(new InputPin(new IVec2(0, 8)));
+		//		this.addComponent(new Wire(new IVec2(3, 9), new IVec2(4, 9)));
 		//		this.addComponent(new InputPin(new IVec2(0, 0)));
+		//		this.addComponent(new Wire(new IVec2(3, 1), new IVec2(4, 1)));
+		//
+		//		this.addComponent(new NORGate(new IVec2(4, 1)));
+		//		this.addComponent(new NORGate(new IVec2(4, 7)));
+		//
+		//		this.addComponent(new Wire(new IVec2(8, 8), new IVec2(8, 4)));
+		//		this.addComponent(new Wire(new IVec2(8, 4), new IVec2(4, 4)));
+		//		this.addComponent(new Wire(new IVec2(4, 4), new IVec2(4, 3)));
+		//
+		//		this.addComponent(new Wire(new IVec2(8, 2), new IVec2(9, 2)));
+		//		this.addComponent(new Wire(new IVec2(9, 2), new IVec2(9, 6)));
+		//		this.addComponent(new Wire(new IVec2(9, 6), new IVec2(4, 6)));
+		//		this.addComponent(new Wire(new IVec2(4, 6), new IVec2(4, 7)));
+		//
+		//		//		this.addComponent(new InputPin(new IVec2(0, 10)));
+		//		//		this.addComponent(new InputPin(new IVec2(0, 0)));
 
 		this._resize();
 	}
@@ -261,6 +265,8 @@ public class LogicSimulatorWindow extends Window {
 		Scene.removeScene(COMPONENT_TEXT_SCENE);
 		Scene.removeScene(COMPONENT_SELECT_SCENE);
 		Scene.removeScene(GATE_MODE_SCENE);
+
+		this.saveProject();
 	}
 
 	@Override
@@ -271,6 +277,26 @@ public class LogicSimulatorWindow extends Window {
 	@Override
 	public String getDefaultTitle() {
 		return "Logic Simulator";
+	}
+
+	private void saveProject() {
+		this.saveBlueprint();
+
+		File f = FileUtils.loadFileRelative("/res/logic_simulator/projects/test.xml");
+		try {
+			this.project.saveToFile(f);
+		}
+		catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	//saves whatever circuit we have into the current active blueprint. 
+	private void saveBlueprint() {
+		this.blueprint.removeAllComponents();
+		for (LogicComponent c : this.componentInstances.keySet()) {
+			this.blueprint.addComponent(c);
+		}
 	}
 
 	private void _addComponent(LogicComponent c) {
@@ -514,11 +540,6 @@ public class LogicSimulatorWindow extends Window {
 	private void addToUpdateQueue(LogicComponent c) {
 		this.updateQueue.add(c);
 		this.updateQueueCnt.put(c, this.updateQueueCnt.getOrDefault(c, 0) + 1);
-	}
-
-	//saves whatever circuit we have into the current active blueprint. 
-	private void saveBlueprint() {
-		//TODO
 	}
 
 	private void setBlueprint(LogicCircuitBlueprint blueprint) {
@@ -1090,6 +1111,7 @@ public class LogicSimulatorWindow extends Window {
 			switch (this.interactionMode) {
 			case EDIT_MODE:
 				this.deselectAllComponents();
+				this.stopCopying();
 				break;
 			case GATE_MODE:
 				this.gateModeGhost.setVisible(false);
@@ -1147,7 +1169,7 @@ public class LogicSimulatorWindow extends Window {
 				if (!this.isCopying) {
 					break;
 				}
-				//TODO paste
+				//paste
 				IVec2 mouse_pos = this.getMouseGridSnapPos();
 				for (LogicComponent c : this.copiedComponents) {
 					LogicComponent new_component = LogicComponent.copyComponent(c);
@@ -1835,7 +1857,39 @@ public class LogicSimulatorWindow extends Window {
 
 	}
 
-	class CircuitDisplay {
+	//TODO load text
+	class CircuitDisplay extends ComponentDisplay {
+		private LogicCircuitInstance circuit;
+		private ModelInstance circuitRect = null;
+
+		public CircuitDisplay(LogicCircuitInstance component, IVec2 offset) {
+			super(component, offset);
+			this.circuit = component;
+			this.circuitRect = null;
+		}
+
+		@Override
+		public void update() {
+			if (this.isVisible) {
+				//nothing
+			}
+		}
+
+		@Override
+		public void kill() {
+			this.setVisible(false);
+		}
+
+		@Override
+		public void setVisible(boolean b) {
+			if (this.isVisible && !b) {
+
+			}
+			else if (!this.isVisible && b) {
+
+			}
+			this.isVisible = b;
+		}
 
 	}
 

@@ -4,8 +4,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 
+import logic_simulator.component.gate.GateType;
 import logic_simulator.component.gate.LogicGate;
 import logic_simulator.component.instance.LogicComponentInstance;
+import myutils.file.xml.XMLNode;
 import myutils.math.IVec2;
 
 public abstract class LogicComponent {
@@ -13,6 +15,12 @@ public abstract class LogicComponent {
 	//this is why i'm thinking to make the number of inputs and outputs immutable. 
 	//inputs enumerated along the left side, and outputs along the right side by default, just like logisim. 
 	//locations of inputs and outputs should be allowed to change though. 
+
+	public enum ComponentType {
+		WIRE, INPUT_PIN, OUTPUT_PIN, GATE, CIRCUIT
+	}
+
+	private ComponentType componentType;
 
 	private int nrInputs, nrOutputs;
 
@@ -23,7 +31,9 @@ public abstract class LogicComponent {
 	private int width, height;
 	private IVec2 offset;
 
-	public LogicComponent(int nr_inputs, int nr_outputs, IVec2 offset) {
+	public LogicComponent(ComponentType component_type, int nr_inputs, int nr_outputs, IVec2 offset) {
+		this.componentType = component_type;
+
 		this.nrInputs = nr_inputs;
 		this.nrOutputs = nr_outputs;
 		this.offset = new IVec2(offset);
@@ -43,6 +53,8 @@ public abstract class LogicComponent {
 	}
 
 	public LogicComponent(LogicComponent c) {
+		this.componentType = c.componentType;
+
 		this.nrInputs = c.nrInputs;
 		this.nrOutputs = c.nrOutputs;
 		this.offset = new IVec2(c.offset);
@@ -133,4 +145,17 @@ public abstract class LogicComponent {
 	public void setOutputOffset(int ind, int x, int y) {
 		this.setOutputOffset(ind, new IVec2(x, y));
 	}
+
+	public XMLNode toXML() {
+		XMLNode node = new XMLNode("logic_component");
+		node.setIsSelfEnding(true);
+		node.addAttribute("component_type", this.componentType.toString());
+		node.addAttribute("component_width", this.getWidth() + "");
+		node.addAttribute("component_height", this.getHeight() + "");
+		node.addAttribute("component_offset", this.offset.x + " " + this.offset.y);
+		this._toXML(node);
+		return node;
+	}
+
+	protected abstract void _toXML(XMLNode node);
 }

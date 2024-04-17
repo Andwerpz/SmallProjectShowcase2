@@ -7,6 +7,7 @@ import java.util.HashSet;
 import logic_simulator.component.InputPin;
 import logic_simulator.component.LogicComponent;
 import logic_simulator.component.OutputPin;
+import myutils.file.xml.XMLNode;
 import myutils.math.IVec2;
 
 public class LogicCircuitBlueprint {
@@ -84,6 +85,26 @@ public class LogicCircuitBlueprint {
 				this.outputPins.get(i).setOutputInd(i);
 			}
 		}
+	}
+
+	public void removeAllComponents() {
+		ArrayList<LogicComponent> to_remove = new ArrayList<>();
+		to_remove.addAll(this.components);
+		for (LogicComponent c : to_remove) {
+			this.removeComponent(c);
+		}
+	}
+
+	public XMLNode toXML() {
+		XMLNode root = new XMLNode("blueprint");
+		root.addAttribute("name", this.name);
+
+		//have to write all components into xml
+		for (LogicComponent c : this.components) {
+			root.addChild(c.toXML());
+		}
+
+		return root;
 	}
 
 }
