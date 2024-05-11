@@ -8,7 +8,7 @@ import myutils.math.IVec2;
 public class Inverter extends LogicGate {
 
 	public Inverter(IVec2 offset) {
-		super(GateType.INVERTER, 1, 1, offset);
+		super(GateType.NOT, 1, 1, offset);
 		this.setWidth(3);
 		this.setHeight(2);
 		this.setInputOffset(0, 0, 1);

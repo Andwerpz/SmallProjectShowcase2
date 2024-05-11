@@ -5,7 +5,8 @@ import java.awt.Font;
 
 import genetic_image_builder.GeneticImageBuilder;
 import hydraulic_terrain.HydraulicTerrainWindow;
-import logic_simulator.LogicSimulatorWindow;
+import logic_simulator.CircuitEditorWindow;
+import logic_simulator.CircuitSimulatorWindow;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
 import lwjglengine.main.Main;
@@ -208,7 +209,7 @@ public class BackgroundWindow extends Window {
 		}
 
 		case "Logic Simulator": {
-			AdjustableWindow window = new AdjustableWindow(new LogicSimulatorWindow(x, y, width, height, null), this);
+			AdjustableWindow window = new AdjustableWindow(new CircuitEditorWindow(x, y, width, height, null), this);
 			break;
 		}
 		}

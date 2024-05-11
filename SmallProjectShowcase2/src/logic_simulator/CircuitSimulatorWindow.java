@@ -49,6 +49,7 @@ import logic_simulator.component.TruthValue;
 import logic_simulator.component.Wire;
 import logic_simulator.component.circuit.LogicCircuit;
 import logic_simulator.component.circuit.LogicCircuitBlueprint;
+import logic_simulator.component.display.ComponentDisplay;
 import logic_simulator.component.gate.ANDGate;
 import logic_simulator.component.gate.GateType;
 import logic_simulator.component.gate.Inverter;
@@ -81,9 +82,14 @@ import lwjglengine.ui.Text;
 import lwjglengine.ui.UIElement;
 import lwjglengine.ui.UIFilledRectangle;
 import lwjglengine.ui.UISection;
+import lwjglengine.window.AdjustableWindow;
+import lwjglengine.window.NestedListViewerWindow;
 import lwjglengine.window.Window;
 import myutils.file.FileUtils;
 import myutils.file.SystemUtils;
+import myutils.file.xml.XMLNode;
+import myutils.file.xml.XMLReader;
+import myutils.graphics.GraphicsTools;
 import myutils.math.IVec2;
 import myutils.math.Mat4;
 import myutils.math.MathUtils;
@@ -91,25 +97,26 @@ import myutils.math.Vec2;
 import myutils.math.Vec3;
 import myutils.misc.Pair;
 
-public class LogicSimulatorWindow extends Window {
-	//this should be fully capable of simulating and editing a single logic circuit blueprint
+public class CircuitSimulatorWindow extends Window {
+	//this should just be responsible for simulating a circuit, with capability to add and remove 
+	//logic components on the fly. 
 
 	//TODO
 	//FEATURES
-	// - save blueprint
 	// - add logic circuit display
+	// - allow user to add logic circuit instances. 
 	// - for now, just notify the user which mode they switched to through some text
-	// - ability to add input and output pins. 
+	// - when edit mode, if eligible to drag wires, have a little thing that pops up on the wire that is to be dragged. 
 
 	//BUGFIXES
 	// - if we have wires that form a loop, they will maintain a TRUE signal without outside input. 
 	//   - for now, just don't build wire loops
 
+	//perhaps move all the helper classes out of this file... 
+
 	private enum InteractionMode {
 		INTERACT_MODE, //should allow for toggling on and off input pins
 		EDIT_MODE, //moving around logic components by dragging. Also should be able to select anything and delete it. 
-		WIRE_MODE, //clicking and dragging should place wires as you go. 
-		GATE_MODE,
 	}
 
 	private InteractionMode interactionMode = InteractionMode.INTERACT_MODE;
@@ -120,28 +127,27 @@ public class LogicSimulatorWindow extends Window {
 	// - if you press the mouse, and it happens to be above a component, do single component selection logic. 
 	// - otherwise, you'll start to do a rectangle selection, and you'll select the components once you release the mouse. 
 	private HashSet<LogicComponent> selectedComponents;
+
 	private boolean isRectangleSelecting = false;
 	private Vec2 rectangleSelectAnchor;
 	private ModelInstance[] rectangleSelectDisplay; //0-3 are lines, 4 is internal rectangle
+
 	private boolean isDraggingSelection = false;
 	private IVec2 selectionDragAnchor, selectionDragOffset;
+
 	private boolean isCopying = false;
 	private LogicComponent[] copiedComponents;
 	private IVec2 copyRectangleDimensions;
 	private ModelInstance[] copyRectangleDisplay; //tells you where the copied selection will go to when you press ctrl+v
 
-	//wire mode
-	private boolean draggingWires = false;
+	private boolean isPlacingComponent = false;
+	private LogicComponent placeComponent;
+	private ComponentDisplay placeComponentGhost;
+
+	private boolean isDraggingWires = false;
 	private boolean wireDragHorizontalFirst = true;
 	private IVec2 wireDragAnchor; //where did the mouse get pressed?
 	private ModelInstance[] wireDragDisplay;
-
-	//gate mode
-	private int gateModeTypeInd = 0;
-	private int gateModeNotInd = 0;
-	private GateType[][] gateModeTypeArr = { { GateType.AND, GateType.OR, GateType.XOR, GateType.INVERTER }, { GateType.NAND, GateType.NOR, GateType.XNOR, GateType.INVERTER } };
-	private GateType gateModeGateType = GateType.AND;
-	private GateDisplay gateModeGhost;
 
 	private final int GRIDLINE_SCENE = Scene.generateScene();
 	private final int LOGIC_INPUT_SCENE = Scene.generateScene();
@@ -149,16 +155,15 @@ public class LogicSimulatorWindow extends Window {
 	private final int COMPONENT_SCENE = Scene.generateScene();
 	private final int COMPONENT_TEXT_SCENE = Scene.generateScene();
 	private final int COMPONENT_SELECT_SCENE = Scene.generateScene();
-	private final int GATE_MODE_SCENE = Scene.generateScene();
 
-	private static final Material ERROR_MATERIAL = new Material(Color.RED);
-	private static final Material TRUE_MATERIAL = new Material(Color.GREEN);
-	private static final Material FALSE_MATERIAL = new Material(new Vec3(0, 100, 0).mul((float) (1.0 / 255.0)));
+	public static final Material ERROR_MATERIAL = new Material(Color.RED);
+	public static final Material TRUE_MATERIAL = new Material(Color.GREEN);
+	public static final Material FALSE_MATERIAL = new Material(new Vec3(0, 100, 0).mul((float) (1.0 / 255.0)));
 
-	private static final Material SELECT_MATERIAL = new Material(new Vec3(128, 128, 255).mul((float) (1.0 / 255.0)));
+	public static final Material SELECT_MATERIAL = new Material(new Vec3(128, 128, 255).mul((float) (1.0 / 255.0)));
 	private static final Material COPY_MATERIAL = new Material(Color.WHITE);
 
-	private static final float WIRE_WIDTH = 0.15f;
+	public static final float WIRE_WIDTH = 0.15f;
 
 	private UIScreen uiScreen;
 	private UISection uiSection;
@@ -172,7 +177,6 @@ public class LogicSimulatorWindow extends Window {
 	private TreeMap<Integer, ModelInstance> verticalGridlines, horizontalGridlines;
 
 	//the active blueprint that we are editing. 
-	private Project project;
 	private LogicCircuitBlueprint blueprint;
 
 	//we should run our own simulation so that we can add and remove logic components during the simulation. 
@@ -185,12 +189,16 @@ public class LogicSimulatorWindow extends Window {
 
 	private HashMap<GateType, FilledRectangle> gateRects;
 
-	public LogicSimulatorWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
+	private boolean shouldPruneWires = false;
+
+	public CircuitSimulatorWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
 		this.init();
 	}
 
 	private void init() {
+		this.setAllowInputWhenParentSubtreeSelected(true);
+
 		this.uiScreen = new UIScreen();
 
 		this.uiSection = new UISection();
@@ -223,33 +231,7 @@ public class LogicSimulatorWindow extends Window {
 
 		this.wireDragDisplay = new ModelInstance[2];
 
-		this.gateModeGhost = new GateDisplay((LogicGateInstance) LogicComponentInstance.createLogicComponentInstance(LogicGate.createGate(this.gateModeGateType, new IVec2(0, 0))), new IVec2(0));
-
 		this.selectedComponents = new HashSet<>();
-
-		this.project = new Project(FileUtils.loadFileRelative("/res/logic_simulator/projects/test.xml"));
-		this.setBlueprint(this.project.getMainBlueprint());
-
-		//		//SR latch
-		//		this.addComponent(new InputPin(new IVec2(0, 8)));
-		//		this.addComponent(new Wire(new IVec2(3, 9), new IVec2(4, 9)));
-		//		this.addComponent(new InputPin(new IVec2(0, 0)));
-		//		this.addComponent(new Wire(new IVec2(3, 1), new IVec2(4, 1)));
-		//
-		//		this.addComponent(new NORGate(new IVec2(4, 1)));
-		//		this.addComponent(new NORGate(new IVec2(4, 7)));
-		//
-		//		this.addComponent(new Wire(new IVec2(8, 8), new IVec2(8, 4)));
-		//		this.addComponent(new Wire(new IVec2(8, 4), new IVec2(4, 4)));
-		//		this.addComponent(new Wire(new IVec2(4, 4), new IVec2(4, 3)));
-		//
-		//		this.addComponent(new Wire(new IVec2(8, 2), new IVec2(9, 2)));
-		//		this.addComponent(new Wire(new IVec2(9, 2), new IVec2(9, 6)));
-		//		this.addComponent(new Wire(new IVec2(9, 6), new IVec2(4, 6)));
-		//		this.addComponent(new Wire(new IVec2(4, 6), new IVec2(4, 7)));
-		//
-		//		//		this.addComponent(new InputPin(new IVec2(0, 10)));
-		//		//		this.addComponent(new InputPin(new IVec2(0, 0)));
 
 		this._resize();
 	}
@@ -264,9 +246,6 @@ public class LogicSimulatorWindow extends Window {
 		Scene.removeScene(COMPONENT_SCENE);
 		Scene.removeScene(COMPONENT_TEXT_SCENE);
 		Scene.removeScene(COMPONENT_SELECT_SCENE);
-		Scene.removeScene(GATE_MODE_SCENE);
-
-		this.saveProject();
 	}
 
 	@Override
@@ -279,20 +258,41 @@ public class LogicSimulatorWindow extends Window {
 		return "Logic Simulator";
 	}
 
-	private void saveProject() {
-		this.saveBlueprint();
+	public void setPlaceComponent(LogicComponent c) {
+		if (this.interactionMode != InteractionMode.EDIT_MODE) {
+			return;
+		}
 
-		File f = FileUtils.loadFileRelative("/res/logic_simulator/projects/test.xml");
-		try {
-			this.project.saveToFile(f);
+		if (c == null) {
+			if (this.isPlacingComponent) {
+				this.placeComponent = null;
+				this.placeComponentGhost.kill();
+				this.placeComponentGhost = null;
+			}
+			this.isPlacingComponent = false;
+			return;
 		}
-		catch (IOException e) {
-			e.printStackTrace();
+		this.isPlacingComponent = true;
+		this.placeComponent = c;
+		this.placeComponentGhost = ComponentDisplay.createComponentDisplay(c, this);
+		this.placeComponentGhost.setVisible(true);
+	}
+
+	public void setBlueprint(LogicCircuitBlueprint blueprint) {
+		for (LogicComponent c : this.componentInstances.keySet()) {
+			this.componentInstances.get(c).kill();
 		}
+		this.componentInstances.clear();
+
+		this.blueprint = null;
+		for (LogicComponent c : blueprint.getComponents()) {
+			this.addComponent(c);
+		}
+		this.blueprint = blueprint;
 	}
 
 	//saves whatever circuit we have into the current active blueprint. 
-	private void saveBlueprint() {
+	public void saveBlueprint() {
 		this.blueprint.removeAllComponents();
 		for (LogicComponent c : this.componentInstances.keySet()) {
 			this.blueprint.addComponent(c);
@@ -307,15 +307,16 @@ public class LogicSimulatorWindow extends Window {
 		ComponentInstance inst = new ComponentInstance(c);
 		this.componentInstances.put(c, inst);
 
+		assert false;
 		if (inst.component instanceof InputPin) {
 			((InputPinInstance) inst.instance).setData(FALSE);
-			this.addToUpdateQueue(c);
 		}
+		this.addToUpdateQueue(c);
 	}
 
 	private void addComponent(LogicComponent c) {
 		this._addComponent(c);
-		this.pruneWires();
+		this.triggerPruneWires();
 	}
 
 	private void _removeComponent(LogicComponent c) {
@@ -332,7 +333,11 @@ public class LogicSimulatorWindow extends Window {
 
 	private void removeComponent(LogicComponent c) {
 		this._removeComponent(c);
-		this.pruneWires();
+		this.triggerPruneWires();
+	}
+
+	private void triggerPruneWires() {
+		this.shouldPruneWires = true;
 	}
 
 	//cut and merge wires
@@ -542,19 +547,6 @@ public class LogicSimulatorWindow extends Window {
 		this.updateQueueCnt.put(c, this.updateQueueCnt.getOrDefault(c, 0) + 1);
 	}
 
-	private void setBlueprint(LogicCircuitBlueprint blueprint) {
-		for (LogicComponent c : this.componentInstances.keySet()) {
-			this.componentInstances.get(c).kill();
-		}
-		this.componentInstances.clear();
-
-		this.blueprint = null;
-		for (LogicComponent c : blueprint.getComponents()) {
-			this.addComponent(c);
-		}
-		this.blueprint = blueprint;
-	}
-
 	private void updateGridlines() {
 		//compute gridline scale
 		int majorGridlineScale, minorGridlineScale;
@@ -671,6 +663,11 @@ public class LogicSimulatorWindow extends Window {
 
 		this.updateGridlines();
 
+		if (this.shouldPruneWires) {
+			this.shouldPruneWires = false;
+			this.pruneWires();
+		}
+
 		//go through update queue
 		while (this.updateQueue.size() != 0) {
 			LogicComponent component = this.updateQueue.poll();
@@ -688,7 +685,7 @@ public class LogicSimulatorWindow extends Window {
 			inst.update();
 		}
 
-		if (this.draggingWires) {
+		if (this.isDraggingWires) {
 			IVec2 start = new IVec2(this.wireDragAnchor);
 			IVec2 end = this.getMouseGridSnapPos();
 
@@ -717,12 +714,6 @@ public class LogicSimulatorWindow extends Window {
 
 			this.wireDragDisplay[0].setMaterial(new Material(Color.RED));
 			this.wireDragDisplay[1].setMaterial(new Material(Color.RED));
-		}
-
-		if (this.interactionMode == InteractionMode.GATE_MODE) {
-			IVec2 mouse_loc = this.getMouseGridSnapPos();
-			this.gateModeGhost.setOffset(mouse_loc);
-			this.gateModeGhost.refresh();
 		}
 
 		if (this.isDraggingSelection) {
@@ -756,6 +747,12 @@ public class LogicSimulatorWindow extends Window {
 			}
 			this.copyRectangleDisplay[4].setModelTransform(FilledRectangle.generateRectangleModelTransform(bl, tr, 1.5f));
 		}
+
+		if (this.isPlacingComponent) {
+			IVec2 mouse_loc = this.getMouseGridSnapPos();
+			this.placeComponentGhost.setOffset(mouse_loc);
+			this.placeComponentGhost.refresh();
+		}
 	}
 
 	@Override
@@ -783,11 +780,6 @@ public class LogicSimulatorWindow extends Window {
 
 		this.uiScreen.setUIScene(COMPONENT_SELECT_SCENE);
 		this.uiScreen.render(outputBuffer);
-
-		if (this.interactionMode == InteractionMode.GATE_MODE) {
-			this.uiScreen.setUIScene(GATE_MODE_SCENE);
-			this.uiScreen.render(outputBuffer);
-		}
 
 		this.uiSection.render(outputBuffer, this.getWindowMousePos());
 	}
@@ -914,6 +906,39 @@ public class LogicSimulatorWindow extends Window {
 		this.copyRectangleDimensions = null;
 	}
 
+	//if we press the mouse over a wire, a logic input, or a logic output, we should start dragging wires. 
+	private boolean shouldStartDraggingWires() {
+		IVec2 mouse_pos = this.getMouseGridSnapPos();
+		if (this.inputMap.containsKey(mouse_pos) || this.outputMap.containsKey(mouse_pos)) {
+			return true;
+		}
+		for (LogicComponent c : this.componentInstances.keySet()) {
+			if (!(c instanceof Wire)) {
+				continue;
+			}
+			IVec2 bl = c.getOffset();
+			IVec2 tr = c.getOffset().add(c.getWidth(), c.getHeight());
+			if (bl.x <= mouse_pos.x && bl.y <= mouse_pos.y && tr.x >= mouse_pos.x && tr.y >= mouse_pos.y) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private void startDraggingWires() {
+		this.isDraggingWires = true;
+		this.wireDragAnchor = this.getMouseGridSnapPos();
+	}
+
+	private void stopDraggingWires() {
+		this.isDraggingWires = false;
+
+		this.wireDragDisplay[0].kill();
+		this.wireDragDisplay[1].kill();
+		this.wireDragDisplay[0] = null;
+		this.wireDragDisplay[1] = null;
+	}
+
 	@Override
 	protected void _mousePressed(int button) {
 		this.uiSection.mousePressed(button);
@@ -923,6 +948,19 @@ public class LogicSimulatorWindow extends Window {
 		else if (button == GLFW.GLFW_MOUSE_BUTTON_1) {
 			switch (this.interactionMode) {
 			case EDIT_MODE: {
+
+				if (this.isPlacingComponent) {
+					this.placeComponent.setOffset(this.getMouseGridSnapPos());
+					this.addComponent(this.placeComponent);
+					this.setPlaceComponent(null);
+					break;
+				}
+
+				if (this.shouldStartDraggingWires()) {
+					this.startDraggingWires();
+					break;
+				}
+
 				ComponentInstance clicked_component = this.getComponentInstanceAtPos(this.getMouseGridSnapPos());
 				if (clicked_component == null) {
 					this.deselectAllComponents();
@@ -966,17 +1004,6 @@ public class LogicSimulatorWindow extends Window {
 				}
 				break;
 			}
-			case WIRE_MODE: {
-				this.wireDragAnchor = this.getMouseGridSnapPos();
-				this.draggingWires = true;
-				break;
-			}
-			case GATE_MODE: {
-				IVec2 offset = this.getMouseGridSnapPos();
-				LogicGate gate = LogicGate.createGate(this.gateModeGateType, offset);
-				this.addComponent(gate);
-				break;
-			}
 			}
 		}
 	}
@@ -990,15 +1017,39 @@ public class LogicSimulatorWindow extends Window {
 		else if (button == GLFW.GLFW_MOUSE_BUTTON_1) {
 			switch (this.interactionMode) {
 			case EDIT_MODE: {
+				if (this.isDraggingWires) {
+					IVec2 start = new IVec2(this.wireDragAnchor);
+					IVec2 end = this.getMouseGridSnapPos();
+
+					int dx = end.x - start.x;
+					int dy = end.y - start.y;
+
+					IVec2 e0 = start;
+					IVec2 e1 = start.add(dx, 0);
+					IVec2 e2 = start.add(dx, dy);
+					if (!this.wireDragHorizontalFirst) {
+						e1 = start.add(0, dy);
+						e2 = start.add(dx, dy);
+					}
+
+					if (!e0.equals(e1)) {
+						this.addComponent(new Wire(e0, e1));
+					}
+					if (!e1.equals(e2)) {
+						this.addComponent(new Wire(e1, e2));
+					}
+
+					this.stopDraggingWires();
+				}
 				if (this.isDraggingSelection) {
 					this.isDraggingSelection = false;
 					for (LogicComponent c : this.selectedComponents) {
 						ComponentInstance inst = this.componentInstances.get(c);
 						inst.setOffset(inst.getOffset().add(this.selectionDragOffset));
 					}
-					this.pruneWires();
+					this.triggerPruneWires();
 				}
-				else if (this.isRectangleSelecting) {
+				if (this.isRectangleSelecting) {
 					this.isRectangleSelecting = false;
 					for (ModelInstance m : this.rectangleSelectDisplay) {
 						m.kill();
@@ -1020,39 +1071,6 @@ public class LogicSimulatorWindow extends Window {
 			}
 
 			case INTERACT_MODE: {
-				break;
-			}
-
-			case WIRE_MODE: {
-				this.draggingWires = false;
-				this.wireDragDisplay[0].kill();
-				this.wireDragDisplay[1].kill();
-				this.wireDragDisplay[0] = null;
-				this.wireDragDisplay[1] = null;
-
-				IVec2 start = new IVec2(this.wireDragAnchor);
-				IVec2 end = this.getMouseGridSnapPos();
-
-				int dx = end.x - start.x;
-				int dy = end.y - start.y;
-
-				IVec2 e0 = start;
-				IVec2 e1 = start.add(dx, 0);
-				IVec2 e2 = start.add(dx, dy);
-				if (!this.wireDragHorizontalFirst) {
-					e1 = start.add(0, dy);
-					e2 = start.add(dx, dy);
-				}
-
-				if (!e0.equals(e1)) {
-					this.addComponent(new Wire(e0, e1));
-				}
-				if (!e1.equals(e2)) {
-					this.addComponent(new Wire(e1, e2));
-				}
-				break;
-			}
-			case GATE_MODE: {
 				break;
 			}
 			}
@@ -1092,14 +1110,6 @@ public class LogicSimulatorWindow extends Window {
 			case GLFW_KEY_2:
 				next_mode = InteractionMode.EDIT_MODE;
 				break;
-
-			case GLFW_KEY_3:
-				next_mode = InteractionMode.WIRE_MODE;
-				break;
-
-			case GLFW_KEY_4:
-				next_mode = InteractionMode.GATE_MODE;
-				break;
 			}
 
 			if (next_mode == this.interactionMode) {
@@ -1110,15 +1120,11 @@ public class LogicSimulatorWindow extends Window {
 			//clean up previous mode
 			switch (this.interactionMode) {
 			case EDIT_MODE:
+				this.setPlaceComponent(null);
 				this.deselectAllComponents();
 				this.stopCopying();
 				break;
-			case GATE_MODE:
-				this.gateModeGhost.setVisible(false);
-				break;
 			case INTERACT_MODE:
-				break;
-			case WIRE_MODE:
 				break;
 			}
 
@@ -1126,12 +1132,7 @@ public class LogicSimulatorWindow extends Window {
 			switch (next_mode) {
 			case EDIT_MODE:
 				break;
-			case GATE_MODE:
-				this.gateModeGhost.setVisible(true);
-				break;
 			case INTERACT_MODE:
-				break;
-			case WIRE_MODE:
 				break;
 			}
 			this.interactionMode = next_mode;
@@ -1182,6 +1183,9 @@ public class LogicSimulatorWindow extends Window {
 				if (this.isCopying) {
 					this.stopCopying();
 				}
+				else if (this.isPlacingComponent) {
+					this.setPlaceComponent(null);
+				}
 				else {
 					this.deselectAllComponents();
 				}
@@ -1190,40 +1194,7 @@ public class LogicSimulatorWindow extends Window {
 			}
 			break;
 		}
-		case GATE_MODE: {
-			switch (key) {
-			case GLFW_KEY_A:
-				this.gateModeTypeInd = (this.gateModeTypeInd - 1 + 4) % 4;
-				break;
-
-			case GLFW_KEY_D:
-				this.gateModeTypeInd = (this.gateModeTypeInd + 1) % 4;
-				break;
-
-			case GLFW_KEY_W:
-				this.gateModeNotInd = (this.gateModeNotInd + 1) % 2;
-				break;
-			}
-			GateType n_type = this.gateModeTypeArr[this.gateModeNotInd][this.gateModeTypeInd];
-			if (n_type != this.gateModeGateType) {
-				this.gateModeGateType = n_type;
-				this.gateModeGhost.kill();
-				LogicGate gate = LogicGate.createGate(this.gateModeGateType, new IVec2(0, 0));
-				LogicGateInstance gate_inst = (LogicGateInstance) LogicComponentInstance.createLogicComponentInstance(gate);
-				this.gateModeGhost = new GateDisplay(gate_inst, new IVec2(0));
-				this.gateModeGhost.setVisible(true);
-			}
-			break;
-		}
 		case INTERACT_MODE: {
-			break;
-		}
-		case WIRE_MODE: {
-			switch (key) {
-			case GLFW_KEY_R:
-				this.wireDragHorizontalFirst = !this.wireDragHorizontalFirst;
-				break;
-			}
 			break;
 		}
 		}
@@ -1234,7 +1205,7 @@ public class LogicSimulatorWindow extends Window {
 		this.uiSection.keyReleased(key);
 	}
 
-	private class LogicInput {
+	public class LogicInput {
 		//helper class responsible for handling the case where there are multiple outputs feeding into an input. 
 		//should behave the same as a wire. 
 
@@ -1329,7 +1300,7 @@ public class LogicSimulatorWindow extends Window {
 		}
 	}
 
-	class LogicOutput {
+	public class LogicOutput {
 		//this exists for display purposes, and for knowing where all the outputs are
 		public LogicComponent component;
 		public int output_ind;
@@ -1405,6 +1376,8 @@ public class LogicSimulatorWindow extends Window {
 		}
 	}
 
+	private CircuitSimulatorWindow thiswindow = this;
+
 	class ComponentInstance {
 		LogicComponent component;
 		ComponentDisplay display;
@@ -1438,20 +1411,7 @@ public class LogicSimulatorWindow extends Window {
 				this.logicOutputs[i] = l_output;
 			}
 
-			if (component instanceof Wire) {
-				this.display = new WireDisplay((WireInstance) this.instance, this.component.getOffset());
-			}
-			else if (component instanceof LogicGate) {
-				this.display = new GateDisplay((LogicGateInstance) this.instance, this.component.getOffset());
-			}
-			else if (component instanceof InputPin) {
-				this.display = new InputPinDisplay((InputPinInstance) this.instance, this.component.getOffset());
-			}
-			else if (component instanceof OutputPin) {
-				this.display = new OutputPinDisplay((OutputPinInstance) this.instance, this.component.getOffset());
-			}
-
-			assert this.display != null;
+			this.display = ComponentDisplay.createComponentDisplay(component, this.instance, thiswindow);
 			this.display.setVisible(true);
 			this.display.update();
 
@@ -1546,351 +1506,27 @@ public class LogicSimulatorWindow extends Window {
 		}
 	}
 
-	abstract class ComponentDisplay {
-		private LogicComponentInstance component;
-		protected boolean isVisible = false;
-		protected IVec2 offset;
-
-		protected boolean isSelected = false;
-		protected ModelInstance[] selectLines;
-
-		public ComponentDisplay(LogicComponentInstance component, IVec2 offset) {
-			this.component = component;
-			this.offset = new IVec2(offset);
-			this.selectLines = new ModelInstance[4];
-		}
-
-		public abstract void update();
-
-		public abstract void kill();
-
-		public abstract void setVisible(boolean b);
-
-		public void refresh() {
-			if (this.isVisible) {
-				this.setVisible(false);
-				this.setVisible(true);
-				this.update();
-			}
-			if (this.isSelected) {
-				this.setSelected(false);
-				this.setSelected(true);
-			}
-		}
-
-		public void setOffset(IVec2 offset) {
-			if (this.offset.equals(offset)) {
-				return;
-			}
-
-			this.offset = offset;
-			this.refresh();
-		}
-
-		public void setSelected(boolean b) {
-			if (this.isSelected && !b) {
-				for (int i = 0; i < 4; i++) {
-					this.selectLines[i].kill();
-					this.selectLines[i] = null;
-				}
-			}
-			else if (!this.isSelected && b) {
-				Vec2 bl = new Vec2(this.offset);
-				Vec2 tr = new Vec2(this.offset.add(this.component.getWidth(), this.component.getHeight()));
-				bl.subi(0.5f);
-				tr.addi(0.5f);
-				Vec2[] corners = { new Vec2(bl.x, bl.y), new Vec2(tr.x, bl.y), new Vec2(tr.x, tr.y), new Vec2(bl.x, tr.y) };
-				for (int i = 0; i < 4; i++) {
-					this.selectLines[i] = Line.addDefaultLine(corners[i], corners[(i + 1) % 4], COMPONENT_SELECT_SCENE);
-					this.selectLines[i].setMaterial(SELECT_MATERIAL);
-				}
-			}
-			this.isSelected = b;
-		}
+	public int getComponentSelectScene() {
+		return this.COMPONENT_SELECT_SCENE;
 	}
 
-	class WireDisplay extends ComponentDisplay {
-		private WireInstance wire;
-
-		private ModelInstance wireInstance, e0Instance, e1Instance;
-
-		public WireDisplay(WireInstance component, IVec2 offset) {
-			super(component, offset);
-			this.wire = component;
-		}
-
-		@Override
-		public void update() {
-			if (this.isVisible) {
-				TruthValue d0 = this.wire.getOutput(0);
-				TruthValue d1 = this.wire.getOutput(1);
-				TruthValue data = ERROR;
-				if (d0 == TRUE || d1 == TRUE) {
-					data = TRUE;
-				}
-				else if (d0 == FALSE || d1 == FALSE) {
-					data = FALSE;
-				}
-				switch (data) {
-				case TRUE:
-					this.wireInstance.setMaterial(TRUE_MATERIAL);
-					this.e0Instance.setMaterial(TRUE_MATERIAL);
-					this.e1Instance.setMaterial(TRUE_MATERIAL);
-					break;
-
-				case FALSE:
-					this.wireInstance.setMaterial(FALSE_MATERIAL);
-					this.e0Instance.setMaterial(FALSE_MATERIAL);
-					this.e1Instance.setMaterial(FALSE_MATERIAL);
-					break;
-
-				case ERROR:
-					this.wireInstance.setMaterial(ERROR_MATERIAL);
-					this.e0Instance.setMaterial(ERROR_MATERIAL);
-					this.e1Instance.setMaterial(ERROR_MATERIAL);
-					break;
-				}
-			}
-		}
-
-		@Override
-		public void kill() {
-			this.setVisible(false);
-		}
-
-		@Override
-		public void setVisible(boolean b) {
-			if (this.isVisible && !b) {
-				this.wireInstance.kill();
-				this.wireInstance = null;
-
-				this.e0Instance.kill();
-				this.e1Instance.kill();
-				this.e0Instance = null;
-				this.e1Instance = null;
-			}
-			else if (!this.isVisible && b) {
-				IVec2 ie0 = this.offset.add(this.wire.getInputOffsets()[0]);
-				IVec2 ie1 = this.offset.add(this.wire.getInputOffsets()[1]);
-
-				Vec2 e0 = new Vec2(this.offset.add(this.wire.getInputOffsets()[0]));
-				Vec2 e1 = new Vec2(this.offset.add(this.wire.getInputOffsets()[1]));
-				Vec2 bl = MathUtils.min(e0, e1);
-				Vec2 tr = MathUtils.max(e0, e1);
-				this.wireInstance = FilledRectangle.addDefaultRectangle(bl.add(-WIRE_WIDTH / 2), tr.add(WIRE_WIDTH / 2), 0, WIRE_SCENE);
-
-				int e0_ioamt = (inputMap.get(ie0) != null ? inputMap.get(ie0).size() : 0) + (outputMap.get(ie0) != null ? outputMap.get(ie0).size() : 0);
-				int e1_ioamt = (inputMap.get(ie1) != null ? inputMap.get(ie1).size() : 0) + (outputMap.get(ie1) != null ? outputMap.get(ie1).size() : 0);
-
-				float e0_size = e0_ioamt > 4 ? WIRE_WIDTH : WIRE_WIDTH / 2;
-				float e1_size = e1_ioamt > 4 ? WIRE_WIDTH : WIRE_WIDTH / 2;
-
-				this.e0Instance = FilledRectangle.addDefaultRectangle(e0.sub(e0_size), e0.add(e0_size), 0, WIRE_SCENE);
-				this.e1Instance = FilledRectangle.addDefaultRectangle(e1.sub(e1_size), e1.add(e1_size), 0, WIRE_SCENE);
-			}
-			this.isVisible = b;
-		}
+	public int getComponentScene() {
+		return this.COMPONENT_SCENE;
 	}
 
-	class InputPinDisplay extends ComponentDisplay {
-		private InputPinInstance inputPin;
-		private ModelInstance dataRect, backgroundRect;
-
-		public InputPinDisplay(InputPinInstance component, IVec2 offset) {
-			super(component, offset);
-			this.inputPin = component;
-		}
-
-		@Override
-		public void update() {
-			if (this.isVisible) {
-				TruthValue data = this.inputPin.getOutput(0);
-				switch (data) {
-				case TRUE:
-					this.dataRect.setMaterial(TRUE_MATERIAL);
-					break;
-
-				case FALSE:
-					this.dataRect.setMaterial(FALSE_MATERIAL);
-					break;
-
-				case ERROR:
-					this.dataRect.setMaterial(ERROR_MATERIAL);
-					break;
-				}
-			}
-		}
-
-		@Override
-		public void kill() {
-			this.setVisible(false);
-		}
-
-		@Override
-		public void setVisible(boolean b) {
-			if (this.isVisible && !b) {
-				this.dataRect.kill();
-				this.dataRect = null;
-
-				this.backgroundRect.kill();
-				this.backgroundRect = null;
-			}
-			else if (!this.isVisible && b) {
-				Vec2 offset = new Vec2(this.offset);
-				float width = this.inputPin.getWidth();
-				float height = this.inputPin.getHeight();
-				Vec2 bl = new Vec2(offset);
-				Vec2 tr = bl.add(width, height);
-				this.backgroundRect = FilledRectangle.addDefaultRectangle(bl, tr, 0, COMPONENT_SCENE);
-
-				float dr_size = 0.5f;
-				Vec2 center = offset.add(width / 2, height / 2);
-				this.dataRect = FilledRectangle.addDefaultRectangle(center.sub(dr_size), center.add(dr_size), 1, COMPONENT_SCENE);
-			}
-			this.isVisible = b;
-		}
+	public int getWireScene() {
+		return this.WIRE_SCENE;
 	}
 
-	class OutputPinDisplay extends ComponentDisplay {
-		private OutputPinInstance outputPin;
-		private ModelInstance dataRect, backgroundRect;
-
-		public OutputPinDisplay(OutputPinInstance component, IVec2 offset) {
-			super(component, offset);
-			this.outputPin = component;
-		}
-
-		@Override
-		public void update() {
-			if (this.isVisible) {
-				TruthValue data = this.outputPin.getInput(0);
-				switch (data) {
-				case TRUE:
-					this.dataRect.setMaterial(TRUE_MATERIAL);
-					break;
-
-				case FALSE:
-					this.dataRect.setMaterial(FALSE_MATERIAL);
-					break;
-
-				case ERROR:
-					this.dataRect.setMaterial(ERROR_MATERIAL);
-					break;
-				}
-			}
-		}
-
-		@Override
-		public void kill() {
-			this.setVisible(false);
-		}
-
-		@Override
-		public void setVisible(boolean b) {
-			if (this.isVisible && !b) {
-				this.dataRect.kill();
-				this.dataRect = null;
-
-				this.backgroundRect.kill();
-				this.backgroundRect = null;
-			}
-			else if (!this.isVisible && b) {
-				Vec2 offset = new Vec2(this.offset);
-				float width = this.outputPin.getWidth();
-				float height = this.outputPin.getHeight();
-				Vec2 bl = new Vec2(offset);
-				Vec2 tr = bl.add(width, height);
-				this.backgroundRect = FilledRectangle.addDefaultRectangle(bl, tr, 0, COMPONENT_SCENE);
-
-				float dr_size = 0.5f;
-				Vec2 center = offset.add(width / 2, height / 2);
-				this.dataRect = FilledRectangle.addDefaultRectangle(center.sub(dr_size), center.add(dr_size), 1, COMPONENT_SCENE);
-			}
-			this.isVisible = b;
-		}
-
+	public HashMap<IVec2, ArrayList<LogicInput>> getInputMap() {
+		return this.inputMap;
 	}
 
-	class GateDisplay extends ComponentDisplay {
-		private LogicGateInstance gate;
-		private ModelInstance gateRect;
-
-		public GateDisplay(LogicGateInstance component, IVec2 offset) {
-			super(component, offset);
-			this.gate = component;
-			this.gateRect = null;
-		}
-
-		@Override
-		public void update() {
-			if (this.isVisible) {
-				//nothing D:
-			}
-		}
-
-		@Override
-		public void kill() {
-			this.setVisible(false);
-		}
-
-		@Override
-		public void setVisible(boolean b) {
-			if (this.isVisible && !b) {
-				this.gateRect.kill();
-				this.gateRect = null;
-			}
-			else if (!this.isVisible && b) {
-				Vec2 c_offset = new Vec2(this.offset);
-				float width = this.gate.getWidth();
-				float height = this.gate.getHeight();
-				Vec2 bl = new Vec2(c_offset);
-				Vec2 tr = new Vec2(bl.x + width, bl.y + height);
-
-				float extra_height = 0.3f;
-				bl.addi(0, -extra_height);
-				tr.addi(0, extra_height);
-				this.gateRect = gateRects.get(this.gate.getType()).addRectangle(bl, tr, 0, COMPONENT_SCENE);
-				this.gateRect.setMaterial(new Material(Color.WHITE));
-			}
-			this.isVisible = b;
-		}
-
+	public HashMap<IVec2, ArrayList<LogicOutput>> getOutputMap() {
+		return this.outputMap;
 	}
 
-	//TODO load text
-	class CircuitDisplay extends ComponentDisplay {
-		private LogicCircuitInstance circuit;
-		private ModelInstance circuitRect = null;
-
-		public CircuitDisplay(LogicCircuitInstance component, IVec2 offset) {
-			super(component, offset);
-			this.circuit = component;
-			this.circuitRect = null;
-		}
-
-		@Override
-		public void update() {
-			if (this.isVisible) {
-				//nothing
-			}
-		}
-
-		@Override
-		public void kill() {
-			this.setVisible(false);
-		}
-
-		@Override
-		public void setVisible(boolean b) {
-			if (this.isVisible && !b) {
-
-			}
-			else if (!this.isVisible && b) {
-
-			}
-			this.isVisible = b;
-		}
-
+	public HashMap<GateType, FilledRectangle> getGateRects() {
+		return this.gateRects;
 	}
-
 }

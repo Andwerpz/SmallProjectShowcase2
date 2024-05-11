@@ -1,0 +1,19 @@
+<root>
+	<circuits/>
+	<components>
+		<gates>
+			<AND>AND</AND>
+			<OR>OR</OR>
+			<XOR>XOR</XOR>
+			<NAND>NAND</NAND>
+			<NOR>NOR</NOR>
+			<XNOR>XNOR</XNOR>
+			<NOT>NOT</NOT>
+		</gates>
+		<IO>
+			<Input_Pin>INPUT_PIN</Input_Pin>
+			<Output_Pin>OUTPUT_PIN</Output_Pin>
+		</IO>
+		
+	</components>
+</root>

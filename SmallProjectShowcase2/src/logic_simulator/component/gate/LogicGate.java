@@ -41,7 +41,7 @@ public abstract class LogicGate extends LogicComponent {
 			return new XORGate(offset);
 		case XNOR:
 			return new XNORGate(offset);
-		case INVERTER:
+		case NOT:
 			return new Inverter(offset);
 		}
 		return null;
