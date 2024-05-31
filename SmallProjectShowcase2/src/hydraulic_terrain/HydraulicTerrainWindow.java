@@ -19,6 +19,7 @@ import lwjglengine.graphics.Texture;
 import lwjglengine.graphics.TextureMaterial;
 import lwjglengine.input.Button;
 import lwjglengine.input.Input;
+import lwjglengine.input.Input.InputCallback;
 import lwjglengine.model.Line;
 import lwjglengine.model.Model;
 import lwjglengine.model.ModelInstance;
@@ -41,7 +42,7 @@ import myutils.math.Vec2;
 import myutils.math.Vec3;
 import myutils.misc.Pair;
 
-public class HydraulicTerrainWindow extends Window {
+public class HydraulicTerrainWindow extends Window implements InputCallback {
 	//for now, just generate a new vertex array 
 
 	//later, i want to be able to render using the vertex shader. Feed the heightmap as a texture into the vertex
@@ -115,7 +116,7 @@ public class HydraulicTerrainWindow extends Window {
 		backgroundRect.setMaterial(backgroundMaterial);
 		backgroundRect.bind(this.rootUIElement);
 
-		Button btnRegenerateNoise = new Button(0, 10, 100, 25, "btn_regenerate_noise", "Regenerate Terrain", 12, this.uiSection.getSelectionScene(), this.uiSection.getTextScene());
+		Button btnRegenerateNoise = new Button(0, 10, 100, 25, "btn_regenerate_noise", "Regenerate Terrain", 12, this, this.uiSection.getSelectionScene(), this.uiSection.getTextScene());
 		btnRegenerateNoise.setFrameAlignmentStyle(UIElement.FROM_CENTER_LEFT, UIElement.FROM_TOP);
 		btnRegenerateNoise.setContentAlignmentStyle(UIElement.ALIGN_CENTER, UIElement.ALIGN_TOP);
 		btnRegenerateNoise.setFillWidth(true);
@@ -123,7 +124,7 @@ public class HydraulicTerrainWindow extends Window {
 		btnRegenerateNoise.getButtonText().setDoAntialiasing(false);
 		btnRegenerateNoise.bind(backgroundRect);
 
-		Button btnErodeTerrain = new Button(0, 40, 100, 25, "btn_erode_terrain", "Erode Terrain", 12, this.uiSection.getSelectionScene(), this.uiSection.getTextScene());
+		Button btnErodeTerrain = new Button(0, 40, 100, 25, "btn_erode_terrain", "Erode Terrain", 12, this, this.uiSection.getSelectionScene(), this.uiSection.getTextScene());
 		btnErodeTerrain.setFrameAlignmentStyle(UIElement.FROM_CENTER_LEFT, UIElement.FROM_TOP);
 		btnErodeTerrain.setContentAlignmentStyle(UIElement.ALIGN_CENTER, UIElement.ALIGN_TOP);
 		btnErodeTerrain.setFillWidth(true);
@@ -131,7 +132,7 @@ public class HydraulicTerrainWindow extends Window {
 		btnErodeTerrain.getButtonText().setDoAntialiasing(false);
 		btnErodeTerrain.bind(backgroundRect);
 
-		Button btnBlurTerrain = new Button(0, 70, 100, 25, "btn_blur_terrain", "Blur Terrain", 12, this.uiSection.getSelectionScene(), this.uiSection.getTextScene());
+		Button btnBlurTerrain = new Button(0, 70, 100, 25, "btn_blur_terrain", "Blur Terrain", 12, this, this.uiSection.getSelectionScene(), this.uiSection.getTextScene());
 		btnBlurTerrain.setFrameAlignmentStyle(UIElement.FROM_CENTER_LEFT, UIElement.FROM_TOP);
 		btnBlurTerrain.setContentAlignmentStyle(UIElement.ALIGN_CENTER, UIElement.ALIGN_TOP);
 		btnBlurTerrain.setFillWidth(true);
@@ -575,7 +576,27 @@ public class HydraulicTerrainWindow extends Window {
 	protected void _mouseReleased(int button) {
 		this.mousePressed = false;
 		this.uiSection.mouseReleased(button);
-		switch (Input.getClicked(this.uiSection.getSelectionScene())) {
+	}
+
+	@Override
+	protected void _mouseScrolled(float wheelOffset, float smoothOffset) {
+		this.cameraDist += smoothOffset * 2.5f;
+	}
+
+	@Override
+	protected void _keyPressed(int key) {
+		switch (key) {
+		}
+	}
+
+	@Override
+	protected void _keyReleased(int key) {
+
+	}
+
+	@Override
+	public void inputClicked(String sID) {
+		switch (sID) {
 		case "btn_regenerate_noise": {
 			this.heightmap = HydraulicTerrainWindow.generatePerlinNoise();
 			this.regenerateTerrainModel();
@@ -604,19 +625,7 @@ public class HydraulicTerrainWindow extends Window {
 	}
 
 	@Override
-	protected void _mouseScrolled(float wheelOffset, float smoothOffset) {
-		this.cameraDist += smoothOffset * 2.5f;
-	}
-
-	@Override
-	protected void _keyPressed(int key) {
-		switch (key) {
-		}
-	}
-
-	@Override
-	protected void _keyReleased(int key) {
-		// TODO Auto-generated method stub
+	public void inputChanged(String sID) {
 
 	}
 

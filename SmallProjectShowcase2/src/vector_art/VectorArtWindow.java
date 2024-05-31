@@ -333,17 +333,17 @@ public class VectorArtWindow extends Window {
 
 		this.uiScreen.setUIScene(GRIDLINE_SCENE);
 		this.uiScreen.render(outputBuffer);
-		
-		if(this.renderTriangleScene) {
+
+		if (this.renderTriangleScene) {
 			this.uiScreen.setUIScene(TRIANGLE_SCENE);
 			this.uiScreen.render(outputBuffer);
 		}
-		
+
 		if (this.renderPolyScene) {
 			this.uiScreen.setUIScene(POLY_SCENE);
 			this.uiScreen.render(outputBuffer);
 		}
-		
+
 		if (this.renderConvexHullScene) {
 			this.uiScreen.setUIScene(CONVEX_HULL_SCENE);
 			this.uiScreen.render(outputBuffer);
@@ -352,7 +352,7 @@ public class VectorArtWindow extends Window {
 		if (this.renderControlScene) {
 			this.uiScreen.setUIScene(CONTROL_SCENE);
 			this.uiScreen.render(outputBuffer);
-		}		
+		}
 
 		this.uiSection.render(outputBuffer, this.getWindowMousePos());
 	}
@@ -397,11 +397,6 @@ public class VectorArtWindow extends Window {
 	protected void _mouseReleased(int button) {
 		this.uiSection.mouseReleased(button);
 		this.viewportGrabbed = false;
-
-		String which = Input.getClicked(this.uiSection.getSelectionScene());
-		switch (which) {
-
-		}
 	}
 
 	@Override
@@ -438,7 +433,7 @@ public class VectorArtWindow extends Window {
 		case GLFW_KEY_P:
 			this.renderPolyScene = !this.renderPolyScene;
 			break;
-			
+
 		case GLFW_KEY_T:
 			this.renderTriangleScene = !this.renderTriangleScene;
 			break;
@@ -449,7 +444,7 @@ public class VectorArtWindow extends Window {
 	protected void _keyReleased(int key) {
 		this.uiSection.keyReleased(key);
 	}
-	
+
 	//winding order for path is always CCW
 	class Path {
 		boolean isVisible = false;
@@ -479,16 +474,16 @@ public class VectorArtWindow extends Window {
 				}
 				this.curves.add(new Curve(v));
 			}
-			
+
 			//make sure winding order is CCW
 			{
 				ArrayList<Vec2> poly = new ArrayList<>();
-				for(Curve c : this.curves) {
+				for (Curve c : this.curves) {
 					poly.add(c.v0);
 				}
-				if(!MathUtils.isCounterClockwiseWinding(poly)) {
+				if (!MathUtils.isCounterClockwiseWinding(poly)) {
 					//reverse everything 
-					for(Curve c : this.curves) {
+					for (Curve c : this.curves) {
 						c.reverse();
 					}
 					Collections.reverse(this.curves);
@@ -505,8 +500,8 @@ public class VectorArtWindow extends Window {
 					m.kill();
 				}
 				this.poly_lines.clear();
-				
-				for(ModelInstance m : this.tri_lines) {
+
+				for (ModelInstance m : this.tri_lines) {
 					m.kill();
 				}
 				this.tri_lines.clear();
@@ -527,10 +522,10 @@ public class VectorArtWindow extends Window {
 					m.setMaterial(new Material(Color.BLUE));
 					this.poly_lines.add(m);
 				}
-				
+
 				//triangle lines
 				ArrayList<int[]> tris = MathUtils.calculateTrianglePartition(poly);
-				for(int i = 0; i < tris.size(); i++) {
+				for (int i = 0; i < tris.size(); i++) {
 					int[] inds = tris.get(i);
 					Vec2 t0 = poly.get(inds[0]);
 					Vec2 t1 = poly.get(inds[1]);
@@ -545,11 +540,11 @@ public class VectorArtWindow extends Window {
 					this.tri_lines.add(l1);
 					this.tri_lines.add(l2);
 				}
-				
-				for(Curve c : this.curves) {
+
+				for (Curve c : this.curves) {
 					ArrayList<Vec2> hull = c.generateHull();
 					ArrayList<int[]> hull_tris = MathUtils.calculateTrianglePartition(hull);
-					for(int i = 0; i < hull_tris.size(); i++) {
+					for (int i = 0; i < hull_tris.size(); i++) {
 						int[] inds = hull_tris.get(i);
 						Vec2 t0 = hull.get(inds[0]);
 						Vec2 t1 = hull.get(inds[1]);
@@ -606,7 +601,7 @@ public class VectorArtWindow extends Window {
 						break;
 					}
 				}
-				if(ptr == -1) {
+				if (ptr == -1) {
 					System.err.println("VectorArtWindow : Could not find v0");
 					continue;
 				}
@@ -659,7 +654,7 @@ public class VectorArtWindow extends Window {
 		void kill() {
 			this.setVisible(false);
 		}
-		
+
 		void reverse() {
 			{
 				Vec2 tmp = new Vec2(v0);

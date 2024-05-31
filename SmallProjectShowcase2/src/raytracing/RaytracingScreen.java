@@ -39,7 +39,7 @@ public class RaytracingScreen extends Screen {
 	//TODO 
 	// - read triangles in from attached raytracing scene. 
 
-	//Preview Mode - camera can move around, and minimal rays are sebnt
+	//Preview Mode - camera can move around, and minimal rays are sent
 	//Render Mode - camera cannot move around, and previous frames get blended with new frames to create the render
 	//Display Prev Render Mode - look at the previous render, and tweak postprocessing stuff.
 

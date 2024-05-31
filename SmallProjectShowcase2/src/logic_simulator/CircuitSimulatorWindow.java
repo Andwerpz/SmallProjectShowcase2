@@ -269,7 +269,6 @@ public class CircuitSimulatorWindow extends Window {
 				this.placeComponentGhost.kill();
 				this.placeComponentGhost = null;
 			}
-			this.isPlacingComponent = false;
 			return;
 		}
 		this.isPlacingComponent = true;
@@ -278,7 +277,23 @@ public class CircuitSimulatorWindow extends Window {
 		this.placeComponentGhost.setVisible(true);
 	}
 
+	/**
+	 * for now, also saves the blueprint. 
+	 * @param blueprint
+	 */
 	public void setBlueprint(LogicCircuitBlueprint blueprint) {
+		if (this.blueprint != null) {
+			this.saveBlueprint();
+		}
+
+		//reset all active operations and stuff
+		this.stopCopying();
+		this.stopDraggingWires();
+		this.stopDraggingSelection();
+		this.stopRectangleSelecting();
+		this.stopPlacingComponent();
+		this.deselectAllComponents();
+
 		for (LogicComponent c : this.componentInstances.keySet()) {
 			this.componentInstances.get(c).kill();
 		}
@@ -931,12 +946,66 @@ public class CircuitSimulatorWindow extends Window {
 	}
 
 	private void stopDraggingWires() {
+		if (!this.isDraggingWires) {
+			return;
+		}
 		this.isDraggingWires = false;
 
 		this.wireDragDisplay[0].kill();
 		this.wireDragDisplay[1].kill();
 		this.wireDragDisplay[0] = null;
 		this.wireDragDisplay[1] = null;
+	}
+
+	private void stopPlacingComponent() {
+		if (!this.isPlacingComponent) {
+			return;
+		}
+		this.isPlacingComponent = false;
+		this.setPlaceComponent(null);
+	}
+
+	private void startRectangleSelecting() {
+		this.isRectangleSelecting = true;
+		this.rectangleSelectAnchor = this.getMouseGridPos();
+		this.rectangleSelectDisplay = new ModelInstance[5];
+		this.rectangleSelectDisplay[0] = Line.addDefaultLine(COMPONENT_SELECT_SCENE);
+		this.rectangleSelectDisplay[1] = Line.addDefaultLine(COMPONENT_SELECT_SCENE);
+		this.rectangleSelectDisplay[2] = Line.addDefaultLine(COMPONENT_SELECT_SCENE);
+		this.rectangleSelectDisplay[3] = Line.addDefaultLine(COMPONENT_SELECT_SCENE);
+		this.rectangleSelectDisplay[4] = FilledRectangle.addDefaultRectangle(COMPONENT_SELECT_SCENE);
+
+		Material inner_material = new Material(SELECT_MATERIAL);
+		inner_material.setAlpha(0.5f);
+		this.rectangleSelectDisplay[0].setMaterial(SELECT_MATERIAL);
+		this.rectangleSelectDisplay[1].setMaterial(SELECT_MATERIAL);
+		this.rectangleSelectDisplay[2].setMaterial(SELECT_MATERIAL);
+		this.rectangleSelectDisplay[3].setMaterial(SELECT_MATERIAL);
+		this.rectangleSelectDisplay[4].setMaterial(inner_material);
+	}
+
+	private void stopRectangleSelecting() {
+		if (!this.isRectangleSelecting) {
+			return;
+		}
+		this.isRectangleSelecting = false;
+		for (ModelInstance m : this.rectangleSelectDisplay) {
+			m.kill();
+		}
+		this.rectangleSelectDisplay = null;
+	}
+
+	private void startDraggingSelection() {
+		this.isDraggingSelection = true;
+		this.selectionDragAnchor = this.getMouseGridSnapPos();
+		this.selectionDragOffset = new IVec2(0);
+	}
+
+	private void stopDraggingSelection() {
+		if (!this.isDraggingSelection) {
+			return;
+		}
+		this.isDraggingSelection = false;
 	}
 
 	@Override
@@ -952,7 +1021,7 @@ public class CircuitSimulatorWindow extends Window {
 				if (this.isPlacingComponent) {
 					this.placeComponent.setOffset(this.getMouseGridSnapPos());
 					this.addComponent(this.placeComponent);
-					this.setPlaceComponent(null);
+					this.stopPlacingComponent();
 					break;
 				}
 
@@ -964,23 +1033,7 @@ public class CircuitSimulatorWindow extends Window {
 				ComponentInstance clicked_component = this.getComponentInstanceAtPos(this.getMouseGridSnapPos());
 				if (clicked_component == null) {
 					this.deselectAllComponents();
-					//handle rectangle selection
-					this.isRectangleSelecting = true;
-					this.rectangleSelectAnchor = this.getMouseGridPos();
-					this.rectangleSelectDisplay = new ModelInstance[5];
-					this.rectangleSelectDisplay[0] = Line.addDefaultLine(COMPONENT_SELECT_SCENE);
-					this.rectangleSelectDisplay[1] = Line.addDefaultLine(COMPONENT_SELECT_SCENE);
-					this.rectangleSelectDisplay[2] = Line.addDefaultLine(COMPONENT_SELECT_SCENE);
-					this.rectangleSelectDisplay[3] = Line.addDefaultLine(COMPONENT_SELECT_SCENE);
-					this.rectangleSelectDisplay[4] = FilledRectangle.addDefaultRectangle(COMPONENT_SELECT_SCENE);
-
-					Material inner_material = new Material(SELECT_MATERIAL);
-					inner_material.setAlpha(0.5f);
-					this.rectangleSelectDisplay[0].setMaterial(SELECT_MATERIAL);
-					this.rectangleSelectDisplay[1].setMaterial(SELECT_MATERIAL);
-					this.rectangleSelectDisplay[2].setMaterial(SELECT_MATERIAL);
-					this.rectangleSelectDisplay[3].setMaterial(SELECT_MATERIAL);
-					this.rectangleSelectDisplay[4].setMaterial(inner_material);
+					this.startRectangleSelecting();
 					break;
 				}
 
@@ -989,9 +1042,7 @@ public class CircuitSimulatorWindow extends Window {
 				}
 				this.selectComponent(clicked_component.component);
 				//start dragging selected components
-				this.isDraggingSelection = true;
-				this.selectionDragAnchor = this.getMouseGridSnapPos();
-				this.selectionDragOffset = new IVec2(0);
+				this.startDraggingSelection();
 				break;
 			}
 			case INTERACT_MODE: {
@@ -1042,7 +1093,7 @@ public class CircuitSimulatorWindow extends Window {
 					this.stopDraggingWires();
 				}
 				if (this.isDraggingSelection) {
-					this.isDraggingSelection = false;
+					this.stopDraggingSelection();
 					for (LogicComponent c : this.selectedComponents) {
 						ComponentInstance inst = this.componentInstances.get(c);
 						inst.setOffset(inst.getOffset().add(this.selectionDragOffset));
@@ -1050,11 +1101,7 @@ public class CircuitSimulatorWindow extends Window {
 					this.triggerPruneWires();
 				}
 				if (this.isRectangleSelecting) {
-					this.isRectangleSelecting = false;
-					for (ModelInstance m : this.rectangleSelectDisplay) {
-						m.kill();
-					}
-					this.rectangleSelectDisplay = null;
+					this.stopRectangleSelecting();
 
 					Vec2 sel_bl = MathUtils.min(this.rectangleSelectAnchor, this.getMouseGridPos());
 					Vec2 sel_tr = MathUtils.max(this.rectangleSelectAnchor, this.getMouseGridPos());
@@ -1074,11 +1121,6 @@ public class CircuitSimulatorWindow extends Window {
 				break;
 			}
 			}
-		}
-
-		String which = Input.getClicked(this.uiSection.getSelectionScene());
-		switch (which) {
-
 		}
 	}
 
@@ -1188,6 +1230,13 @@ public class CircuitSimulatorWindow extends Window {
 				}
 				else {
 					this.deselectAllComponents();
+				}
+				break;
+			}
+			case GLFW_KEY_R: {
+				if (this.isDraggingWires) {
+					this.wireDragHorizontalFirst = !this.wireDragHorizontalFirst;
+					break;
 				}
 				break;
 			}

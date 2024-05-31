@@ -22,6 +22,7 @@ import pbr_rendering.PBRRenderingWindow;
 import procedural_trees.ProceduralTreesWindow;
 import ray_marching.RayMarchingWindow;
 import raytracing.RaytracingWindow;
+import spectral_raytracing.SpectralRaytracingWindow;
 import sph_water.SPHWaterWindow;
 import sum_of_sines_water.SumOfSinesWaterWindow;
 import vector_art.VectorArtWindow;
@@ -132,6 +133,7 @@ public class BackgroundWindow extends Window {
 			projectPicker.addToList("Voxel Raytracing");
 			projectPicker.addToList("Genetic Image Builder");
 			projectPicker.addToList("Logic Simulator");
+			projectPicker.addToList("Spectral Raytracing");
 			break;
 		}
 
@@ -210,6 +212,11 @@ public class BackgroundWindow extends Window {
 
 		case "Logic Simulator": {
 			AdjustableWindow window = new AdjustableWindow(new CircuitEditorWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Spectral Raytracing": {
+			AdjustableWindow window = new AdjustableWindow(new SpectralRaytracingWindow(x, y, width, height, null), this);
 			break;
 		}
 		}
