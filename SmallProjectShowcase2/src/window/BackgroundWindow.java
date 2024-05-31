@@ -16,6 +16,7 @@ import lwjglengine.ui.Text;
 import lwjglengine.ui.UIElement;
 import lwjglengine.ui.UIFilledRectangle;
 import lwjglengine.window.AdjustableWindow;
+import lwjglengine.window.ListViewerWindow.ListViewerCallback;
 import lwjglengine.window.TextEditorWindow;
 import lwjglengine.window.Window;
 import pbr_rendering.PBRRenderingWindow;
@@ -29,7 +30,7 @@ import vector_art.VectorArtWindow;
 import volumetric_clouds.VolumetricCloudsWindow;
 import voxel_raytracing.VoxelRaytracingWindow;
 
-public class BackgroundWindow extends Window {
+public class BackgroundWindow extends Window implements ListViewerCallback {
 	//for now, this window should just be to open a context menu. 
 	//perhaps we can modify the background later. 
 
@@ -148,81 +149,6 @@ public class BackgroundWindow extends Window {
 	}
 
 	@Override
-	public void handleObjects(Object[] o) {
-		String whichProject = (String) o[0];
-		int width = 800;
-		int height = 600;
-		int x = (int) this.getWindowMousePos().x;
-		int y = (int) (Main.windowHeight - this.getWindowMousePos().y);
-		switch (whichProject) {
-		case "Volumetric Clouds": {
-			AdjustableWindow window = new AdjustableWindow(new VolumetricCloudsWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Hydraulic Terrain Generation": {
-			AdjustableWindow window = new AdjustableWindow(new HydraulicTerrainWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Procedural Trees": {
-			AdjustableWindow window = new AdjustableWindow(new ProceduralTreesWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Sum of Sines Water": {
-			AdjustableWindow window = new AdjustableWindow(new SumOfSinesWaterWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Ray Marching": {
-			AdjustableWindow window = new AdjustableWindow(new RayMarchingWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Raytracing": {
-			AdjustableWindow window = new AdjustableWindow(new RaytracingWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "PBR Rendering": {
-			AdjustableWindow window = new AdjustableWindow(new PBRRenderingWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Vector Art": {
-			AdjustableWindow window = new AdjustableWindow(new VectorArtWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "SPH Water": {
-			AdjustableWindow window = new AdjustableWindow(new SPHWaterWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Voxel Raytracing": {
-			AdjustableWindow window = new AdjustableWindow(new VoxelRaytracingWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Genetic Image Builder": {
-			AdjustableWindow window = new AdjustableWindow(new GeneticImageBuilder(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Logic Simulator": {
-			AdjustableWindow window = new AdjustableWindow(new CircuitEditorWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Spectral Raytracing": {
-			AdjustableWindow window = new AdjustableWindow(new SpectralRaytracingWindow(x, y, width, height, null), this);
-			break;
-		}
-		}
-	}
-
-	@Override
 	protected void _kill() {
 		Scene.removeScene(BACKGROUND_SCENE);
 		Scene.removeScene(TEXT_SCENE);
@@ -306,6 +232,81 @@ public class BackgroundWindow extends Window {
 	protected void _keyReleased(int key) {
 		// TODO Auto-generated method stub
 
+	}
+
+	@Override
+	public void handleListViewerCallback(Object[] contents) {
+		String whichProject = (String) contents[0];
+		int width = 800;
+		int height = 600;
+		int x = (int) this.getWindowMousePos().x;
+		int y = (int) (Main.windowHeight - this.getWindowMousePos().y);
+		switch (whichProject) {
+		case "Volumetric Clouds": {
+			AdjustableWindow window = new AdjustableWindow(new VolumetricCloudsWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Hydraulic Terrain Generation": {
+			AdjustableWindow window = new AdjustableWindow(new HydraulicTerrainWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Procedural Trees": {
+			AdjustableWindow window = new AdjustableWindow(new ProceduralTreesWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Sum of Sines Water": {
+			AdjustableWindow window = new AdjustableWindow(new SumOfSinesWaterWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Ray Marching": {
+			AdjustableWindow window = new AdjustableWindow(new RayMarchingWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Raytracing": {
+			AdjustableWindow window = new AdjustableWindow(new RaytracingWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "PBR Rendering": {
+			AdjustableWindow window = new AdjustableWindow(new PBRRenderingWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Vector Art": {
+			AdjustableWindow window = new AdjustableWindow(new VectorArtWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "SPH Water": {
+			AdjustableWindow window = new AdjustableWindow(new SPHWaterWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Voxel Raytracing": {
+			AdjustableWindow window = new AdjustableWindow(new VoxelRaytracingWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Genetic Image Builder": {
+			AdjustableWindow window = new AdjustableWindow(new GeneticImageBuilder(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Logic Simulator": {
+			AdjustableWindow window = new AdjustableWindow(new CircuitEditorWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Spectral Raytracing": {
+			AdjustableWindow window = new AdjustableWindow(new SpectralRaytracingWindow(x, y, width, height, null), this);
+			break;
+		}
+		}
 	}
 
 }

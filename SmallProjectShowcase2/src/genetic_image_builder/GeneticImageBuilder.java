@@ -47,6 +47,7 @@ import lwjglengine.window.AdjustableWindow;
 import lwjglengine.window.FileCreatorWindow;
 import lwjglengine.window.FileExplorerWindow;
 import lwjglengine.window.FileSelectorWindow;
+import lwjglengine.window.FileSelectorWindow.FileSelectorCallback;
 import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
@@ -60,7 +61,7 @@ import myutils.math.Vec2;
 import myutils.math.Vec3;
 import myutils.math.Vec4;
 
-public class GeneticImageBuilder extends Window {
+public class GeneticImageBuilder extends Window implements FileSelectorCallback {
 
 	private Texture spriteTexture;
 	private Sprite[] sprites;
@@ -251,17 +252,6 @@ public class GeneticImageBuilder extends Window {
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindVertexArray(0);
-	}
-
-	@Override
-	public void handleFiles(File[] files) {
-		if (files.length != 1) {
-			return;
-		}
-
-		//parse as buffered image
-		BufferedImage img = FileUtils.loadImage(files[0]);
-		this.setTarget(img);
 	}
 
 	private void resetCanvas() {
@@ -691,5 +681,16 @@ public class GeneticImageBuilder extends Window {
 		public void setGenerationCutoff(int generationCutoff) {
 			this.generationCutoff = generationCutoff;
 		}
+	}
+
+	@Override
+	public void handleCallback(File[] files) {
+		if (files.length != 1) {
+			return;
+		}
+
+		//parse as buffered image
+		BufferedImage img = FileUtils.loadImage(files[0]);
+		this.setTarget(img);
 	}
 }

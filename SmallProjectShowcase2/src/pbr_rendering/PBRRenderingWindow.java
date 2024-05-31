@@ -43,6 +43,7 @@ import lwjglengine.util.BufferUtils;
 import lwjglengine.window.AdjustableWindow;
 import lwjglengine.window.FileExplorerWindow;
 import lwjglengine.window.FileSelectorWindow;
+import lwjglengine.window.FileSelectorWindow.FileSelectorCallback;
 import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
@@ -51,7 +52,7 @@ import myutils.file.SystemUtils;
 import myutils.math.Mat4;
 import myutils.math.Vec3;
 
-public class PBRRenderingWindow extends Window {
+public class PBRRenderingWindow extends Window implements FileSelectorCallback {
 
 	private final int WORLD_SCENE = Scene.generateScene();
 
@@ -188,28 +189,6 @@ public class PBRRenderingWindow extends Window {
 			FileSelectorWindow fileExplorer = new FileSelectorWindow(this);
 			AdjustableWindow fileExplorerAdj = new AdjustableWindow("Select File", fileExplorer, this);
 			fileExplorer.setSingleEntrySelection(true);
-			break;
-		}
-		}
-	}
-
-	@Override
-	public void handleFiles(File[] f) {
-		if (f.length != 1) {
-			System.err.println("ModelViewerWindow : File amount should only be 1");
-			return;
-		}
-
-		//see what type of file it is
-		String fileExt = FileUtils.getFileExtension(f[0]);
-		switch (fileExt) {
-		case "obj": {
-			this.setModel(f[0]);
-			break;
-		}
-
-		case "hdr": {
-			this.setHDRSkybox(f[0]);
 			break;
 		}
 		}
@@ -356,6 +335,28 @@ public class PBRRenderingWindow extends Window {
 	protected void _keyReleased(int key) {
 		// TODO Auto-generated method stub
 
+	}
+
+	@Override
+	public void handleCallback(File[] files) {
+		if (files.length != 1) {
+			System.err.println("ModelViewerWindow : File amount should only be 1");
+			return;
+		}
+
+		//see what type of file it is
+		String fileExt = FileUtils.getFileExtension(files[0]);
+		switch (fileExt) {
+		case "obj": {
+			this.setModel(files[0]);
+			break;
+		}
+
+		case "hdr": {
+			this.setHDRSkybox(files[0]);
+			break;
+		}
+		}
 	}
 
 }

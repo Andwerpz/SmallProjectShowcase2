@@ -28,6 +28,7 @@ import lwjglengine.ui.UISection;
 import lwjglengine.window.AdjustableWindow;
 import lwjglengine.window.FileExplorerWindow;
 import lwjglengine.window.FileSelectorWindow;
+import lwjglengine.window.FileSelectorWindow.FileSelectorCallback;
 import lwjglengine.window.TextEditorWindow;
 import lwjglengine.window.Window;
 import myutils.file.FileUtils;
@@ -42,7 +43,7 @@ import myutils.math.Vec3;
 import myutils.math.Vec4;
 import myutils.misc.Pair;
 
-public class VectorArtWindow extends Window {
+public class VectorArtWindow extends Window implements FileSelectorCallback {
 
 	// - trying to create a svg renderer is probably too hard; they have too many features.
 	//   - let's just focus on rendering filled quadratic and cubic bezier curves
@@ -172,15 +173,6 @@ public class VectorArtWindow extends Window {
 				this.addPath(path);
 			}
 		}
-	}
-
-	@Override
-	public void handleFiles(File[] files) {
-		if (files.length != 1) {
-			return;
-		}
-
-		this.displayAsSVG(files[0]);
 	}
 
 	@Override
@@ -730,6 +722,15 @@ public class VectorArtWindow extends Window {
 			Curve c1 = new Curve(new Vec2[] { v30, v21, v12, v3 });
 			return new Pair<>(c0, c1);
 		}
+	}
+
+	@Override
+	public void handleCallback(File[] files) {
+		if (files.length != 1) {
+			return;
+		}
+
+		this.displayAsSVG(files[0]);
 	}
 
 }
