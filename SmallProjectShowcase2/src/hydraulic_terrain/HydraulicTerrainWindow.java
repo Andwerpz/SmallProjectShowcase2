@@ -244,6 +244,22 @@ public class HydraulicTerrainWindow extends Window implements InputCallback {
 		return noise;
 	}
 
+	private static float[][][] generateSlope() {
+		float[][][] noise = new float[TERRAIN_RESOLUTION][TERRAIN_RESOLUTION][2];
+
+		float max_height = 128;
+		float min_height = 0;
+
+		for (int i = 0; i < TERRAIN_RESOLUTION; i++) {
+			for (int j = 0; j < TERRAIN_RESOLUTION; j++) {
+				noise[i][j][0] = MathUtils.lerp(min_height, 0, max_height, TERRAIN_RESOLUTION, i);
+				noise[i][j][1] = 2;
+			}
+		}
+
+		return noise;
+	}
+
 	//applies a two pass gaussian filter of size 3
 	private static void applyGaussianBlur3(float[][][] heightmap) {
 		float[][][] tmp = new float[TERRAIN_RESOLUTION][TERRAIN_RESOLUTION][2];
