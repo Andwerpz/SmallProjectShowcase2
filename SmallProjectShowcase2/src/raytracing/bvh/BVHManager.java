@@ -250,6 +250,27 @@ public class BVHManager {
 		System.out.println("BVH Buffer Length : " + bvhInts.length);
 	}
 
+	private static float[] materialToFloatArr(Material m) {
+		float[] res = new float[4 + 4 + 4 + 1 + 1 + 1 + 1];
+		res[0] = m.getDiffuse().x;
+		res[1] = m.getDiffuse().y;
+		res[2] = m.getDiffuse().z;
+		res[3] = m.getDiffuse().w;
+		res[4] = m.getSpecular().x;
+		res[5] = m.getSpecular().y;
+		res[6] = m.getSpecular().z;
+		res[7] = m.getSpecular().w;
+		res[8] = m.getEmissive().x;
+		res[9] = m.getEmissive().y;
+		res[10] = m.getEmissive().z;
+		res[11] = m.getEmissive().w;
+		res[12] = m.getDispersion();
+		res[13] = m.getRoughness();
+		res[14] = m.getMetalness();
+		res[15] = m.getRefractiveIndex();
+		return res;
+	}
+
 	//returns the next free index in the buffer
 	private void serializeTree(BVHNode cur, ArrayList<Integer> bvhData, ArrayList<Float> boundingBoxData, ArrayList<Float> primitiveData, ArrayList<Float> materialData, HashMap<BVH, Integer> bvhSSBOIndexes) {
 		//write offset to current node's bounding box
@@ -308,7 +329,7 @@ public class BVHManager {
 					//write material
 					Primitive p = (Primitive) s;
 					Material m = p.material;
-					float[] m_floats = m.toFloatArr();
+					float[] m_floats = materialToFloatArr(m);
 					for (int i = 0; i < m_floats.length; i++) {
 						materialData.add(m_floats[i]);
 					}

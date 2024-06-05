@@ -67,6 +67,12 @@ public class ColorTestWindow extends Window {
 	// - apply some scale factors to X and Z, to fix whitepoint
 	// - convert XYZ values into RGB using matrix
 
+	//use formula from this website to compute IOR
+	// - https://wiki.luxcorerender.org/Glass_Material_IOR_and_Dispersion
+
+	//database of material ior and dispersion
+	// - https://refractiveindex.info/?shelf=main&book=SiO2&page=Arosa
+
 	private UISection uiSection;
 	private ColorTestSettings colorTestSettings;
 	private ObjectEditorWindow settingsWindow;
@@ -77,14 +83,15 @@ public class ColorTestWindow extends Window {
 	private Vec3 RGBColor;
 
 	//we're only interested in wavelength data from 360nm to 830nm inclusive
-	private static int nm_low = 360;
-	private static int nm_high = 830;
-	private float[][] RGBC_data = new float[3][nm_high - nm_low + 1];
-	private float[][] XYZ_data = new float[3][nm_high - nm_low + 1];
+	private static int nm_min = 360;
+	private static int nm_max = 830;
+	private static int nm_range = nm_max - nm_min + 1;
+	private float[][] RGBC_data = new float[3][nm_range];
+	private float[][] XYZ_data = new float[3][nm_range];
 	private float cie_y_int; //area under the cie y curve
 
 	//generated spectrum using rgbc
-	private float[] spectrum_data = new float[nm_high - nm_low + 1];
+	private float[] spectrum_data = new float[nm_range];
 	private ModelInstance[] spectrum_display;
 
 	public ColorTestWindow(Window parentWindow) {
@@ -100,8 +107,8 @@ public class ColorTestWindow extends Window {
 			csv.setTranspose(true);
 			csv.readFileAsCSV(FileUtils.loadFileRelative("/res/spectral_raytracing/rgb_components.csv"));
 			for (int i = 0; i < 3; i++) {
-				for (int j = nm_low; j <= nm_high; j++) {
-					this.RGBC_data[i][j - nm_low] = Float.parseFloat(csv.getData()[i][j - nm_low]);
+				for (int j = nm_min; j <= nm_max; j++) {
+					this.RGBC_data[i][j - nm_min] = Float.parseFloat(csv.getData()[i][j - nm_min]);
 				}
 			}
 		}
@@ -115,8 +122,8 @@ public class ColorTestWindow extends Window {
 			csv.setTranspose(true);
 			csv.readFileAsCSV(FileUtils.loadFileRelative("/res/spectral_raytracing/cie_xyz.csv"));
 			for (int i = 0; i < 3; i++) {
-				for (int j = nm_low; j <= nm_high; j++) {
-					this.XYZ_data[i][j - nm_low] = Float.parseFloat(csv.getData()[i][j - nm_low]);
+				for (int j = nm_min; j <= nm_max; j++) {
+					this.XYZ_data[i][j - nm_min] = Float.parseFloat(csv.getData()[i][j - nm_min]);
 				}
 			}
 		}
@@ -125,8 +132,8 @@ public class ColorTestWindow extends Window {
 		}
 
 		this.cie_y_int = 0;
-		for (int i = nm_low; i <= nm_high; i++) {
-			this.cie_y_int += this.XYZ_data[1][i - nm_low];
+		for (int i = nm_min; i <= nm_max; i++) {
+			this.cie_y_int += this.XYZ_data[1][i - nm_min];
 		}
 
 		this.uiSection = new UISection();
@@ -290,8 +297,8 @@ public class ColorTestWindow extends Window {
 		Vec3 RGB = new Vec3(this.RGBColor);
 
 		// - use scott burns's fast RGB to spectrum conversion to produce spectrum
-		for (int i = nm_low; i <= nm_high; i++) {
-			this.spectrum_data[i - nm_low] = RGB.x * this.RGBC_data[0][i - nm_low] + RGB.y * this.RGBC_data[1][i - nm_low] + RGB.z * this.RGBC_data[2][i - nm_low];
+		for (int i = nm_min; i <= nm_max; i++) {
+			this.spectrum_data[i - nm_min] = RGB.x * this.RGBC_data[0][i - nm_min] + RGB.y * this.RGBC_data[1][i - nm_min] + RGB.z * this.RGBC_data[2][i - nm_min];
 		}
 		{
 			//create spectrum display
@@ -301,27 +308,27 @@ public class ColorTestWindow extends Window {
 				}
 				this.spectrum_display = null;
 			}
-			this.spectrum_display = new ModelInstance[nm_high - nm_low];
+			this.spectrum_display = new ModelInstance[nm_max - nm_min];
 			float x_interval = this.getWidth() / (float) this.spectrum_display.length;
 			float y_scale = this.getHeight();
 			Vec3 line_color = new Vec3(1).sub(this.RGBColor);
-			for (int i = nm_low; i < nm_high; i++) {
-				float x0 = (i - nm_low) * x_interval;
-				float x1 = (i - nm_low + 1) * x_interval;
-				float y0 = this.spectrum_data[i - nm_low] * y_scale;
-				float y1 = this.spectrum_data[i - nm_low + 1] * y_scale;
+			for (int i = nm_min; i < nm_max; i++) {
+				float x0 = (i - nm_min) * x_interval;
+				float x1 = (i - nm_min + 1) * x_interval;
+				float y0 = this.spectrum_data[i - nm_min] * y_scale;
+				float y1 = this.spectrum_data[i - nm_min + 1] * y_scale;
 				ModelInstance line = Line.addDefaultLine(x0, y0, x1, y1, this.uiSection.getTextScene());
 				line.setMaterial(new Material(line_color));
-				this.spectrum_display[i - nm_low] = line;
+				this.spectrum_display[i - nm_min] = line;
 			}
 		}
 
 		// - compute spectrum's XYZ values using cie XYZ matching functions
 		Vec3 XYZ = new Vec3(0);
-		for (int i = nm_low; i <= nm_high; i++) {
-			XYZ.x += this.spectrum_data[i - nm_low] * this.XYZ_data[0][i - nm_low];
-			XYZ.y += this.spectrum_data[i - nm_low] * this.XYZ_data[1][i - nm_low];
-			XYZ.z += this.spectrum_data[i - nm_low] * this.XYZ_data[2][i - nm_low];
+		for (int i = nm_min; i <= nm_max; i++) {
+			XYZ.x += this.spectrum_data[i - nm_min] * this.XYZ_data[0][i - nm_min];
+			XYZ.y += this.spectrum_data[i - nm_min] * this.XYZ_data[1][i - nm_min];
+			XYZ.z += this.spectrum_data[i - nm_min] * this.XYZ_data[2][i - nm_min];
 		}
 		XYZ.divi(this.cie_y_int);
 

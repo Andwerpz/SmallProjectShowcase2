@@ -222,8 +222,8 @@ public class RaytracingScreen extends Screen {
 		this.bvhManager.build();
 	}
 
-	public Texture getPrevRenderColorMap() {
-		return this.prevRenderColorMap;
+	public Texture getPostprocessHDRMap() {
+		return this.postprocessHDRMap;
 	}
 
 	private void setRaytracingShaderUniforms() {

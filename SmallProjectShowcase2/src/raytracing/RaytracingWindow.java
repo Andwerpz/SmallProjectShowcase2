@@ -344,7 +344,7 @@ public class RaytracingWindow extends Window {
 			break;
 
 		case GLFW_KEY_Y:
-			BufferedImage img = this.raytracingScreen.getPrevRenderColorMap().toBufferedImage();
+			BufferedImage img = this.raytracingScreen.getPostprocessHDRMap().toBufferedImage();
 			AdjustableWindow adj = new AdjustableWindow("Save Render As", new FileCreatorWindow(img), this);
 			break;
 		}

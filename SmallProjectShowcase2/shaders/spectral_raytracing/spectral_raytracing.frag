@@ -4,6 +4,10 @@ layout (location = 0) out vec4 out_tex_0;
 const float PI = 3.14159265;
 const float INV_PI = 1.0 / PI;
 
+const int nm_min = 360;
+const int nm_max = 830;
+const int nm_range = nm_max - nm_min + 1;
+
 uniform sampler2D render_tex_0;
 uniform samplerCube skybox_tex;
 
@@ -64,6 +68,14 @@ layout (binding = 3) readonly buffer primitiveBuffer {
 
 layout (binding = 4) readonly buffer materialBuffer {
 	float materialData[];
+};
+
+layout (binding = 5) readonly buffer rgbcBuffer {
+	float rgbcData[];
+};
+
+layout (binding = 6) readonly buffer xyzBuffer {
+	float xyzData[];
 };
 
 uniform int num_rendered_frames;
@@ -609,6 +621,185 @@ void cookTorranceBRDF_PDF(vec3 in_dir, vec3 out_dir, vec3 normal, float roughnes
 	denom = D_denom1 * D_denom2 * 4.0 * dot(in_dir, half_dir);
 }
 
+float sampleRGBIntensity(vec3 rgb, int wavelength) {
+	float ans = 0;
+	ans += rgbcData[0 * nm_range + wavelength - nm_min] * rgb.x;
+	ans += rgbcData[1 * nm_range + wavelength - nm_min] * rgb.y;
+	ans += rgbcData[2 * nm_range + wavelength - nm_min] * rgb.z;
+	return ans;
+}
+
+//A coefficient is ior, and B coefficient is dispersion
+//c(\lambda) = A + B / \lambda^2
+//by convention, the wavelength is in units of micrometers (1000 * nm). 
+float cauchyIOR(float ior, float dispersion, int wavelength) {
+	float lambda = float(wavelength) / 1000.0;
+	float A = ior;
+	float B = dispersion;
+	return A + B / pow(lambda, 2.0);
+}
+
+//cook-torrance with importance sampling. Also takes into account dispersion.
+//returns the amount of output power along the ray with the given wavelength. 
+float traceRaySpectral(Ray ray, int wavelength) {
+	float output_energy = 0;
+	float throughput = 1;
+	float prev_refractive_index = 1.0;
+	
+	for(int i = 0; i < max_bounce_count; i++){
+		if(throughput < 0.00001) {
+			break;
+		}
+		
+		int max_depth = 0;
+		HitInfo hit = calculateRayCollision(ray, max_depth);
+		if(!hit.didHit) {
+			//sample skybox
+			vec3 emittedLight = texture(skybox_tex, ray.dir).xyz * ambient_strength;	//skybox 'emits' ambient light
+			vec3 sunLight = max(0, (dot(ray.dir, sun_dir) - 0.99) * sun_strength) * vec3(1);
+			emittedLight += sunLight;
+			
+			output_energy += sampleRGBIntensity(emittedLight, wavelength) * throughput;
+			break;
+		}
+		
+		//we hit something
+		Material m = hit.hitMaterial;
+		float roughness = max(0.001, m.attr.y);	//to prevent divide by 0
+		float metalness = m.attr.z;
+		float dispersion = m.attr.x;
+		float next_refractive_index = cauchyIOR(m.attr.w, dispersion, wavelength);
+		
+		//for now, assume that transmissive materials can't contain each other. 
+		//later, we should check what material the ray is exiting into
+		if(hit.is_internal) {
+			next_refractive_index = 1.0;
+		}
+		
+		vec3 normal = hit.hitNormal;
+		vec3 half_dir = vec3(0);	//which way is the microfacet facing?
+		vec3 out_dir = -ray.dir;
+		vec3 in_dir = cookTorranceBRDF_Dir(out_dir, normal, roughness, metalness, half_dir);
+		
+		//send emitted light back to camera
+		vec3 emittedLight = m.emissive.xyz * m.emissive.w;
+		output_energy += sampleRGBIntensity(emittedLight, wavelength) * throughput;
+		
+		float B = 0.0;
+		float P = 1.0;
+		
+		if(next_refractive_index < 1.0) {
+			//material is opaque
+			float F = fresnelOpaque(out_dir, half_dir, metalness);
+			
+			if(randomValue() < F) {
+				//do a specular bounce
+				throughput *= sampleRGBIntensity(m.specular.xyz, wavelength);
+				
+				float D_num, D_denom1, D_denom2;
+				float G_num1, G_num2, G_denom1, G_denom2;
+				float P_num, P_denom;
+				
+				geometrySmithGGX_Cancel(in_dir, out_dir, normal, roughness, G_num1, G_num2, G_denom1, G_denom2);
+				distribution(half_dir, normal, roughness, D_num, D_denom1, D_denom2);
+				cookTorranceBRDF_PDF(in_dir, out_dir, normal, roughness, P_num, P_denom);
+				
+				float NdotI = max(dot(normal, in_dir), 0.0);
+				float NdotO = max(dot(normal, out_dir), 0.0);
+				
+				if(NdotI > 0 && NdotO > 0) {
+					//B = G * D / (4.0 * dot(in_dir, normal) * dot(out_dir, normal));
+					
+					float num = D_num;
+					float denom = (4.0) * D_denom2 * D_denom1 * (G_denom1 * G_denom2);
+					
+					B = num / denom;
+					P = P_num / P_denom;
+					
+					if(isinf(B) || isnan(B)) {
+						B = 0;
+					}
+				}
+			}
+			else {
+				//do a diffuse bounce
+				//multiply by 1 - metalness because metallic materials quickly extinguish diffuse bounces
+				throughput *= sampleRGBIntensity(m.diffuse.xyz, wavelength) * (1.0 - metalness);
+				
+				in_dir = lambertBRDF_Dir(normal);
+				B = lambertBRDF();
+				P = max(0.0001, lambertBRDF_PDF(normal, in_dir));
+			}
+			
+			float mult = B / P;
+			throughput *= dot(normal, in_dir) * mult;
+			
+			ray.dir = in_dir;
+			ray.origin = hit.hitPoint;
+		}
+		else {
+			//material is transmissive
+			float F = fresnelDielectric(out_dir, half_dir, prev_refractive_index, next_refractive_index);
+			
+			vec3 transmit_dir;
+			bool can_transmit = refract(out_dir, half_dir, prev_refractive_index, next_refractive_index, transmit_dir);
+			
+			if(!can_transmit || randomValue() < F) {
+				//do a specular bounce
+				throughput *= sampleRGBIntensity(m.specular.xyz, wavelength);
+				
+				float D_num, D_denom1, D_denom2;
+				float G_num1, G_num2, G_denom1, G_denom2;
+				float P_num, P_denom;
+				
+				geometrySmithGGX_Cancel(in_dir, out_dir, normal, roughness, G_num1, G_num2, G_denom1, G_denom2);
+				distribution(half_dir, normal, roughness, D_num, D_denom1, D_denom2);
+				cookTorranceBRDF_PDF(in_dir, out_dir, normal, roughness, P_num, P_denom);
+				
+				float NdotI = max(dot(normal, in_dir), 0.0);
+				float NdotO = max(dot(normal, out_dir), 0.0);
+				
+				if(NdotI > 0 && NdotO > 0) {
+					//B = G * D / (4.0 * dot(in_dir, normal) * dot(out_dir, normal));
+					
+					float num = D_num;
+					float denom = (4.0) * D_denom2 * D_denom1 * (G_denom1 * G_denom2);
+					
+					B = num / denom;
+					P = P_num / P_denom;
+					
+					if(isinf(B) || isnan(B)) {
+						B = 0;
+					}
+				}
+				
+				float mult = B / P;
+				throughput *= dot(normal, in_dir) * mult;
+				
+				ray.dir = in_dir;
+				ray.origin = hit.hitPoint;
+			}
+			else {
+				//transmit light
+				//note that fresnel is already accounted for here
+				//throughput doesn't decrease, as i assume that transmission doesn't consume any energy. 
+				throughput *= 1.0f;
+				
+				float P_num, P_denom;
+				cookTorranceBRDF_PDF(in_dir, out_dir, normal, roughness, P_num, P_denom);
+				
+				B = 1.0;
+				P = P_num / P_denom;
+								
+				ray.dir = transmit_dir;
+				ray.origin = hit.hitPoint;
+				prev_refractive_index = next_refractive_index;
+			}
+		}
+	}
+	return output_energy;
+}
+
 //cook-torrance with importance sampling
 //TODO
 // - read theory and understand what's going on with my BSDF
@@ -815,13 +1006,15 @@ vec3 traceRay(Ray ray) {
 	return outputColor;
 }
 
+//use traceRay2
+uniform bool is_preview;
 uniform int num_rays_per_pixel;
 uniform float blur_strength;
 uniform float defocus_strength;
 uniform float focus_dist;
 uniform vec3 camera_right;
 uniform vec3 camera_up;
-void main() {   
+vec3 computeColorPreview() {
 	vec3 traceColor = vec3(0);
 	for(int i = 0; i < num_rays_per_pixel; i++) {
 		vec3 focusPos = camera_pos + frag_dir * focus_dist; 
@@ -842,7 +1035,70 @@ void main() {
 		traceColor += rayColor;
 	}
 	traceColor /= num_rays_per_pixel;
+	return traceColor;
+}
+
+vec3 sampleXYZ(int wavelength, float intensity) {
+	vec3 xyz = vec3(0);
+	xyz.x = xyzData[0 * nm_range + wavelength - nm_min] * intensity;
+	xyz.y = xyzData[1 * nm_range + wavelength - nm_min] * intensity;
+	xyz.z = xyzData[2 * nm_range + wavelength - nm_min] * intensity;
+	return xyz;
+}
+
+//use traceRaySpectral
+uniform float cie_y_int;
+uniform int num_wavelength_samples_per_ray;
+vec3 computeColorRender() {
+	//compute sum in xyz color space
+	vec3 xyz_sum = vec3(0);
+	for(int i = 0; i < num_rays_per_pixel; i++){
+		vec3 focusPos = camera_pos + frag_dir * focus_dist; 
+		
+		vec2 defocusJitter = randomPointInCircle() * defocus_strength / window_width;
+		vec3 rayOrigin = camera_pos + camera_right * defocusJitter.x + camera_up * defocusJitter.y;
+		
+		vec2 blurJitter = randomPointInCircle() * blur_strength / window_width;
+		vec3 rayDir = normalize(focusPos - rayOrigin) + camera_right * blurJitter.x + camera_up * blurJitter.y;
+		
+		Ray fragRay = Ray(rayOrigin, rayDir);
+		vec3 c_xyz = vec3(0);
+		for(int j = 0; j < num_wavelength_samples_per_ray; j++){
+			int wavelength = nm_min + int(randomValue() * nm_range);
+			float energy = traceRaySpectral(fragRay, wavelength);
+			
+			if(isnan(energy) || isinf(energy)) {
+				continue;
+			}
+			
+			//averaging and accounting for pdf at the same time
+			xyz_sum += sampleXYZ(wavelength, energy) * nm_range / num_wavelength_samples_per_ray;
+		}
+	}
+	xyz_sum /= cie_y_int;	//make sure y max is 1
+	xyz_sum /= num_rays_per_pixel;
 	
+	//apply some scale factors to x and z to fix whitepoint
+	xyz_sum.x *= 0.9505 / 1.000081;
+	xyz_sum.z *= 1.0888 / 1.0003315;
+	
+	//use matrix to transform to linear rgb color space
+	//Row Major:
+	// 3.2404542 -1.5371385 -0.4985314
+	//-0.9692660  1.8760108  0.0415560
+	// 0.0556434 -0.2040259  1.0572252
+	
+	//Column Major?
+	// 3.2404542 -0.9692660  0.0556434
+	//-1.5371385  1.8760108 -0.2040259
+	//-0.4985314  0.0415560  1.0572252
+	mat3 convert = mat3(3.2404542, -0.9692660, 0.0556434, -1.5371385, 1.8760108, -0.2040259, -0.4985314, 0.0415560, 1.0572252);
+	vec3 rgb = convert * xyz_sum;
+	return rgb;
+}
+
+void main() {   
+	vec3 traceColor = is_preview? computeColorPreview() : computeColorRender();
 	vec4 oldColor = texture(render_tex_0, vec2(gl_FragCoord.x / window_width, gl_FragCoord.y / window_height)).xyzw;
 	vec4 newColor = vec4(traceColor, 1);
 	
