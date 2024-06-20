@@ -68,9 +68,6 @@ public class SpectralRaytracingWindow extends Window {
 		this.pic = new PlayerInputController(new Vec3(0, 0, 102));
 
 		//set up the scene
-		Material lightMaterial = new Material(new Vec3(1));
-		lightMaterial.setEmissive(new Vec4(1, 1, 1, 25f));
-
 		Material whiteMaterial = new Material(new Vec3(1, 1, 1));
 		Material grayMaterial = new Material(Color.GRAY);
 		Material blueMaterial = new Material(Color.BLUE);
@@ -78,51 +75,110 @@ public class SpectralRaytracingWindow extends Window {
 		Material redMaterial = new Material(Color.RED);
 		Material sphereMaterial = new Material(Color.WHITE);
 
-		Vec3 v0 = new Vec3(-50, -50, -50);
-		Vec3 v1 = new Vec3(-50, -50, 50);
-		Vec3 v2 = new Vec3(50, -50, 50);
-		Vec3 v3 = new Vec3(50, -50, -50);
-		Vec3 v4 = new Vec3(-50, 50, -50);
-		Vec3 v5 = new Vec3(-50, 50, 50);
-		Vec3 v6 = new Vec3(50, 50, 50);
-		Vec3 v7 = new Vec3(50, 50, -50);
+		//		//cornell box
+		//		{
+		//			Vec3 v0 = new Vec3(-50, -50, -50);
+		//			Vec3 v1 = new Vec3(-50, -50, 50);
+		//			Vec3 v2 = new Vec3(50, -50, 50);
+		//			Vec3 v3 = new Vec3(50, -50, -50);
+		//			Vec3 v4 = new Vec3(-50, 50, -50);
+		//			Vec3 v5 = new Vec3(-50, 50, 50);
+		//			Vec3 v6 = new Vec3(50, 50, 50);
+		//			Vec3 v7 = new Vec3(50, 50, -50);
+		//
+		//			//floor
+		//			this.screen.addTriangle(v0, v1, v2, whiteMaterial);
+		//			this.screen.addTriangle(v0, v2, v3, whiteMaterial);
+		//
+		//			//ceiling
+		//			this.screen.addTriangle(v5, v4, v6, whiteMaterial);
+		//			this.screen.addTriangle(v6, v4, v7, whiteMaterial);
+		//
+		//			//back wall
+		//			this.screen.addTriangle(v0, v3, v7, whiteMaterial);
+		//			this.screen.addTriangle(v0, v7, v4, whiteMaterial);
+		//
+		//			//left wall
+		//			this.screen.addTriangle(v1, v0, v4, redMaterial);
+		//			this.screen.addTriangle(v1, v4, v5, redMaterial);
+		//
+		//			//right wall
+		//			this.screen.addTriangle(v2, v7, v3, greenMaterial);
+		//			this.screen.addTriangle(v2, v6, v7, greenMaterial);
+		//
+		//			//front wall
+		//			//this.screen.addTriangle(v2, v1, v5, whiteMaterial);
+		//			//this.screen.addTriangle(v2, v5, v6, whiteMaterial);
+		//
+		//			//ceiling light
+		//			float lightScale = 0.5f;
+		//			v4.muli(lightScale);
+		//			v5.muli(lightScale);
+		//			v6.muli(lightScale);
+		//			v7.muli(lightScale);
+		//			v4.y = 49.99f;
+		//			v5.y = 49.99f;
+		//			v6.y = 49.99f;
+		//			v7.y = 49.99f;
+		//			Material lightMaterial = new Material(new Vec3(1));
+		//			lightMaterial.setEmissive(new Vec4(1, 1, 1, 25f));
+		//			this.screen.addTriangle(v5, v4, v6, lightMaterial);
+		//			this.screen.addTriangle(v6, v4, v7, lightMaterial);
+		//		}
 
-		//floor
-		this.screen.addTriangle(v0, v1, v2, whiteMaterial);
-		this.screen.addTriangle(v0, v2, v3, whiteMaterial);
+		//small floor
+		{
+			Vec3 v0 = new Vec3(-50, -50, -50);
+			Vec3 v1 = new Vec3(-50, -50, 50);
+			Vec3 v2 = new Vec3(50, -50, 50);
+			Vec3 v3 = new Vec3(50, -50, -50);
+			this.screen.addTriangle(v0, v1, v2, whiteMaterial);
+			this.screen.addTriangle(v0, v2, v3, whiteMaterial);
+		}
 
-		//ceiling
-		this.screen.addTriangle(v5, v4, v6, whiteMaterial);
-		this.screen.addTriangle(v6, v4, v7, whiteMaterial);
+		//		//large floor
+		//		{
+		//			Vec3 v0 = new Vec3(-250, -50, -250);
+		//			Vec3 v1 = new Vec3(-250, -50, 250);
+		//			Vec3 v2 = new Vec3(250, -50, 250);
+		//			Vec3 v3 = new Vec3(250, -50, -250);
+		//			this.screen.addTriangle(v0, v1, v2, whiteMaterial);
+		//			this.screen.addTriangle(v0, v2, v3, whiteMaterial);
+		//		}
 
-		//back wall
-		this.screen.addTriangle(v0, v3, v7, whiteMaterial);
-		this.screen.addTriangle(v0, v7, v4, whiteMaterial);
-
-		//left wall
-		this.screen.addTriangle(v1, v0, v4, redMaterial);
-		this.screen.addTriangle(v1, v4, v5, redMaterial);
-
-		//right wall
-		this.screen.addTriangle(v2, v7, v3, greenMaterial);
-		this.screen.addTriangle(v2, v6, v7, greenMaterial);
-
-		//front wall
-		//this.screen.addTriangle(v2, v1, v5, whiteMaterial);
-		//this.screen.addTriangle(v2, v5, v6, whiteMaterial);
-
-		//ceiling light
-		float lightScale = 0.5f;
-		v4.muli(lightScale);
-		v5.muli(lightScale);
-		v6.muli(lightScale);
-		v7.muli(lightScale);
-		v4.y = 49.99f;
-		v5.y = 49.99f;
-		v6.y = 49.99f;
-		v7.y = 49.99f;
-		this.screen.addTriangle(v5, v4, v6, lightMaterial);
-		this.screen.addTriangle(v6, v4, v7, lightMaterial);
+		//		//5 glass balls. Touching the floor and arranged in a pyramid shape
+		//		{
+		//			Material glass_material = Material.defaultMaterial();
+		//			glass_material.setRoughness(0);
+		//			glass_material.setRefractiveIndex(1.7f);
+		//			glass_material.setDispersion(0.05f);
+		//
+		//			float radius = 16;
+		//
+		//			Vec3 c0 = new Vec3(radius, radius, radius);
+		//			Vec3 c1 = new Vec3(-radius, radius, radius);
+		//			Vec3 c2 = new Vec3(radius, radius, -radius);
+		//			Vec3 c3 = new Vec3(-radius, radius, -radius);
+		//
+		//			//compute elevation for stacked ball
+		//			float diag = (float) Math.sqrt(radius * radius + radius * radius);
+		//			float ascent = radius * 2;
+		//			float elevation = (float) Math.sqrt(ascent * ascent - diag * diag);
+		//			Vec3 c4 = new Vec3(0, radius + elevation, 0);
+		//
+		//			//translate down to touch ground
+		//			c0.y -= 50;
+		//			c1.y -= 50;
+		//			c2.y -= 50;
+		//			c3.y -= 50;
+		//			c4.y -= 50;
+		//
+		//			this.screen.addSphere(c0, radius, glass_material);
+		//			this.screen.addSphere(c1, radius, glass_material);
+		//			this.screen.addSphere(c2, radius, glass_material);
+		//			this.screen.addSphere(c3, radius, glass_material);
+		//			this.screen.addSphere(c4, radius, glass_material);
+		//		}
 
 		//		//suzanne
 		//		{
@@ -154,46 +210,28 @@ public class SpectralRaytracingWindow extends Window {
 		//
 		//			Mat4 transform = Mat4.identity();
 		//			transform.muli(Mat4.scale(4f));
-		//			transform.muli(Mat4.rotateY((float) Math.toRadians(40f)));
+		//			transform.muli(Mat4.rotateY((float) Math.toRadians(15f)));
 		//			transform.muli(Mat4.translate(new Vec3(0, -50, 0)));
 		//
 		//			this.screen.addModel(diamond, transform, material);
 		//		}
 
-		//		//stanford dragon
-		//		Model dragon = Model.loadModelFile(FileUtils.loadFileRelative("/res/stanford_dragon/stanford_dragon.obj"));
-		//		Material dragonMaterial = Material.defaultMaterial();
-		//		dragonMaterial.setRoughness(0);
-		//		dragonMaterial.setMetalness(0);
-		//		dragonMaterial.setRefractiveIndex(1.5f);
-		//		{
-		//			Mat4 transform = Mat4.identity();
-		//			transform.muli(Mat4.scale(30));
-		//			transform.muli(Mat4.translate(new Vec3(0, -50, 0)));
-		//			ArrayList<VertexArray> meshes = dragon.getMeshes();
-		//			for (VertexArray v : meshes) {
-		//				int[] indices = v.getIndices();
-		//				Vec3[] vertices = new Vec3[v.getVertices().length / 3];
-		//				for (int i = 0; i < vertices.length; i++) {
-		//					float x = v.getVertices()[i * 3 + 0];
-		//					float y = v.getVertices()[i * 3 + 1];
-		//					float z = v.getVertices()[i * 3 + 2];
-		//					vertices[i] = new Vec3(x, y, z);
-		//				}
-		//				for (int i = 0; i < indices.length / 3; i++) {
-		//					Vec3 a = vertices[indices[i * 3 + 0]];
-		//					Vec3 b = vertices[indices[i * 3 + 1]];
-		//					Vec3 c = vertices[indices[i * 3 + 2]];
-		//
-		//					//apply model transform
-		//					a = transform.mul(a, 1);
-		//					b = transform.mul(b, 1);
-		//					c = transform.mul(c, 1);
-		//
-		//					this.screen.addTriangle(a, b, c, dragonMaterial);
-		//				}
-		//			}
-		//		}
+		//stanford dragon
+		{
+			Model dragon = Model.loadModelFile(FileUtils.loadFileRelative("/res/stanford_dragon/stanford_dragon.obj"));
+			Material dragonMaterial = Material.defaultMaterial();
+			dragonMaterial.setRoughness(0);
+			dragonMaterial.setMetalness(0);
+			dragonMaterial.setRefractiveIndex(1.5f);
+			dragonMaterial.setDispersion(0.015f);
+
+			Mat4 transform = Mat4.identity();
+			transform.muli(Mat4.rotateY((float) Math.toRadians(-30)));
+			transform.muli(Mat4.scale(40));
+			transform.muli(Mat4.translate(new Vec3(0, -50, 0)));
+
+			this.screen.addModel(dragon, transform, dragonMaterial);
+		}
 
 		//		//big ball
 		//		whiteMaterial.setRoughness(0f);
@@ -347,6 +385,7 @@ public class SpectralRaytracingWindow extends Window {
 		switch (action) {
 		case "Open Color Test Window": {
 			AdjustableWindow window = new AdjustableWindow(new ColorTestWindow(null), this);
+			window.setDimensions(800, 600);
 			break;
 		}
 		}

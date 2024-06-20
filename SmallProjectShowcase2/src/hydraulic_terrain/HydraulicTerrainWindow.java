@@ -37,10 +37,10 @@ import lwjglengine.ui.UISection;
 import lwjglengine.window.Window;
 import myutils.file.FileUtils;
 import myutils.math.MathUtils;
-import myutils.math.PerlinNoiseGenerator;
 import myutils.math.Vec2;
 import myutils.math.Vec3;
 import myutils.misc.Pair;
+import myutils.noise.PerlinNoise;
 
 public class HydraulicTerrainWindow extends Window implements InputCallback {
 	//for now, just generate a new vertex array 
@@ -219,10 +219,9 @@ public class HydraulicTerrainWindow extends Window implements InputCallback {
 
 	//generates a perlin noise heightmap
 	private static float[][][] generatePerlinNoise() {
-		PerlinNoiseGenerator.randomizeNoise();
-
 		float[][][] noise = new float[TERRAIN_RESOLUTION][TERRAIN_RESOLUTION][2];
 
+		PerlinNoise perlin = new PerlinNoise((int) (Math.random() * 1e9));
 		float frequency = 1.0f / 256.0f;
 		float amplitude = 128;
 		float persistence = 0.3f;
@@ -230,13 +229,19 @@ public class HydraulicTerrainWindow extends Window implements InputCallback {
 
 		int octaves = 4;
 
+		perlin.setFrequency(frequency);
+		perlin.setAmplitude(amplitude);
+		perlin.setPersistence(persistence);
+		perlin.setLacunarity(lacunarity);
+		perlin.setOctaves(octaves);
+
 		float sedimentLayerThickness = 2;
 
 		for (int i = 0; i < TERRAIN_RESOLUTION; i++) {
 			for (int j = 0; j < TERRAIN_RESOLUTION; j++) {
-				float x = (float) (i + PerlinNoiseGenerator.noise(i, j, frequency, amplitude, persistence, lacunarity, octaves));
-				float y = (float) (j + PerlinNoiseGenerator.noise(-j, i, frequency, amplitude, persistence, lacunarity, octaves));
-				noise[i][j][0] = (float) PerlinNoiseGenerator.noise(x, y, frequency, amplitude, persistence, lacunarity, octaves);
+				float x = i + perlin.sampleNoise(i, j);
+				float y = j + perlin.sampleNoise(-j, i);
+				noise[i][j][0] = perlin.sampleNoise(x, y);
 				noise[i][j][1] = sedimentLayerThickness;
 			}
 		}
@@ -361,8 +366,8 @@ public class HydraulicTerrainWindow extends Window implements InputCallback {
 
 		float x = (float) (Math.random() * TERRAIN_RESOLUTION);
 		float y = (float) (Math.random() * TERRAIN_RESOLUTION);
-		x = MathUtils.clamp(1, TERRAIN_RESOLUTION - 1, x);
-		y = MathUtils.clamp(1, TERRAIN_RESOLUTION - 1, y);
+		x = MathUtils.clamp(0, TERRAIN_RESOLUTION - 1, x);
+		y = MathUtils.clamp(0, TERRAIN_RESOLUTION - 1, y);
 
 		//velocity
 		float vx = 0;
@@ -428,7 +433,7 @@ public class HydraulicTerrainWindow extends Window implements InputCallback {
 			y += vy;
 
 			//we fell off the edge
-			if (x < 0 || x > TERRAIN_RESOLUTION - 1 || y < 0 || y > TERRAIN_RESOLUTION - 1) {
+			if (x < 0 || x >= TERRAIN_RESOLUTION || y < 0 || y >= TERRAIN_RESOLUTION) {
 				break;
 			}
 		}

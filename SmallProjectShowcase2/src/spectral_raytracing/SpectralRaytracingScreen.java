@@ -43,6 +43,7 @@ import lwjglengine.util.ShaderUtils;
 import myutils.file.FileUtils;
 import myutils.file.csv.CSVReader;
 import myutils.math.Mat4;
+import myutils.math.MathUtils;
 import myutils.math.Vec3;
 import raytracing.RaytracingScreen.RaytracingOptions;
 import raytracing.bvh.*;
@@ -355,7 +356,7 @@ public class SpectralRaytracingScreen extends Screen {
 		this.raytracingGeometryShader.setUniform1f("ambient_strength", this.options.ambientStrength);
 		this.raytracingGeometryShader.setUniform1i("is_preview", this.renderMode == RENDER_MODE_PREVIEW ? 1 : 0);
 		this.raytracingGeometryShader.setUniform1f("cie_y_int", this.cie_y_int);
-		this.raytracingGeometryShader.setUniform1i("num_wavelength_samples_per_ray", this.options.renderNumWavelengthSamplesPerRay);
+		this.raytracingGeometryShader.setUniform1i("wavelength_nm_interval", MathUtils.clamp(1, nm_range, this.options.wavelengthNmInterval));
 	}
 
 	private void bindRaytracingSSBOs() {
@@ -534,19 +535,21 @@ public class SpectralRaytracingScreen extends Screen {
 		private float focusDist = 30f;
 
 		private float ambientStrength = 2;
-		private float sunStrength = 1000;
-		private Vec3 sunDir = new Vec3(1, 1, 0.4f);
+		private float sunStrength = 10000;
+		private Vec3 sunDir = new Vec3(-1, 1, -0.4f);
 
 		//more bounces have drastically diminishing returns along with drastically increasing render times
-		private int previewMaxBounceCount = 5;
-		private int renderMaxBounceCount = 10;
+		private int previewMaxBounceCount = 2;
+		private int renderMaxBounceCount = 15;
 
 		//increase number of rays per pixel while rendering to speed it up?
 		//downside is lower fps
 		private int previewNumRaysPerPixel = 1;
-		private int renderNumRaysPerPixel = 4;
+		private int renderNumRaysPerPixel = 1;
 
-		private int renderNumWavelengthSamplesPerRay = 4;
+		//by default, sample every 5 nanometers in the visible light range. 
+		//higher should converge faster (???), but look worse. 
+		private int wavelengthNmInterval = 5;
 
 		private float exposure = 1;
 		private float gamma = 1;
@@ -666,12 +669,12 @@ public class SpectralRaytracingScreen extends Screen {
 			this.bloomThreshold = bloomThreshold;
 		}
 
-		public int getRenderNumWavelengthSamplesPerRay() {
-			return renderNumWavelengthSamplesPerRay;
+		public int getWavelengthNmInterval() {
+			return wavelengthNmInterval;
 		}
 
-		public void setRenderNumWavelengthSamplesPerRay(int renderNumWavelengthSamplesPerRay) {
-			this.renderNumWavelengthSamplesPerRay = renderNumWavelengthSamplesPerRay;
+		public void setWavelengthNmInterval(int wavelengthNmInterval) {
+			this.wavelengthNmInterval = wavelengthNmInterval;
 		}
 	}
 

@@ -26,6 +26,7 @@ import raytracing.RaytracingWindow;
 import spectral_raytracing.SpectralRaytracingWindow;
 import sph_water.SPHWaterWindow;
 import sum_of_sines_water.SumOfSinesWaterWindow;
+import terrain_shadow_casting.TerrainShadowCastingWindow;
 import vector_art.VectorArtWindow;
 import volumetric_clouds.VolumetricCloudsWindow;
 import voxel_raytracing.VoxelRaytracingWindow;
@@ -49,9 +50,6 @@ public class BackgroundWindow extends Window implements ListViewerCallback {
 	//   - rigidbody tutorial: 
 	//     - Part 1: https://www.youtube.com/watch?v=4r_EvmPKOvY
 	//     - Part 2: https://www.youtube.com/watch?v=GYc99lMdcFE
-	// - 2D Terrain Shadow Casting
-	//   - https://www.youtube.com/watch?v=bMTeCqNkId8
-	//   - UPDATE : https://www.youtube.com/watch?v=6bnFfE82AJg
 	// - Vertex Painting
 	//   - https://www.youtube.com/watch?v=On64nNkjJpQ
 	// - expression calculator
@@ -67,8 +65,20 @@ public class BackgroundWindow extends Window implements ListViewerCallback {
 	//	 - another related video: https://www.youtube.com/watch?v=iKAVRgIrUOU
 	//   - look into the lattice boltzmann (algorithm?) we can do a grid based simulation, and then just advect the particle locations. 
 	//   - perhaps able to do 2D drag simulations. 
-	// - Procedural Dungeon Generation
+	// - Procedural 2D Dungeon Generation
+	//   - http://pcg.wikidot.com/pcg-algorithm:dungeon-generation
+	//     - many links to other stuff
+	//     - half of which are dead D:
+	//   - https://donjon.bin.sh/d20/dungeon/
+	//     - just a cool dungeon generator, probably for dnd
 	//   - https://www.gamedeveloper.com/programming/procedural-dungeon-generation-algorithm
+	//		- first, place a bunch of overlapping rooms, then spread them out using physics.
+	//      - pick some subset of rooms, then connect them using delaunay triangulation, create minimum spanning tree, but add back some edges. 
+	//      - along the mst edges, use the rejected rooms as the corridors. 
+	//   - https://journal.stuffwithstuff.com/2014/12/21/rooms-and-mazes/
+	//      - first, place rooms on 2D grid. Then, wherever you can, use a maze generation algorithm to fill in the rest of the empty space
+	//      - slowly connect all the components, until everything is connected
+	//      - remove all 'dead ends'. A tile is a dead end if it is surrounded by walls on 3 sides. 
 
 	private final int BACKGROUND_SCENE = Scene.generateScene();
 	private final int TEXT_SCENE = Scene.generateScene();
@@ -135,6 +145,7 @@ public class BackgroundWindow extends Window implements ListViewerCallback {
 			projectPicker.addToList("Genetic Image Builder");
 			projectPicker.addToList("Logic Simulator");
 			projectPicker.addToList("Spectral Raytracing");
+			projectPicker.addToList("Terrain Shadow Casting");
 			break;
 		}
 
@@ -304,6 +315,12 @@ public class BackgroundWindow extends Window implements ListViewerCallback {
 
 		case "Spectral Raytracing": {
 			AdjustableWindow window = new AdjustableWindow(new SpectralRaytracingWindow(x, y, width, height, null), this);
+			break;
+		}
+
+		case "Terrain Shadow Casting": {
+			AdjustableWindow window = new AdjustableWindow(new TerrainShadowCastingWindow(x, y, width, height, null), this);
+			window.setResizeContentWindowWhenEdgeGrabbed(false);
 			break;
 		}
 		}

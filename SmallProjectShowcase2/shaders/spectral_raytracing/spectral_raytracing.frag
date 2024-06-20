@@ -1048,9 +1048,10 @@ vec3 sampleXYZ(int wavelength, float intensity) {
 
 //use traceRaySpectral
 uniform float cie_y_int;
-uniform int num_wavelength_samples_per_ray;
+uniform int wavelength_nm_interval;
 vec3 computeColorRender() {
 	//compute sum in xyz color space
+	int wavelength_amt = nm_range / wavelength_nm_interval;
 	vec3 xyz_sum = vec3(0);
 	for(int i = 0; i < num_rays_per_pixel; i++){
 		vec3 focusPos = camera_pos + frag_dir * focus_dist; 
@@ -1062,21 +1063,17 @@ vec3 computeColorRender() {
 		vec3 rayDir = normalize(focusPos - rayOrigin) + camera_right * blurJitter.x + camera_up * blurJitter.y;
 		
 		Ray fragRay = Ray(rayOrigin, rayDir);
-		vec3 c_xyz = vec3(0);
-		for(int j = 0; j < num_wavelength_samples_per_ray; j++){
-			int wavelength = nm_min + int(randomValue() * nm_range);
-			float energy = traceRaySpectral(fragRay, wavelength);
-			
-			if(isnan(energy) || isinf(energy)) {
-				continue;
-			}
-			
-			//averaging and accounting for pdf at the same time
-			xyz_sum += sampleXYZ(wavelength, energy) * nm_range / num_wavelength_samples_per_ray;
+		
+		int wavelength = nm_min + int(randomValue() * wavelength_amt) * wavelength_nm_interval;
+		float energy = traceRaySpectral(fragRay, wavelength);
+		
+		if(!isnan(energy) && !isinf(energy)) {
+			xyz_sum += sampleXYZ(wavelength, energy);
 		}
 	}
-	xyz_sum /= cie_y_int;	//make sure y max is 1
-	xyz_sum /= num_rays_per_pixel;
+	xyz_sum /= cie_y_int;			//make sure y max is 1
+	xyz_sum *= nm_range;			//account for uniform pdf
+	xyz_sum /= num_rays_per_pixel;	//take average
 	
 	//apply some scale factors to x and z to fix whitepoint
 	xyz_sum.x *= 0.9505 / 1.000081;

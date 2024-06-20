@@ -27,6 +27,10 @@ import myutils.math.Vec3;
 
 public class RayMarchingWindow extends Window {
 
+	// - TODO
+	//   - try playing around with these distance functions. 
+	//     - https://iquilezles.org/articles/distfunctions/
+
 	private static final float FOV = (float) Math.toRadians(90f); //vertical fov
 	private static final float NEAR = 0.1f;
 	private static final float FAR = 400f;

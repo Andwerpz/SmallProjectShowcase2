@@ -3,6 +3,8 @@ package spectral_raytracing;
 import java.awt.Color;
 import java.io.IOException;
 
+import org.lwjgl.glfw.GLFW;
+
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
 import lwjglengine.model.Line;
@@ -94,8 +96,15 @@ public class ColorTestWindow extends Window {
 	private float[] spectrum_data = new float[nm_range];
 	private ModelInstance[] spectrum_display;
 
+	private boolean doXZScaling = true;
+
 	public ColorTestWindow(Window parentWindow) {
 		super(parentWindow);
+		this.init();
+	}
+
+	public ColorTestWindow(int width, int height, Window parentWindow) {
+		super(0, 0, width, height, parentWindow);
 		this.init();
 	}
 
@@ -177,6 +186,11 @@ public class ColorTestWindow extends Window {
 			this.settingsWindow = new ObjectEditorWindow(this.colorTestSettings);
 			AdjustableWindow window = new AdjustableWindow(this.settingsWindow, this);
 			window.setAllowUserRenesting(false);
+
+			window.setAlignmentStyle(Window.FROM_LEFT, Window.FROM_BOTTOM);
+
+			window.setOffset(10, 10);
+			window.setDimensions(200, 120);
 		}
 
 		this._resize();
@@ -259,10 +273,18 @@ public class ColorTestWindow extends Window {
 
 	}
 
+	private void setDoXZScaling(boolean b) {
+		this.doXZScaling = b;
+		this.setRGBColor(this.RGBColor);
+	}
+
 	@Override
 	protected void _keyPressed(int key) {
-		// TODO Auto-generated method stub
-
+		switch (key) {
+		case GLFW.GLFW_KEY_X:
+			this.setDoXZScaling(!this.doXZScaling);
+			break;
+		}
 	}
 
 	@Override
@@ -333,8 +355,10 @@ public class ColorTestWindow extends Window {
 		XYZ.divi(this.cie_y_int);
 
 		// - apply some scale factors to x and z, to fix whitepoint
-		XYZ.x *= 0.9505 / 1.000081;
-		XYZ.z *= 1.0888 / 1.0003315;
+		if (this.doXZScaling) {
+			XYZ.x *= 0.9505 / 1.000081;
+			XYZ.z *= 1.0888 / 1.0003315;
+		}
 
 		// - convert XYZ values into linear RGB in the sRGB space using matrix
 		//since OpenGL uses linear, this is exactly what we want
