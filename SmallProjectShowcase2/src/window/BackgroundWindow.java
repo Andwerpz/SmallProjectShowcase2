@@ -16,6 +16,7 @@ import lwjglengine.ui.Text;
 import lwjglengine.ui.UIElement;
 import lwjglengine.ui.UIFilledRectangle;
 import lwjglengine.window.AdjustableWindow;
+import lwjglengine.window.FileCreatorWindow;
 import lwjglengine.window.ListViewerWindow.ListViewerCallback;
 import lwjglengine.window.TextEditorWindow;
 import lwjglengine.window.Window;

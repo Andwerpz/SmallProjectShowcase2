@@ -121,7 +121,6 @@ public class HydraulicTerrainWindow extends Window implements InputCallback {
 		btnRegenerateNoise.setContentAlignmentStyle(UIElement.ALIGN_CENTER, UIElement.ALIGN_TOP);
 		btnRegenerateNoise.setFillWidth(true);
 		btnRegenerateNoise.setFillWidthMargin(10);
-		btnRegenerateNoise.getButtonText().setDoAntialiasing(false);
 		btnRegenerateNoise.bind(backgroundRect);
 
 		Button btnErodeTerrain = new Button(0, 40, 100, 25, "btn_erode_terrain", "Erode Terrain", 12, this, this.uiSection.getSelectionScene(), this.uiSection.getTextScene());
@@ -129,7 +128,6 @@ public class HydraulicTerrainWindow extends Window implements InputCallback {
 		btnErodeTerrain.setContentAlignmentStyle(UIElement.ALIGN_CENTER, UIElement.ALIGN_TOP);
 		btnErodeTerrain.setFillWidth(true);
 		btnErodeTerrain.setFillWidthMargin(10);
-		btnErodeTerrain.getButtonText().setDoAntialiasing(false);
 		btnErodeTerrain.bind(backgroundRect);
 
 		Button btnBlurTerrain = new Button(0, 70, 100, 25, "btn_blur_terrain", "Blur Terrain", 12, this, this.uiSection.getSelectionScene(), this.uiSection.getTextScene());
@@ -137,7 +135,6 @@ public class HydraulicTerrainWindow extends Window implements InputCallback {
 		btnBlurTerrain.setContentAlignmentStyle(UIElement.ALIGN_CENTER, UIElement.ALIGN_TOP);
 		btnBlurTerrain.setFillWidth(true);
 		btnBlurTerrain.setFillWidthMargin(10);
-		btnBlurTerrain.getButtonText().setDoAntialiasing(false);
 		btnBlurTerrain.bind(backgroundRect);
 
 		this._resize();

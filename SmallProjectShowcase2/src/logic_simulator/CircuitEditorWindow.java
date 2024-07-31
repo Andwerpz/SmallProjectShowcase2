@@ -60,7 +60,6 @@ public class CircuitEditorWindow extends Window implements InputCallback {
 		this.newCircuitButton = new Button(0, 0, 80, 20, "btn_new_circuit", "New Circuit", this, this.topBarSection.getSelectionScene(), this.topBarSection.getTextScene());
 		this.newCircuitButton.setFrameAlignmentStyle(UIElement.FROM_LEFT, UIElement.FROM_CENTER_TOP);
 		this.newCircuitButton.setContentAlignmentStyle(UIElement.ALIGN_LEFT, UIElement.ALIGN_CENTER);
-		this.newCircuitButton.getButtonText().setDoAntialiasing(false);
 		this.newCircuitButton.bind(this.topBarSection.getBackgroundRect());
 
 		this.project = new Project(FileUtils.loadFileRelative("/res/logic_simulator/projects/test.xml"));

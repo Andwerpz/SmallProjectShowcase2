@@ -170,14 +170,12 @@ public class ColorTestWindow extends Window {
 		this.referenceText.setFrameAlignmentStyle(UIElement.FROM_CENTER_LEFT, UIElement.FROM_TOP);
 		this.referenceText.setContentAlignmentStyle(UIElement.ALIGN_CENTER, UIElement.ALIGN_TOP);
 		this.referenceText.setFrameAlignmentOffset(0, 10);
-		this.referenceText.setDoAntialiasing(false);
 		this.referenceText.bind(this.referenceColorRect);
 
 		this.spectrumText = new Text(0, 0, "Spectrum Color", this.uiSection.getTextScene());
 		this.spectrumText.setFrameAlignmentStyle(UIElement.FROM_CENTER_LEFT, UIElement.FROM_TOP);
 		this.spectrumText.setContentAlignmentStyle(UIElement.ALIGN_CENTER, UIElement.ALIGN_TOP);
 		this.spectrumText.setFrameAlignmentOffset(0, 10);
-		this.spectrumText.setDoAntialiasing(false);
 		this.spectrumText.bind(this.spectrumColorRect);
 
 		{

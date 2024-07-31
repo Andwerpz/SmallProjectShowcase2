@@ -2,6 +2,7 @@ package terrain_shadow_casting;
 
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Texture;
+import lwjglengine.scene.Scene;
 import lwjglengine.window.Window;
 
 public class TerrainShadowCastingWindow extends Window {
