@@ -40,7 +40,7 @@ import myutils.math.MathUtils;
 import myutils.math.Vec2;
 import myutils.math.Vec3;
 import myutils.misc.Pair;
-import myutils.noise.PerlinNoise;
+import myutils.noise.base.PerlinNoise;
 
 public class HydraulicTerrainWindow extends Window implements InputCallback {
 	//for now, just generate a new vertex array 

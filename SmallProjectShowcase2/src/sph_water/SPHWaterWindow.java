@@ -387,6 +387,7 @@ public class SPHWaterWindow extends Window {
 			this.waterMetaballShader.setUniform1f("water_mass", waterMass);
 			this.waterMetaballShader.setUniform1f("density_smoothing_kernel_volume", densitySmoothingKernelVolume);
 			this.waterMetaballShader.setUniform1f("near_density_smoothing_kernel_volume", nearDensitySmoothingKernelVolume);
+			outputBuffer.bind();
 			ScreenQuad.screenQuad.render();
 		}
 
