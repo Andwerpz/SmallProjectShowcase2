@@ -12,6 +12,7 @@ import logic_simulator.component.circuit.LogicCircuitBlueprint;
 import logic_simulator.component.gate.GateType;
 import logic_simulator.component.gate.LogicGate;
 import lwjglengine.graphics.Framebuffer;
+import lwjglengine.graphics.Material;
 import lwjglengine.input.Button;
 import lwjglengine.input.Input;
 import lwjglengine.input.Input.InputCallback;
@@ -54,7 +55,7 @@ public class CircuitEditorWindow extends Window implements InputCallback {
 		this.topBarSection.getBackgroundRect().setContentAlignmentStyle(UIElement.ALIGN_LEFT, UIElement.ALIGN_TOP);
 		this.topBarSection.getBackgroundRect().setFillWidth(true);
 		this.topBarSection.getBackgroundRect().setHeight(topBarHeightPx);
-		this.topBarSection.getBackgroundRect().setMaterial(topBarDefaultMaterial);
+		this.topBarSection.getBackgroundRect().setMaterial(Material.TOP_BAR_DEFAULT_MATERIAL);
 		this.topBarSection.getBackgroundRect().bind(this.rootUIElement);
 
 		this.newCircuitButton = new Button(0, 0, 80, 20, "btn_new_circuit", "New Circuit", this, this.topBarSection.getSelectionScene(), this.topBarSection.getTextScene());

@@ -104,7 +104,7 @@ public class HydraulicTerrainWindow extends Window implements InputCallback {
 
 		this.uiSection = new UISection();
 
-		Material backgroundMaterial = new Material(this.contentDefaultMaterial);
+		Material backgroundMaterial = new Material(Material.CONTENT_DEFAULT_MATERIAL);
 		backgroundMaterial.setAlpha(0.5f);
 
 		UIFilledRectangle backgroundRect = this.uiSection.getBackgroundRect();

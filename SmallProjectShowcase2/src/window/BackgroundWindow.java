@@ -18,6 +18,7 @@ import lwjglengine.ui.UIFilledRectangle;
 import lwjglengine.window.AdjustableWindow;
 import lwjglengine.window.FileCreatorWindow;
 import lwjglengine.window.ListViewerWindow.ListViewerCallback;
+import lwjglengine.window.NoiseGeneratorWindow;
 import lwjglengine.window.TextEditorWindow;
 import lwjglengine.window.Window;
 import pbr_rendering.PBRRenderingWindow;
@@ -104,7 +105,7 @@ public class BackgroundWindow extends Window implements ListViewerCallback {
 		backgroundRect.setMaterial(new Material(Color.BLACK));
 		backgroundRect.bind(this.rootUIElement);
 
-		Text promptText = new Text(0, 0, "Right click to open the context menu", new Font("Consolas", Font.PLAIN, 36), this.contentDefaultMaterial, TEXT_SCENE);
+		Text promptText = new Text(0, 0, "Right click to open the context menu", new Font("Consolas", Font.PLAIN, 36), Material.CONTENT_DEFAULT_MATERIAL, TEXT_SCENE);
 		promptText.setFrameAlignmentStyle(UIElement.FROM_CENTER_LEFT, UIElement.FROM_CENTER_TOP);
 		promptText.setContentAlignmentStyle(UIElement.ALIGN_CENTER, UIElement.ALIGN_CENTER);
 		promptText.setBackgroundColor(Color.BLACK);
@@ -320,8 +321,9 @@ public class BackgroundWindow extends Window implements ListViewerCallback {
 		}
 
 		case "Terrain Shadow Casting": {
-			AdjustableWindow window = new AdjustableWindow(new TerrainShadowCastingWindow(x, y, width, height, null), this);
-			window.setAllowManualResizing(false);
+			this.addChildAdjWindow(new NoiseGeneratorWindow(null));
+			//			AdjustableWindow window = new AdjustableWindow(new TerrainShadowCastingWindow(x, y, width, height, null), this);
+			//			window.setAllowManualResizing(false);
 			break;
 		}
 		}
