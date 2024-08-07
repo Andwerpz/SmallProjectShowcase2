@@ -81,6 +81,9 @@ public class BackgroundWindow extends Window implements ListViewerCallback {
 	//      - first, place rooms on 2D grid. Then, wherever you can, use a maze generation algorithm to fill in the rest of the empty space
 	//      - slowly connect all the components, until everything is connected
 	//      - remove all 'dead ends'. A tile is a dead end if it is surrounded by walls on 3 sides. 
+	// - Black Hole / Wormhole Raytracer
+	//   - http://rantonels.github.io/starless/
+	//   - https://blog.seanholloway.com/2022/03/13/visualizing-black-holes-with-general-relativistic-ray-tracing/
 
 	private final int BACKGROUND_SCENE = Scene.generateScene();
 	private final int TEXT_SCENE = Scene.generateScene();
