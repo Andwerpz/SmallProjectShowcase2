@@ -185,7 +185,7 @@ public class GeneticImageBuilder extends Window implements FileSelectorCallback 
 		this.target = new Texture("/res/astolfo 11.jpg", 0, GL_RGBA32F, GL_NEAREST, GL_NEAREST, 1);
 		this.canvasWidth = this.target.getWidth();
 		this.canvasHeight = this.target.getHeight();
-		this.canvas = new Texture(GL_RGBA32F, this.canvasWidth, this.canvasHeight, 0, 0, 0, 255);
+		this.canvas = new Texture(this.canvasWidth, this.canvasHeight, GL_RGBA32F, 0, 0, 0, 255);
 
 		this.canvasFramebuffer = new Framebuffer(this.canvasWidth, this.canvasHeight);
 		this.canvasFramebuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.canvas.getID());
@@ -256,7 +256,7 @@ public class GeneticImageBuilder extends Window implements FileSelectorCallback 
 
 	private void resetCanvas() {
 		this.canvasFramebuffer.kill();
-		this.canvas = new Texture(GL_RGBA32F, this.canvasWidth, this.canvasHeight, 0, 0, 0, 255);
+		this.canvas = new Texture(this.canvasWidth, this.canvasHeight, GL_RGBA32F, 0, 0, 0, 255);
 
 		this.canvasFramebuffer = new Framebuffer(this.canvasWidth, this.canvasHeight);
 		this.canvasFramebuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.canvas.getID());

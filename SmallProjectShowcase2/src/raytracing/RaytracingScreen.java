@@ -130,31 +130,31 @@ public class RaytracingScreen extends Screen {
 		}
 
 		this.renderBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
-		this.renderColorMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
+		this.renderColorMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
 		this.renderBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.renderColorMap.getID());
 		this.renderBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
 		this.renderBuffer.isComplete();
 
 		this.prevRenderBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
-		this.prevRenderColorMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
+		this.prevRenderColorMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
 		this.prevRenderBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.prevRenderColorMap.getID());
 		this.prevRenderBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
 		this.prevRenderBuffer.isComplete();
 
 		this.outputBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
-		this.outputColorMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
+		this.outputColorMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
 		this.outputBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.outputColorMap.getID());
 		this.outputBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
 		this.outputBuffer.isComplete();
 
 		this.postprocessHDRBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
-		this.postprocessHDRMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
+		this.postprocessHDRMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
 		this.postprocessHDRBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.postprocessHDRMap.getID());
 		this.postprocessHDRBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
 		this.postprocessHDRBuffer.isComplete();
 
 		this.postprocessBloomBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
-		this.postprocessBloomMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
+		this.postprocessBloomMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
 		glBindTexture(GL_TEXTURE_2D, this.postprocessBloomMap.getID());
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -163,7 +163,7 @@ public class RaytracingScreen extends Screen {
 		this.postprocessBloomBuffer.isComplete();
 
 		this.postprocessTempBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
-		this.postprocessTempMap = new Texture(GL_RGBA32F, this.screenWidth, this.screenHeight, GL_RGBA, GL_FLOAT);
+		this.postprocessTempMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
 		glBindTexture(GL_TEXTURE_2D, this.postprocessTempMap.getID());
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);

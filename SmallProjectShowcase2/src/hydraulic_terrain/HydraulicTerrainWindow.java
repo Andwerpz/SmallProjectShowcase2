@@ -184,7 +184,7 @@ public class HydraulicTerrainWindow extends Window implements InputCallback {
 			}
 		}
 
-		Texture texture = new Texture(data, TERRAIN_RESOLUTION, TERRAIN_RESOLUTION, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR);
+		Texture texture = new Texture(TERRAIN_RESOLUTION, TERRAIN_RESOLUTION, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, data);
 		texture.setWrapping(GL_CLAMP_TO_EDGE);
 
 		return texture;
@@ -208,7 +208,7 @@ public class HydraulicTerrainWindow extends Window implements InputCallback {
 			}
 		}
 
-		Texture texture = new Texture(data, TERRAIN_RESOLUTION, TERRAIN_RESOLUTION, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR);
+		Texture texture = new Texture(TERRAIN_RESOLUTION, TERRAIN_RESOLUTION, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, data);
 		texture.setWrapping(GL_CLAMP_TO_EDGE);
 
 		return texture;
