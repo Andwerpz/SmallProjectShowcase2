@@ -34,6 +34,7 @@ import lwjglengine.graphics.Shader;
 import lwjglengine.graphics.Texture;
 import lwjglengine.scene.Scene;
 import lwjglengine.screen.ScreenQuad;
+import lwjglengine.ui.UISection;
 import lwjglengine.util.ShaderUtils;
 import lwjglengine.window.AdjustableWindow;
 import lwjglengine.window.FileCreatorWindow;
@@ -58,30 +59,38 @@ public class TerrainShadowCastingWindow extends Window {
 	//https://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
 
 	//TODO
-	// - allow rendering downsampled centered image. 
 	// - handle rendering in a seperate thread, and have a fancy progress readout on the gui. 
 	//   - use this window as a lat, lon, zoom selector for the final render. 
+	//   - also give some presets to render. 
 	// - optimize shadowing portion of rendering. 
 	//   - can build a quadtree, and somehow traverse that. Quadtree might be able to be generated using opengl mipmaps?
-
-	//	private Texture renderTexture;
-	//	private final int RENDER_SCENE = Scene.generateScene();
-
+	// - allow to pick planet??
+	//   - https://www.openplanetary.org/opm/basemaps
+	//   - can generate images from mars and moon
+	//   - annoying problem: they have elevation as an arbitrary color gradient. Either i need to reverse engineer
+	//     the color gradient used and apply the reverse transformation, or i need to find somewhere that 
+	//     provides the DEM (digital elevation model) tiles. 
+	//   - one idea to reverse engineer the gradient is to just guess :3 Just create a gradient that looks good enough,
+	//     then map the heights linearly onto the gradient. 
+	//   - another idea is to get the DEM data, and sample color, height pairs. Then create the gradient that way. 
+	
+	private UISection uiSection;
+	
 	public TerrainShadowCastingWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
 		this.init();
 	}
 
 	private void init() {
-		//		//sanfrancisco
+		//sanfrancisco
 		//		float lat = 37.774929f;
 		//		float lon = -122.419418f;
 		//		int zoom = 11;
 
-		//grand canyon
-		float lat = 36.230940f;
-		float lon = -112.410221f;
-		int zoom = 9;
+//		//grand canyon
+//		float lat = 36.230940f;
+//		float lon = -112.410221f;
+//		int zoom = 8;
 
 		//mt everest
 		//		float lat = 27.9881f;
@@ -97,23 +106,28 @@ public class TerrainShadowCastingWindow extends Window {
 		//		float lat = 30.418415f;
 		//		float lon = -97.831395f;
 		//		int zoom = 10;
+		
+		//mars
+		float lat = 18.65f;
+		float lon = 226.2f - 360;
+		int zoom = 2;
 
-		//		int width = 1920, height = 1080;
-		//		//		int width = 500, height = 500;
-		//		this.renderTexture = generateCenteredImage(zoom, lat, lon, width, height);
-		//		this.setDimensions(width, height);
+//		int width = 1920, height = 1080;
+		int width = 1200;
+		int height = 600;
 
-		TerrainShadowCastingRenderWindow r = new TerrainShadowCastingRenderWindow(zoom, lat, lon, 500, 500);
+		TerrainShadowCastingRenderWindow r = new TerrainShadowCastingRenderWindow(zoom, lat, lon, width, height);
 		AdjustableWindow adj = this.addChildAdjWindow(r);
 		adj.setAllowManualResizing(false);
+		
+		this.uiSection = new UISection();
 
 		this._resize();
 	}
 
 	@Override
 	protected void _kill() {
-		//		Scene.removeScene(RENDER_SCENE);
-		//		this.renderTexture.kill();
+		this.uiSection.kill();
 	}
 
 	@Override
@@ -126,6 +140,77 @@ public class TerrainShadowCastingWindow extends Window {
 		return "Terrain Shadow Casting";
 	}
 
+	@Override
+	protected void _update() {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	protected void renderContent(Framebuffer outputBuffer) {
+		
+	}
+
+	@Override
+	protected void renderOverlay(Framebuffer outputBuffer) {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	protected void selected() {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	protected void deselected() {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	protected void subtreeSelected() {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	protected void subtreeDeselected() {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	protected void _mousePressed(int button) {
+
+	}
+
+	@Override
+	protected void _mouseReleased(int button) {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	protected void _mouseScrolled(float wheelOffset, float smoothOffset) {
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	protected void _keyPressed(int key) {
+
+	}
+
+	@Override
+	protected void _keyReleased(int key) {
+		// TODO Auto-generated method stub
+
+	}
+	
+	//for reference if i ever break it D:
+	/*
 	//for free!!
 	private static final String API_KEY = "wuHJ0xDcLkjvM20HPGA7";
 
@@ -191,7 +276,7 @@ public class TerrainShadowCastingWindow extends Window {
 		float lon1 = zxyToLL(zoom, x + 1, y).second;
 		float pixel_scale = 6371000 * (lon1 - lon0) / TILE_RESOLUTION; //6371000 meters is avg radius of earth.
 
-		int nr_rays = 256;
+		int nr_rays = 1;
 		Vec3 sun_dir = new Vec3(1, 1, 0.5).normalize();
 
 		//create textures by patching together a bunch of tiles
@@ -425,79 +510,5 @@ public class TerrainShadowCastingWindow extends Window {
 		res_tex.generateMipmaps();
 		return res_tex;
 	}
-
-	@Override
-	protected void _update() {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	protected void renderContent(Framebuffer outputBuffer) {
-		//		glViewport(0, 0, this.getWidth(), this.getHeight());
-		//		this.renderTexture.bind(GL_TEXTURE0);
-		//		outputBuffer.bind();
-		//		Shader.SPLASH.enable();
-		//		Shader.SPLASH.setUniform1f("alpha", 1);
-		//		ScreenQuad.screenQuad.render();
-	}
-
-	@Override
-	protected void renderOverlay(Framebuffer outputBuffer) {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	protected void selected() {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	protected void deselected() {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	protected void subtreeSelected() {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	protected void subtreeDeselected() {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	protected void _mousePressed(int button) {
-
-	}
-
-	@Override
-	protected void _mouseReleased(int button) {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	protected void _mouseScrolled(float wheelOffset, float smoothOffset) {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	protected void _keyPressed(int key) {
-
-	}
-
-	@Override
-	protected void _keyReleased(int key) {
-		// TODO Auto-generated method stub
-
-	}
-
+	*/
 }
