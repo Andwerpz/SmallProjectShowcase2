@@ -322,7 +322,6 @@ public class BackgroundWindow extends Window implements ListViewerCallback {
 
 		case "Terrain Shadow Casting": {
 			AdjustableWindow window = new AdjustableWindow(new TerrainShadowCastingWindow(x, y, width, height, null), this);
-			window.setAllowManualResizing(false);
 			break;
 		}
 		}
