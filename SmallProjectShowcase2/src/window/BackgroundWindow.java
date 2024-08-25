@@ -3,6 +3,7 @@ package window;
 import java.awt.Color;
 import java.awt.Font;
 
+import csce_vis.hw1.HW1Window;
 import genetic_image_builder.GeneticImageBuilder;
 import hydraulic_terrain.HydraulicTerrainWindow;
 import logic_simulator.CircuitEditorWindow;
@@ -33,7 +34,7 @@ import vector_art.VectorArtWindow;
 import volumetric_clouds.VolumetricCloudsWindow;
 import voxel_raytracing.VoxelRaytracingWindow;
 
-public class BackgroundWindow extends Window implements ListViewerCallback {
+public class BackgroundWindow extends Window {
 	//for now, this window should just be to open a context menu. 
 	//perhaps we can modify the background later. 
 
@@ -94,7 +95,7 @@ public class BackgroundWindow extends Window implements ListViewerCallback {
 
 	private void init() {
 		this.setContextMenuRightClick(true);
-		this.setContextMenuActions(new String[] { "Open Project Picker", "Readme" });
+		this.setContextMenuActions(new String[] { "Open Project Picker", "Open VIS Picker", "Readme" });
 
 		this.setFillWidth(true);
 		this.setFillHeight(true);
@@ -131,7 +132,7 @@ public class BackgroundWindow extends Window implements ListViewerCallback {
 
 		switch (action) {
 		case "Open Project Picker": {
-			ProjectPickerWindow projectPicker = new ProjectPickerWindow(x, y, width, height, this, null);
+			ProjectPickerWindow projectPicker = new ProjectPickerWindow(x, y, width, height, new ProjWindowCallback(), null);
 			AdjustableWindow adjWindow = new AdjustableWindow("Project Picker", projectPicker, this);
 
 			projectPicker.addToList("Volumetric Clouds");
@@ -148,6 +149,14 @@ public class BackgroundWindow extends Window implements ListViewerCallback {
 			projectPicker.addToList("Logic Simulator");
 			projectPicker.addToList("Spectral Raytracing");
 			projectPicker.addToList("Terrain Shadow Casting");
+			break;
+		}
+
+		case "Open VIS Picker": {
+			ProjectPickerWindow proj_window = new ProjectPickerWindow(x, y, width, height, new VisProjWindowCallback(), null);
+			AdjustableWindow adj_window = new AdjustableWindow("VIS Projects", proj_window, this);
+
+			proj_window.addToList("Homework 1");
 			break;
 		}
 
@@ -247,84 +256,105 @@ public class BackgroundWindow extends Window implements ListViewerCallback {
 
 	}
 
-	@Override
-	public void handleListViewerCallback(Object[] contents) {
-		String whichProject = (String) contents[0];
-		int width = 800;
-		int height = 600;
-		int x = (int) this.getWindowMousePos().x;
-		int y = (int) (Main.windowHeight - this.getWindowMousePos().y);
-		switch (whichProject) {
-		case "Volumetric Clouds": {
-			AdjustableWindow window = new AdjustableWindow(new VolumetricCloudsWindow(x, y, width, height, null), this);
-			break;
+	class ProjWindowCallback implements ListViewerCallback {
+		@Override
+		public void handleListViewerCallback(Object[] contents) {
+			String whichProject = (String) contents[0];
+			int width = 800;
+			int height = 600;
+			int x = (int) getWindowMousePos().x;
+			int y = (int) (Main.windowHeight - getWindowMousePos().y);
+			switch (whichProject) {
+			case "Volumetric Clouds": {
+				AdjustableWindow window = new AdjustableWindow(new VolumetricCloudsWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "Hydraulic Terrain Generation": {
+				AdjustableWindow window = new AdjustableWindow(new HydraulicTerrainWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "Procedural Trees": {
+				AdjustableWindow window = new AdjustableWindow(new ProceduralTreesWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "Sum of Sines Water": {
+				AdjustableWindow window = new AdjustableWindow(new SumOfSinesWaterWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "Ray Marching": {
+				AdjustableWindow window = new AdjustableWindow(new RayMarchingWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "Raytracing": {
+				AdjustableWindow window = new AdjustableWindow(new RaytracingWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "PBR Rendering": {
+				AdjustableWindow window = new AdjustableWindow(new PBRRenderingWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "Vector Art": {
+				AdjustableWindow window = new AdjustableWindow(new VectorArtWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "SPH Water": {
+				AdjustableWindow window = new AdjustableWindow(new SPHWaterWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "Voxel Raytracing": {
+				AdjustableWindow window = new AdjustableWindow(new VoxelRaytracingWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "Genetic Image Builder": {
+				AdjustableWindow window = new AdjustableWindow(new GeneticImageBuilder(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "Logic Simulator": {
+				AdjustableWindow window = new AdjustableWindow(new CircuitEditorWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "Spectral Raytracing": {
+				AdjustableWindow window = new AdjustableWindow(new SpectralRaytracingWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "Terrain Shadow Casting": {
+				AdjustableWindow window = new AdjustableWindow(new TerrainShadowCastingWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+			}
+		}
+	}
+
+	class VisProjWindowCallback implements ListViewerCallback {
+
+		@Override
+		public void handleListViewerCallback(Object[] contents) {
+			String whichProject = (String) contents[0];
+			int width = 800;
+			int height = 600;
+			int x = (int) getWindowMousePos().x;
+			int y = (int) (Main.windowHeight - getWindowMousePos().y);
+			switch (whichProject) {
+			case "Homework 1": {
+				AdjustableWindow window = new AdjustableWindow(new HW1Window(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+			}
 		}
 
-		case "Hydraulic Terrain Generation": {
-			AdjustableWindow window = new AdjustableWindow(new HydraulicTerrainWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Procedural Trees": {
-			AdjustableWindow window = new AdjustableWindow(new ProceduralTreesWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Sum of Sines Water": {
-			AdjustableWindow window = new AdjustableWindow(new SumOfSinesWaterWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Ray Marching": {
-			AdjustableWindow window = new AdjustableWindow(new RayMarchingWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Raytracing": {
-			AdjustableWindow window = new AdjustableWindow(new RaytracingWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "PBR Rendering": {
-			AdjustableWindow window = new AdjustableWindow(new PBRRenderingWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Vector Art": {
-			AdjustableWindow window = new AdjustableWindow(new VectorArtWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "SPH Water": {
-			AdjustableWindow window = new AdjustableWindow(new SPHWaterWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Voxel Raytracing": {
-			AdjustableWindow window = new AdjustableWindow(new VoxelRaytracingWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Genetic Image Builder": {
-			AdjustableWindow window = new AdjustableWindow(new GeneticImageBuilder(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Logic Simulator": {
-			AdjustableWindow window = new AdjustableWindow(new CircuitEditorWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Spectral Raytracing": {
-			AdjustableWindow window = new AdjustableWindow(new SpectralRaytracingWindow(x, y, width, height, null), this);
-			break;
-		}
-
-		case "Terrain Shadow Casting": {
-			AdjustableWindow window = new AdjustableWindow(new TerrainShadowCastingWindow(x, y, width, height, null), this);
-			break;
-		}
-		}
 	}
 
 }
