@@ -177,7 +177,8 @@ public class HW1Window extends Window {
 		tangent_norm.normalize();
 
 		float tangent_vel = tangent_norm.dot(relative_vel);
-		float tangent_impulse_scalar = tangent_vel / inv_mass_sum;
+		float tangent_impulse_scalar = tangent_vel / inv_mass_sum;	//static friction. should 'match speed' with other surface
+//		float tangent_impulse_scalar = tangent_vel / inv_mass_sum;
 
 		//		System.err.println("TANGENT NORM : " + tangent_norm + " " + tangent_norm.dot(normal));
 		//		System.err.println("REL VEL : " + relative_vel);
@@ -187,7 +188,9 @@ public class HW1Window extends Window {
 		//		System.err.println("ANG VEL : " + s.ang_vel);
 
 		if (tangent_impulse_scalar > normal_impulse_scalar * settings.staticFriction) {
-			tangent_impulse_scalar *= settings.dynamicFriction;
+			//if the force is too great for static friction, switch to dynamic friction
+			tangent_impulse_scalar = settings.dynamicFriction * normal_impulse_scalar;
+//			tangent_impulse_scalar *= settings.dynamicFriction;
 		}
 
 		//apply tangent impulse
@@ -204,6 +207,47 @@ public class HW1Window extends Window {
 			ang_accel[i] = new Vec3(0);
 		}
 
+		//collisions
+		for (int i = 0; i < this.spheres.size(); i++) {
+			for (int j = 0; j < this.spheres.size(); j++) {
+				if (i == j) {
+					continue;
+				}
+
+				//considering impulse of sa due to sb. 
+				Sphere sa = this.spheres.get(i);
+				Sphere sb = this.spheres.get(j);
+
+				Vec3 ba = new Vec3(sb.pos, sa.pos);
+				if (ba.lengthSq() > Math.pow(sa.radius + sb.radius, 2)) { //not colliding
+					continue;
+				}
+
+				Vec3 ba_norm = new Vec3(ba);
+				ba_norm.normalize();
+
+				//need to correct penetration. Move two balls equally
+				if (i < j) {
+					float pen = (sa.radius + sb.radius) - ba.length();
+					pen = Math.max(0, pen - settings.penetrationThreshold);
+					pen_correct[i].addi(ba_norm.mul(pen / 2.0f));
+					pen_correct[j].subi(ba_norm.mul(pen / 2.0f));
+				}
+
+				//compute collision point
+				Vec3 coll_pt = sa.pos.add(sb.pos).mul(0.5f);
+
+				//relative vel between two contact points
+				Vec3 relative_vel = new Vec3(0);
+				relative_vel.addi(sb.vel);
+				relative_vel.addi(calcSurfaceVel(sb.ang_vel, sb.pos, coll_pt));
+				relative_vel.subi(sa.vel);
+				relative_vel.subi(calcSurfaceVel(sa.ang_vel, sa.pos, coll_pt));
+
+				this.handleCollision(accel, ang_accel, i, sa, coll_pt, relative_vel, 1.0f / sb.mass);
+			}
+		}
+		
 		//basics
 		for (int i = 0; i < this.spheres.size(); i++) {
 			Sphere s = this.spheres.get(i);
@@ -257,47 +301,6 @@ public class HW1Window extends Window {
 
 			//gravity
 			accel[i].addi(settings.gravity.mul(settings.timeStep));
-		}
-
-		//collisions
-		for (int i = 0; i < this.spheres.size(); i++) {
-			for (int j = 0; j < this.spheres.size(); j++) {
-				if (i == j) {
-					continue;
-				}
-
-				//considering impulse of sa due to sb. 
-				Sphere sa = this.spheres.get(i);
-				Sphere sb = this.spheres.get(j);
-
-				Vec3 ba = new Vec3(sb.pos, sa.pos);
-				if (ba.lengthSq() > Math.pow(sa.radius + sb.radius, 2)) { //not colliding
-					continue;
-				}
-
-				Vec3 ba_norm = new Vec3(ba);
-				ba_norm.normalize();
-
-				//need to correct penetration. Move two balls equally
-				if (i < j) {
-					float pen = (sa.radius + sb.radius) - ba.length();
-					pen = Math.max(0, pen - settings.penetrationThreshold);
-					pen_correct[i].addi(ba_norm.mul(pen / 2.0f));
-					pen_correct[j].subi(ba_norm.mul(pen / 2.0f));
-				}
-
-				//compute collision point
-				Vec3 coll_pt = sa.pos.add(sb.pos).mul(0.5f);
-
-				//relative vel between two contact points
-				Vec3 relative_vel = new Vec3(0);
-				relative_vel.addi(sb.vel);
-				relative_vel.addi(calcSurfaceVel(sb.ang_vel, sb.pos, coll_pt));
-				relative_vel.subi(sa.vel);
-				relative_vel.subi(calcSurfaceVel(sa.ang_vel, sa.pos, coll_pt));
-
-				this.handleCollision(accel, ang_accel, i, sa, coll_pt, relative_vel, 1.0f / sb.mass);
-			}
 		}
 
 		//assign values of next step
