@@ -42,7 +42,10 @@ public class HW1Window extends Window {
 
 	//TODO
 	// - air resistance
-	// - wind?
+	// - wind
+	// - handle physics updates in compute shader (prob not worth it)
+	// - ball size variance when generating. 
+	// - allow to change box dimensions along each axis seperately. 
 
 	private PlayerInputController pc;
 
@@ -294,134 +297,14 @@ public class HW1Window extends Window {
 				relative_vel.subi(calcSurfaceVel(sa.ang_vel, sa.pos, coll_pt));
 
 				this.handleCollision(accel, ang_accel, i, sa, coll_pt, relative_vel, 1.0f / sb.mass);
-
-				/*
-				//normal from b -> a
-				Vec3 normal = sa.pos.sub(sb.pos);
-				normal.normalize();
-				
-				float normal_vel = normal.dot(relative_vel);
-				if (normal_vel < 0) { //they're separating. 
-					continue;
-				}
-				
-				//				System.err.println("NORMAL VEL : " + normal_vel + " " + normal);
-				
-				float inv_mass_sum = 1.0f / sa.mass + 1.0f / sb.mass;
-				float normal_impulse_scalar = (1.0f + this.coeffRestitution) * normal_vel / inv_mass_sum;
-				
-				//apply normal impulse
-				accel[i].addi(normal.mul(normal_impulse_scalar / sa.mass));
-				
-				Vec3 tangent_norm = relative_vel.sub(normal.mul(normal_vel));
-				tangent_norm.normalize();
-				
-				float tangent_vel = tangent_norm.dot(relative_vel);
-				float tangent_impulse_scalar = tangent_vel / inv_mass_sum;
-				
-				if (tangent_impulse_scalar > normal_impulse_scalar * this.staticFriction) {
-					tangent_impulse_scalar *= this.dynamicFriction;
-				}
-				
-				//apply tangent impulse
-				accel[i].addi(tangent_norm.mul(tangent_impulse_scalar / sa.mass));
-				
-				//apply torque
-				Vec3 rel_coll_pt = coll_pt.sub(sa.pos);
-				Vec3 torque_impulse = rel_coll_pt.cross(tangent_norm);
-				ang_accel[i].addi(torque_impulse.mul(-tangent_impulse_scalar / sa.moment));
-				
-				System.err.println("TANGENT IMPULSE SCALAR : " + tangent_impulse_scalar);
-				System.err.println("ANG ACCEL : " + ang_accel[i]);
-				System.err.println("REL COLL PT : " + rel_coll_pt);
-				//				if (tangent_impulse_scalar != 0) {
-				//					System.exit(0);
-				//				}
-				*/
-
-				/*
-				//consider collision from perspective of sa. Put sa at origin and velocity to 0. 
-				//now, sa is standing still and sb is moving towards (?) sa. 
-				Vec3 pa = new Vec3(0);
-				Vec3 pb = sb.pos.sub(sa.pos);
-				
-				Vec3 va = new Vec3(0);
-				Vec3 vb = sb.vel.sub(sa.vel);
-				
-				float ma = sa.mass;
-				float mb = sb.mass;
-				
-				Vec3 unit_norm = new Vec3(ba_norm); //b -> a
-				if (vb.dot(unit_norm) < 0) { //b is travelling away from a
-					continue;
-				}
-				
-				Vec3 vel_norm = unit_norm.mul(vb.dot(unit_norm));
-				Vec3 vel_tan = vb.sub(vel_norm);
-				
-				// - find relative velocity between two contact points
-				//   - vel_tan + rot_tan_a + rot_tan_b
-				Vec3 cpta = new Vec3(pb).normalize().mul(sa.radius);
-				Vec3 rot_tan_a = calcSurfaceVel(sa.ang_vel, pa, cpta);
-				
-				Vec3 cptb = new Vec3(pb).normalize().mul(-sb.radius);
-				cptb.addi(pb);
-				Vec3 rot_tan_b = calcSurfaceVel(sb.ang_vel, pb, cptb);
-				
-				vel_tan.subi(rot_tan_a);
-				vel_tan.addi(rot_tan_b);
-				if (vel_tan.length() > 1) {
-					vel_tan.normalize();
-				}
-				//				vel_tan.normalize();
-				
-				//				System.err.println("VEL_TAN : " + vel_tan);
-				//				System.err.println("ROT TAN : " + rot_tan_a + " " + rot_tan_b);
-				//				System.err.println("CPT : " + cpta + " " + cptb);
-				
-				float norm_impulse = (1.0f + this.coeffRestitution) / (1.0f / ma + 1.0f / mb);
-				
-				// - find normal force (we currently have a normal velocity)
-				//   - maybe velocity * mass? or just velocity. I think velocity * mass
-				float frict_impulse = norm_impulse * this.coeffFriction;
-				
-				// - compute tangential force due to friction, and apply it to center mass and angular velocity. 
-				float torque_impulse_mag = frict_impulse * sa.radius;
-				
-				Vec3 torque_impulse = cpta.cross(vel_tan.mul(-torque_impulse_mag));
-				torque_impulse = torque_impulse.div(sa.moment);
-				ang_accel[i].addi(torque_impulse);
-				
-				//				System.err.println("ANG ACCEL : " + ang_accel[i] + " " + sa.ang_vel);
-				
-				Vec3 imp = vel_norm.mul(norm_impulse);
-				imp.addi(vel_tan.mul(frict_impulse));
-				imp = imp.div(ma);
-				accel[i].addi(imp);
-				
-				//				System.err.println("IMP : " + imp);
-				//				System.exit(0);
-				*/
-
 			}
 		}
 
 		//assign values of next step
 		for (int i = 0; i < this.spheres.size(); i++) {
 			Sphere s = this.spheres.get(i);
-			s.pos.addi(s.vel.mul(settings.timeStep));
-			s.pos.addi(pen_correct[i]);
-			s.vel.addi(accel[i]);
 
-			s.ang_vel.addi(ang_accel[i]);
-			if (settings.doAngVelDamping) {
-				Vec3 norm_ang_vel = new Vec3(s.ang_vel);
-				norm_ang_vel.normalize();
-				s.ang_vel.subi(norm_ang_vel.muli(settings.timeStep));
-				if (s.ang_vel.length() < 1e-2) {
-					s.ang_vel.set(0, 0, 0);
-				}
-			}
+			s.pos.addi(s.vel.mul(settings.timeStep));
 
 			Vec3 axis = new Vec3(s.ang_vel);
 			float omega = axis.length();
@@ -430,6 +313,19 @@ public class HW1Window extends Window {
 			Quaternion n_orient = quat_rot.mul(s.orient);
 			n_orient.normalize();
 			s.orient = n_orient;
+
+			s.pos.addi(pen_correct[i]);
+			s.vel.addi(accel[i]);
+			s.ang_vel.addi(ang_accel[i]);
+
+			if (settings.doAngVelDamping) {
+				Vec3 norm_ang_vel = new Vec3(s.ang_vel);
+				norm_ang_vel.normalize();
+				s.ang_vel.subi(norm_ang_vel.muli(settings.timeStep));
+				if (s.ang_vel.length() < 1e-2) {
+					s.ang_vel.set(0, 0, 0);
+				}
+			}
 		}
 
 		this.timeDebt -= settings.timeStep;
@@ -514,9 +410,21 @@ public class HW1Window extends Window {
 	@Override
 	protected void _keyPressed(int key) {
 		switch (key) {
-		case GLFW.GLFW_KEY_Q:
+		case GLFW.GLFW_KEY_Q: {
 			this.generateBalls();
 			break;
+		}
+
+		case GLFW.GLFW_KEY_E: {
+			Vec3 pos = this.pc.getPos();
+			Vec3 dir = this.pc.getFacing();
+			float vel = 500;
+			float radius = 5;
+			Sphere s = new Sphere(pos, radius);
+			s.vel = dir.mul(vel);
+			this.spheres.add(s);
+			break;
+		}
 		}
 	}
 
