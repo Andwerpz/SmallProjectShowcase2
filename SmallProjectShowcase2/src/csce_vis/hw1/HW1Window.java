@@ -41,16 +41,12 @@ import myutils.math.Vec3;
 public class HW1Window extends Window {
 
 	//TODO
-	// - air resistance
-	// - wind
 	// - handle physics updates in compute shader (prob not worth it)
 	// - ball size variance when generating. 
-	// - allow to change box dimensions along each axis seperately. 
 	// - fun stuff
 	//   - first player movement on the ground
 	//   - boss fight? have another big ball fly around and pelt the player with balls
 	//   - basketball hoop. use a plane to detect if you score
-	//   - general triangle collider to make obstacles on the ground
 
 	private PlayerInputController pc;
 
@@ -88,33 +84,73 @@ public class HW1Window extends Window {
 
 	//cube of side length 2 * size centered around the origin. 
 	private void setBoxSize(float size) {
-		//cube points
-		Vec3 pt = new Vec3(size);
-		int[][] c = { { 1, 1, 1 }, { -1, 1, 1 }, { -1, 1, -1 }, { 1, 1, -1 }, { 1, -1, 1 }, { -1, -1, 1 }, { -1, -1, -1 }, { 1, -1, -1 }, };
-		Vec3[] p = new Vec3[8];
-		for (int i = 0; i < 8; i++) {
-			p[i] = new Vec3(size * c[i][0], size * c[i][1], size * c[i][2]);
+		List<Triangle> tris = new ArrayList<>();
+		
+		{
+			//walls
+			Vec3 pt = new Vec3(size);
+			int[][] c = { { 1, 1, 1 }, { -1, 1, 1 }, { -1, 1, -1 }, { 1, 1, -1 }, { 1, -1, 1 }, { -1, -1, 1 }, { -1, -1, -1 }, { 1, -1, -1 }, };
+			Vec3[] p = new Vec3[8];
+			for (int i = 0; i < 8; i++) {
+				p[i] = new Vec3(size * c[i][0], size * c[i][1], size * c[i][2]);
+			}
+			
+			Triangle t0 = new Triangle(p[0], p[1], p[2]); //top
+			Triangle t1 = new Triangle(p[2], p[3], p[0]);
+
+			Triangle t2 = new Triangle(p[5], p[4], p[6]); //bottom
+			Triangle t3 = new Triangle(p[7], p[6], p[4]);
+
+			Triangle t4 = new Triangle(p[4], p[0], p[3]); //left
+			Triangle t5 = new Triangle(p[3], p[7], p[4]);
+
+			Triangle t6 = new Triangle(p[5], p[6], p[2]); //right
+			Triangle t7 = new Triangle(p[2], p[1], p[5]);
+
+			Triangle t8 = new Triangle(p[1], p[0], p[4]); //front
+			Triangle t9 = new Triangle(p[4], p[5], p[1]);
+
+			Triangle t10 = new Triangle(p[3], p[2], p[6]); //back
+			Triangle t11 = new Triangle(p[6], p[7], p[3]);
+			
+			tris.addAll(Arrays.asList(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11));
 		}
-
-		Triangle t0 = new Triangle(p[0], p[1], p[2]); //top
-		Triangle t1 = new Triangle(p[2], p[3], p[0]);
-
-		Triangle t2 = new Triangle(p[5], p[4], p[6]); //bottom
-		Triangle t3 = new Triangle(p[7], p[6], p[4]);
-
-		Triangle t4 = new Triangle(p[4], p[0], p[3]); //left
-		Triangle t5 = new Triangle(p[3], p[7], p[4]);
-
-		Triangle t6 = new Triangle(p[5], p[6], p[2]); //right
-		Triangle t7 = new Triangle(p[2], p[1], p[5]);
-
-		Triangle t8 = new Triangle(p[1], p[0], p[4]); //front
-		Triangle t9 = new Triangle(p[4], p[5], p[1]);
-
-		Triangle t10 = new Triangle(p[3], p[2], p[6]); //back
-		Triangle t11 = new Triangle(p[6], p[7], p[3]);
-
-		List<Triangle> tris = Arrays.asList(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11);
+		
+		//ramp shallow
+		{
+			Vec3[] p = new Vec3[6];
+			p[0] = new Vec3(0, -size, size / 2);
+			p[1] = new Vec3(size, -size, size / 2);
+			p[2] = new Vec3(size, -3 * size / 4, size / 2);
+			p[3] = new Vec3(0, -size, -size / 2);
+			p[4] = new Vec3(size, -size, -size / 2);
+			p[5] = new Vec3(size, -3 * size / 4, -size / 2);
+			
+			tris.add(new Triangle(p[0], p[1], p[2]));	//front
+			tris.add(new Triangle(p[3], p[5], p[4]));	//back
+			
+			tris.add(new Triangle(p[0], p[2], p[5]));	//top
+			tris.add(new Triangle(p[5], p[3], p[0]));
+			
+		}
+		
+		//ramp steep
+		{
+			Vec3[] p = new Vec3[6];
+			p[0] = new Vec3(-size / 2, -size, size / 2);
+			p[1] = new Vec3(-size, -size, size / 2);
+			p[2] = new Vec3(-size, -2 * size / 4, size / 2);
+			p[3] = new Vec3(-size / 2, -size, -size / 2);
+			p[4] = new Vec3(-size, -size, -size / 2);
+			p[5] = new Vec3(-size, -2 * size / 4, -size / 2);
+			
+			tris.add(new Triangle(p[1], p[0], p[2]));	//front
+			tris.add(new Triangle(p[5], p[3], p[4]));	//back
+			
+			tris.add(new Triangle(p[2], p[0], p[5]));	//top
+			tris.add(new Triangle(p[3], p[5], p[0]));
+		}
+		
 		this.renderScreen.setTriangles(tris);
 
 		this.triangles.clear();
@@ -178,9 +214,6 @@ public class HW1Window extends Window {
 
 		float inv_mass_sum = 1.0f / s.mass + inv_mass_b;
 		float normal_impulse_scalar = (1.0f + settings.coeffRestitution) * normal_vel / inv_mass_sum;
-		if (relative_vel.lengthSq() < settings.gravity.mul(settings.timeStep).lengthSq() + 1e-5) {
-			normal_impulse_scalar = normal_vel / inv_mass_sum;
-		}
 
 		//apply normal impulse
 		this.applyImpulse(accel, ang_accel, ind, s, normal.mul(normal_impulse_scalar), contact_vec);
@@ -399,6 +432,7 @@ public class HW1Window extends Window {
 		}
 
 		this.renderScreen.setSpheres(this.spheres);
+		this.renderScreen.setTriangles(this.triangles);
 	}
 
 	@Override
