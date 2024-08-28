@@ -301,6 +301,9 @@ public class TerrainShadowCastingRenderWindow extends Window {
 
 		private ScreenQuad sq;
 
+		private int nr_rays = 256;
+		private Vec3 sun_dir = new Vec3(1, 1, 0.5).normalize();
+
 		public RenderThread(int zoom, float lat, float lon, int width, int height, TerrainShadowCastingRenderWindow window) {
 			this.zoom = zoom;
 			this.lat = lat;
@@ -375,10 +378,13 @@ public class TerrainShadowCastingRenderWindow extends Window {
 		}
 
 		//for free!!
-		private static final String API_KEY = "wuHJ0xDcLkjvM20HPGA7";
+		private static final String MAPTILER_API_KEY = "wuHJ0xDcLkjvM20HPGA7";
+		private static final String MAPBOX_API_KEY = "pk.eyJ1IjoiYW5kd2VycCIsImEiOiJjbHp0aXl2aDIyZXZhMnFweDRtMnJxa2s5In0.xwo1W_uOdQ7RboK1hidWnQ";
 
-		//actually, this is only true in the case of maptiler. 
-		private static final int TILE_RESOLUTION = 512;
+		//actually, 512 resolution is only true in the case of maptiler. 
+		//for mapbox, use 256. 
+		private static final boolean USE_MAPTILER = true;
+		private static final int TILE_RESOLUTION = USE_MAPTILER ? 512 : 256;
 
 		private BufferedImage getTileImage(String url_string) {
 			this.callback_window.addLogMsg(url_string);
@@ -422,9 +428,19 @@ public class TerrainShadowCastingRenderWindow extends Window {
 			String url_string = "";
 			switch (planet) {
 			case "earth":
-				String map_name = albedo ? "satellite-v2" : "terrain-rgb-v2";
-				String format = albedo ? "jpg" : "webp";
-				url_string = "https://api.maptiler.com/tiles/" + map_name + "/" + zoom + "/" + x + "/" + y + "." + format + "?key=" + API_KEY;
+				//maptiler
+				if (USE_MAPTILER) {
+					String map_name = albedo ? "satellite-v2" : "terrain-rgb-v2";
+					String format = albedo ? "jpg" : "webp";
+					url_string = "https://api.maptiler.com/tiles/" + map_name + "/" + zoom + "/" + x + "/" + y + "." + format + "?key=" + MAPTILER_API_KEY;
+				}
+
+				//mapbox
+				else {
+					//https://api.mapbox.com/v4/{tileset_id}/{zoom}/{x}/{y}{@2x}.{format}
+					String tile_id = albedo ? "mapbox.satellite" : "mapbox.mapbox-terrain-dem-v1";
+					url_string = "https://api.mapbox.com/v4/" + tile_id + "/" + zoom + "/" + x + "/" + y + "@2x.png?access_token=" + MAPBOX_API_KEY;
+				}
 				break;
 			}
 
@@ -444,9 +460,6 @@ public class TerrainShadowCastingRenderWindow extends Window {
 			float lon0 = zxyToLL(zoom, x, y).second;
 			float lon1 = zxyToLL(zoom, x + 1, y).second;
 			float pixel_scale = 6371000 * (lon1 - lon0) / TILE_RESOLUTION; //6371000 meters is avg radius of earth.
-
-			int nr_rays = 256;
-			Vec3 sun_dir = new Vec3(1, 1, 0.5).normalize();
 
 			//create textures by patching together a bunch of tiles
 			this.callback_window.addLogMsg("Retrieving tiles from api");

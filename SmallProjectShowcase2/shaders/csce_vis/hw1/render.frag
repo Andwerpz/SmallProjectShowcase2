@@ -21,12 +21,20 @@ struct Ray {
 	vec3 dir;
 };
 
+struct Material {
+	vec3 color;
+	vec3 specular;
+	bool is_reflective;	//standin for roughness
+	float metalness;
+	float ior;	
+};
+
 struct HitInfo {
 	bool didHit;
 	float dist;
 	vec3 hitPoint;
 	vec3 hitNormal;
-	vec3 hitMaterial;
+	Material hitMaterial;
 	bool is_internal;
 };
 
@@ -42,8 +50,16 @@ struct Triangle {
 	vec3 c;
 };
 
+Material createMaterial() {
+	return Material(vec3(0), vec3(1), false, 0, 1.5);
+}
+
+Material createMaterial(vec3 color) {
+	return Material(color, vec3(1), false, 0, 1.5);
+}
+
 HitInfo createHitInfo() {
-	return HitInfo(false, 0, vec3(0), vec3(0), vec3(0), false);
+	return HitInfo(false, 0, vec3(0), vec3(0), createMaterial(), false);
 }
 
 Sphere createSphere() {
@@ -54,11 +70,14 @@ Triangle createTriangle() {
 	return Triangle(vec3(0), vec3(0), vec3(0));
 }
 
-vec3 sampleSphereMaterial(Sphere sphere, vec3 hit_pos) {
+Material sampleSphereMaterial(Sphere sphere, vec3 hit_pos) {
+	Material white_mat = Material(vec3(1), vec3(1), false, 0, 1.5);
+	Material dark_mat = Material(vec3(0.5), vec3(1), true, 0, 1.5);
+
 	hit_pos -= sphere.center;
 	hit_pos = (vec4(hit_pos, 0) * sphere.orient).xyz;
 	int cond = (hit_pos.x > 0? 1 : 0) ^ (hit_pos.y > 0? 1 : 0) ^ (hit_pos.z > 0? 1 : 0);
-	return cond == 1 && render_sphere_texture? vec3(0.5) : vec3(1);
+	return cond == 1 && render_sphere_texture? dark_mat : white_mat;
 }
 
 Sphere readSphere(inout int offset) {
@@ -202,7 +221,7 @@ HitInfo rayTriangle(Ray ray, Triangle triangle) {
 	ret.dist = t;	//ray.dir has to be normalized on function call for this to work
 	ret.hitPoint = plane_intersect;
 	ret.hitNormal = plane_normal;
-	ret.hitMaterial = vec3(1);
+	ret.hitMaterial = createMaterial(vec3(1));
 
 	return ret;
 }
@@ -253,6 +272,80 @@ bool isShadowed(vec3 pos, vec3 light_pos) {
 	return closest_hit.dist * closest_hit.dist < dot(to_light, to_light);
 }
 
+//n1 is ior of current material, n2 is incident material
+float fresnelDielectric(vec3 incident, vec3 normal, float n1, float n2) {
+	float cos_theta_i = dot(incident, normal);
+	float n = n2 / n1;
+	
+	//incident and normal are facing opposite directions, reverse orientation of normal. 
+	if(cos_theta_i < 0){
+		normal *= -1;
+		cos_theta_i = dot(incident, normal);
+		n = n1 / n2;
+	}
+	
+	//compute cos_theta_t
+	float sin2_theta_i = max(0.0, 1.0 - cos_theta_i * cos_theta_i);
+	float sin2_theta_t = sin2_theta_i / (n * n);
+	if(sin2_theta_t >= 1.0){	//handle total internal reflection
+		return 1.0;
+	}
+	float cos_theta_t = sqrt(max(0.0, 1.0 - sin2_theta_t));
+	
+	//compute ans
+	float r_parl = (n * cos_theta_i - cos_theta_t) / (n * cos_theta_i + cos_theta_t);
+    float r_perp = (cos_theta_i - n * cos_theta_t) / (cos_theta_i + n * cos_theta_t);
+    return (r_parl * r_parl + r_perp * r_perp) / 2.0;
+}
+
+float fresnel(vec3 incident, vec3 normal, float metalness) {
+	//F0 is amount of 0 angle reflectance. 
+	//non-metallic surfaces look good with F0 at 0.04, if surface is metallic, we can raise it. 
+	//F0 = 0.04 corresponds with ior = 1.5, porcelain has an ior of 1.504
+	//as F0 tends towards 1.0, ior goes to infinity
+	float F0 = mix(0.04, 0.99, metalness);   
+	float n2 = (1.0 + sqrt(F0)) / (1.0 - sqrt(F0));	//index of refraction
+	return fresnelDielectric(incident, normal, 1.0, n2);
+}
+
+const int max_bounces = 2;
+vec3 calcColor(Ray ray) {
+	vec3 ans = vec3(0);
+	vec3 throughput = vec3(1);
+	
+	for(int i = 0; i < max_bounces; i++){
+		HitInfo hit = calcRayCollision(ray);
+		
+		if(!hit.didHit) {
+			break;
+		}
+		
+		Material hit_mat = hit.hitMaterial;
+		float metalness = hit_mat.metalness;
+		float ior = hit_mat.ior;
+		
+		vec3 norm_dir = hit.hitNormal;
+		vec3 out_dir = -ray.dir;
+		vec3 in_dir = reflect(out_dir, norm_dir);
+		
+		//for now, this just represents the probability of a specular bounce
+		float F = fresnel(out_dir, norm_dir, metalness);
+		
+		//'diffuse' bounce
+		//just directly go to the light source
+		{
+		
+		}
+		
+		//specular bounce
+		{
+			
+		}
+	}
+	
+	return ans;
+}
+
 void main() {	
 	vec3 frag_dir = normalize(in_frag_dir);
 	
@@ -271,6 +364,6 @@ void main() {
 	float ambient = 0.2;
 	float total = diffuse * (1.0 - ambient) + ambient;
 	
-	color = vec4(hit.hitMaterial * total, 1);
+	color = vec4(hit.hitMaterial.color * total, 1);
 } 
 

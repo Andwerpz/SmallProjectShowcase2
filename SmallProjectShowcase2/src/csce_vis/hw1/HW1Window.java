@@ -85,16 +85,16 @@ public class HW1Window extends Window {
 	//cube of side length 2 * size centered around the origin. 
 	private void setBoxSize(float size) {
 		List<Triangle> tris = new ArrayList<>();
-		
+
+		//walls
 		{
-			//walls
 			Vec3 pt = new Vec3(size);
 			int[][] c = { { 1, 1, 1 }, { -1, 1, 1 }, { -1, 1, -1 }, { 1, 1, -1 }, { 1, -1, 1 }, { -1, -1, 1 }, { -1, -1, -1 }, { 1, -1, -1 }, };
 			Vec3[] p = new Vec3[8];
 			for (int i = 0; i < 8; i++) {
 				p[i] = new Vec3(size * c[i][0], size * c[i][1], size * c[i][2]);
 			}
-			
+
 			Triangle t0 = new Triangle(p[0], p[1], p[2]); //top
 			Triangle t1 = new Triangle(p[2], p[3], p[0]);
 
@@ -112,10 +112,10 @@ public class HW1Window extends Window {
 
 			Triangle t10 = new Triangle(p[3], p[2], p[6]); //back
 			Triangle t11 = new Triangle(p[6], p[7], p[3]);
-			
+
 			tris.addAll(Arrays.asList(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11));
 		}
-		
+
 		//ramp shallow
 		{
 			Vec3[] p = new Vec3[6];
@@ -125,15 +125,15 @@ public class HW1Window extends Window {
 			p[3] = new Vec3(0, -size, -size / 2);
 			p[4] = new Vec3(size, -size, -size / 2);
 			p[5] = new Vec3(size, -3 * size / 4, -size / 2);
-			
-			tris.add(new Triangle(p[0], p[1], p[2]));	//front
-			tris.add(new Triangle(p[3], p[5], p[4]));	//back
-			
-			tris.add(new Triangle(p[0], p[2], p[5]));	//top
+
+			tris.add(new Triangle(p[0], p[1], p[2])); //front
+			tris.add(new Triangle(p[3], p[5], p[4])); //back
+
+			tris.add(new Triangle(p[0], p[2], p[5])); //top
 			tris.add(new Triangle(p[5], p[3], p[0]));
-			
+
 		}
-		
+
 		//ramp steep
 		{
 			Vec3[] p = new Vec3[6];
@@ -143,14 +143,14 @@ public class HW1Window extends Window {
 			p[3] = new Vec3(-size / 2, -size, -size / 2);
 			p[4] = new Vec3(-size, -size, -size / 2);
 			p[5] = new Vec3(-size, -2 * size / 4, -size / 2);
-			
-			tris.add(new Triangle(p[1], p[0], p[2]));	//front
-			tris.add(new Triangle(p[5], p[3], p[4]));	//back
-			
-			tris.add(new Triangle(p[2], p[0], p[5]));	//top
+
+			tris.add(new Triangle(p[1], p[0], p[2])); //front
+			tris.add(new Triangle(p[5], p[3], p[4])); //back
+
+			tris.add(new Triangle(p[2], p[0], p[5])); //top
 			tris.add(new Triangle(p[3], p[5], p[0]));
 		}
-		
+
 		this.renderScreen.setTriangles(tris);
 
 		this.triangles.clear();
@@ -236,6 +236,7 @@ public class HW1Window extends Window {
 	private void physicsStep() {
 		//maybe apply acceleration changes directly instead of buffering them?
 		//will help resolve cases where two objects are pushing in the same direction. 
+		//might create weird cases where objects bounce weirdly off of smooth surfaces though
 		Vec3[] accel = new Vec3[this.spheres.size()];
 		Vec3[] pen_correct = new Vec3[this.spheres.size()];
 		Vec3[] ang_accel = new Vec3[this.spheres.size()];
@@ -527,7 +528,7 @@ public class HW1Window extends Window {
 	public class SimulationSettings {
 		public float boxSize = 50;
 		public Vec3 gravity = new Vec3(0, -300, 0);
-		public int invTimeStep = 60;
+		public int invTimeStep = 120;
 		public float timeStep = 1.0f / this.invTimeStep;
 		public float coeffRestitution = 0.3f;
 		public float penetrationThreshold = 0.05f; //threshold before which we do penetration correction. 

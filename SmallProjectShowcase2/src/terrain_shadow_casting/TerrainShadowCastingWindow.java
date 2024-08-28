@@ -131,9 +131,9 @@ public class TerrainShadowCastingWindow extends Window implements InputCallback 
 			//		int zoom = 11;
 
 			//grand canyon
-			float lat = 36.230940f;
-			float lon = -112.410221f;
-			int zoom = 8;
+			//			float lat = 36.230940f;
+			//			float lon = -112.410221f;
+			//			int zoom = 8;
 
 			//mt everest
 			//		float lat = 27.9881f;
@@ -150,11 +150,16 @@ public class TerrainShadowCastingWindow extends Window implements InputCallback 
 			//		float lon = -97.831395f;
 			//		int zoom = 10;
 
+			//Uncompahgre peak
+			float lat = 38.0696868f;
+			float lon = -107.4662279f;
+			int zoom = 13;
+
 			this.zoom = zoom;
 			this.lat = lat;
 			this.lon = lon;
-			this.width = 800;
-			this.height = 600;
+			this.width = 400;
+			this.height = 300;
 		}
 
 		public int getZoom() {
