@@ -72,12 +72,12 @@ Triangle createTriangle() {
 
 Material sampleSphereMaterial(Sphere sphere, vec3 hit_pos) {
 	Material white_mat = Material(vec3(1), vec3(1), false, 0, 1.5);
-	Material dark_mat = Material(vec3(0.5), vec3(1), true, 0, 1.5);
+	Material gold_mat = Material(vec3(0.9), vec3(0.9), true, 0.75, 1.5);
 
 	hit_pos -= sphere.center;
 	hit_pos = (vec4(hit_pos, 0) * sphere.orient).xyz;
 	int cond = (hit_pos.x > 0? 1 : 0) ^ (hit_pos.y > 0? 1 : 0) ^ (hit_pos.z > 0? 1 : 0);
-	return cond == 1 && render_sphere_texture? dark_mat : white_mat;
+	return cond == 1 && render_sphere_texture? gold_mat : white_mat;
 }
 
 Sphere readSphere(inout int offset) {
@@ -309,7 +309,7 @@ float fresnel(vec3 incident, vec3 normal, float metalness) {
 }
 
 const int max_bounces = 2;
-vec3 calcColor(Ray ray) {
+vec3 calcColor(Ray ray, vec3 light_pos) {
 	vec3 ans = vec3(0);
 	vec3 throughput = vec3(1);
 	
@@ -326,21 +326,34 @@ vec3 calcColor(Ray ray) {
 		
 		vec3 norm_dir = hit.hitNormal;
 		vec3 out_dir = -ray.dir;
-		vec3 in_dir = reflect(out_dir, norm_dir);
+		vec3 in_dir = reflect(ray.dir, norm_dir);
 		
 		//for now, this just represents the probability of a specular bounce
 		float F = fresnel(out_dir, norm_dir, metalness);
+		if(!hit_mat.is_reflective || i == max_bounces - 1) {
+			F = 0;
+		}
 		
-		//'diffuse' bounce
+		//'diffuse' bounce with probability 1 - F
 		//just directly go to the light source
 		{
-		
-		}
-		
-		//specular bounce
-		{
+			vec3 light_dir = normalize(light_pos - hit.hitPoint);
+			float diffuse = dot(light_dir, hit.hitNormal);
+			if(isShadowed(hit.hitPoint, light_pos)) {
+				diffuse = min(diffuse, 0);
+			}
+			diffuse = diffuse / 2.0 + 0.5;
+			float ambient = 0.2;
+			float total = diffuse * (1.0 - ambient) + ambient;
 			
+			ans += throughput * (1.0 - F) * hit_mat.color * total;
 		}
+		
+		//specular bounce with probability F
+		//update throughput
+		throughput *= hit_mat.specular * F;
+		
+		ray = Ray(hit.hitPoint + in_dir * 0.001, in_dir);
 	}
 	
 	return ans;
@@ -352,6 +365,11 @@ void main() {
 	vec3 light_pos = vec3(0, box_size * 0.8, 0);
 	
 	Ray camera_ray = Ray(camera_pos, frag_dir);
+	
+	vec3 out_color = calcColor(camera_ray, light_pos);
+	color = vec4(out_color, 1);
+	
+	/*
 	HitInfo hit = calcRayCollision(camera_ray);
 	
 	vec3 light_dir = normalize(light_pos - hit.hitPoint);
@@ -365,5 +383,6 @@ void main() {
 	float total = diffuse * (1.0 - ambient) + ambient;
 	
 	color = vec4(hit.hitMaterial.color * total, 1);
+	*/
 } 
 
