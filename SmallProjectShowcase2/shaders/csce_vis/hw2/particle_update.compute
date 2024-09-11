@@ -1,0 +1,34 @@
+#version 430 core
+
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 1) buffer posBuffer {
+	vec4[] posData;
+};
+
+layout(binding = 2) buffer velBuffer {
+	vec4[] velData;
+};
+
+layout(binding = 3) buffer hueBuffer {
+	vec4[] hueData;
+};
+
+const float dt = 1.0 / 120.0;
+const vec3 gravity = vec3(0, -1, 0);
+
+void main() {
+	int particle_id = int(gl_GlobalInvocationID.x);
+	vec3 pos = posData[particle_id].xyz;
+	vec3 vel = velData[particle_id].xyz;
+	vec3 hue = hueData[particle_id].xyz;
+	
+	//gravity
+	vel += gravity * dt;
+	
+	//integrate
+	pos += vel * dt;
+	
+	posData[particle_id].xyz = pos;
+	velData[particle_id].xyz = vel;
+}

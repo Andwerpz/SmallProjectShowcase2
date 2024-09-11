@@ -1,23 +1,29 @@
 package csce_vis.hw2;
 
-import static org.lwjgl.opengl.GL11.GL_FLOAT;
-import static org.lwjgl.opengl.GL15.GL_ARRAY_BUFFER;
-import static org.lwjgl.opengl.GL15.GL_DYNAMIC_DRAW;
-import static org.lwjgl.opengl.GL15.GL_ELEMENT_ARRAY_BUFFER;
-import static org.lwjgl.opengl.GL15.GL_STATIC_DRAW;
-import static org.lwjgl.opengl.GL15.glBindBuffer;
-import static org.lwjgl.opengl.GL15.glBufferData;
-import static org.lwjgl.opengl.GL15.glDeleteBuffers;
-import static org.lwjgl.opengl.GL15.glGenBuffers;
-import static org.lwjgl.opengl.GL20.glEnableVertexAttribArray;
-import static org.lwjgl.opengl.GL20.glVertexAttribPointer;
-import static org.lwjgl.opengl.GL30.glBindVertexArray;
-import static org.lwjgl.opengl.GL30.glDeleteVertexArrays;
-import static org.lwjgl.opengl.GL30.glGenVertexArrays;
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.*;
+import static org.lwjgl.opengl.GL13.*;
+import static org.lwjgl.opengl.GL14.*;
+import static org.lwjgl.opengl.GL15.*;
+import static org.lwjgl.opengl.GL20.*;
+import static org.lwjgl.opengl.GL21.*;
+import static org.lwjgl.opengl.GL30.*;
+import static org.lwjgl.opengl.GL31.*;
+import static org.lwjgl.opengl.GL32.*;
+import static org.lwjgl.opengl.GL33.*;
+import static org.lwjgl.opengl.GL40.*;
+import static org.lwjgl.opengl.GL41.*;
+import static org.lwjgl.opengl.GL42.*;
+import static org.lwjgl.opengl.GL43.*;
+import static org.lwjgl.opengl.GL44.*;
+import static org.lwjgl.opengl.GL45.*;
+import static org.lwjgl.opengl.GL46.*;
 
 import lwjglengine.graphics.Framebuffer;
+import lwjglengine.graphics.Shader;
 import lwjglengine.graphics.ShaderStorageBuffer;
 import lwjglengine.util.BufferUtils;
+import lwjglengine.util.ShaderUtils;
 import lwjglengine.window.Window;
 import myutils.math.MathUtils;
 import myutils.math.Vec3;
@@ -39,10 +45,12 @@ public class HW2Window extends Window {
 	//   - perhaps use BVH to speed up particle vs environment collisions?
 
 	//particle buffers
-	private static final int MAX_PARTICLE_CNT = 1000; //maximum amount of particles possible within buffer
+	private static final int MAX_PARTICLE_CNT = 1; //maximum amount of particles possible within buffer
 	private static final int PARTICLE_GEN_PER_SECOND = 100; //number of tries to generate particles. 
 	private int vao, vbo, ibo;
 	private ShaderStorageBuffer posbo, velbo, huebo;
+	
+	private Shader particleUpdateShader;
 
 	private static final int VERTEX_LOC = 0;
 	private static final int INSTANCED_POS_LOC = 1;
@@ -50,6 +58,8 @@ public class HW2Window extends Window {
 
 	public HW2Window(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
+		
+		this.particleUpdateShader = ShaderUtils.createShader("/csce_vis/hw2/particle_update.compute", GL_COMPUTE_SHADER);
 
 		//set up particle array buffers
 		//also need to keep track of:
@@ -95,14 +105,35 @@ public class HW2Window extends Window {
 			Vec3 pos = MathUtils.random(new Vec3(-10), new Vec3(10));
 			Vec3 vel = new Vec3(0);
 			Vec3 hue = new Vec3(1);
-
+			
+			pos_data[i * 4 + 0] = pos.x;
+			pos_data[i * 4 + 1] = pos.y;
+			pos_data[i * 4 + 2] = pos.z;
+			
+			vel_data[i * 4 + 0] = vel.x;
+			vel_data[i * 4 + 1] = vel.y;
+			vel_data[i * 4 + 2] = vel.z;
+			
+			hue_data[i * 4 + 0] = hue.x;
+			hue_data[i * 4 + 1] = hue.y;
+			hue_data[i * 4 + 2] = hue.z;
 		}
+		
+		this.posbo.setData(pos_data);
+		this.velbo.setData(vel_data);
+		this.huebo.setData(hue_data);
 	}
 
 	@Override
 	protected void _kill() {
 		glDeleteVertexArrays(new int[] { this.vao });
-		glDeleteBuffers(new int[] { this.vbo, this.ibo, this.posbo, this.velbo, this.huebo });
+		glDeleteBuffers(new int[] { this.vbo, this.ibo });
+		
+		this.posbo.kill();
+		this.velbo.kill();
+		this.huebo.kill();
+		
+		this.particleUpdateShader.kill();
 	}
 
 	@Override
@@ -118,8 +149,7 @@ public class HW2Window extends Window {
 
 	@Override
 	protected void _update() {
-		// TODO Auto-generated method stub
-
+		
 	}
 
 	@Override
