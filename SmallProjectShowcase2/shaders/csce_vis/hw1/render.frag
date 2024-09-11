@@ -72,7 +72,7 @@ Triangle createTriangle() {
 
 Material sampleSphereMaterial(Sphere sphere, vec3 hit_pos) {
 	Material white_mat = Material(vec3(1), vec3(1), false, 0, 1.5);
-	Material gold_mat = Material(vec3(0.9), vec3(0.9), true, 0.75, 1.5);
+	Material gold_mat = Material(vec3(0.5), vec3(0.5), true, 1, 1.5);
 
 	hit_pos -= sphere.center;
 	hit_pos = (vec4(hit_pos, 0) * sphere.orient).xyz;

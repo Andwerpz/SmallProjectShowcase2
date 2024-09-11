@@ -4,6 +4,7 @@ import java.awt.Color;
 import java.awt.Font;
 
 import csce_vis.hw1.HW1Window;
+import csce_vis.hw2.HW2Window;
 import genetic_image_builder.GeneticImageBuilder;
 import hydraulic_terrain.HydraulicTerrainWindow;
 import logic_simulator.CircuitEditorWindow;
@@ -157,6 +158,7 @@ public class BackgroundWindow extends Window {
 			AdjustableWindow adj_window = new AdjustableWindow("VIS Projects", proj_window, this);
 
 			proj_window.addToList("Homework 1");
+			proj_window.addToList("Homework 2");
 			break;
 		}
 
@@ -350,6 +352,11 @@ public class BackgroundWindow extends Window {
 			switch (whichProject) {
 			case "Homework 1": {
 				AdjustableWindow window = new AdjustableWindow(new HW1Window(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "Homework 2": {
+				AdjustableWindow window = new AdjustableWindow(new HW2Window(x, y, width, height, null), BackgroundWindow.this);
 				break;
 			}
 			}

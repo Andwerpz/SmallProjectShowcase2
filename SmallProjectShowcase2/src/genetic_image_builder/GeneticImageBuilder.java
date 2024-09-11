@@ -298,6 +298,9 @@ public class GeneticImageBuilder extends Window implements FileSelectorCallback 
 
 		this.scoreShader.kill();
 		this.drawShader.kill();
+
+		glDeleteVertexArrays(new int[] { this.vao });
+		glDeleteBuffers(new int[] { this.vbo, this.ibo, this.mat4bo, this.huebo, this.uvbo });
 	}
 
 	@Override
