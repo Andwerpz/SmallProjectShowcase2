@@ -17,18 +17,60 @@ layout(binding = 3) buffer hueBuffer {
 const float dt = 1.0 / 120.0;
 const vec3 gravity = vec3(0, -1, 0);
 
+vec3 lorentz_step(vec3 pos, float rho, float sigma, float beta) {
+	vec3 ans = pos;
+	ans.x += dt * (sigma * (pos.y - pos.x));
+	ans.y += dt * (pos.x * (rho - pos.z) - pos.y);
+	ans.z += dt * (pos.x * pos.y - beta * pos.z);
+	return ans;
+}
+
+vec3 thomas_step(vec3 pos, float b) {
+	vec3 ans = pos;
+	ans.x += dt * (sin(pos.y) - b * pos.x);
+	ans.y += dt * (sin(pos.z) - b * pos.y);
+	ans.z += dt * (sin(pos.x) - b * pos.z);
+	return ans;
+}
+
+vec3 rabinovich_step(vec3 pos, float alpha, float gamma) {
+	vec3 ans = pos;
+	ans.x += dt * (pos.y * (pos.z - 1.0 + pos.x * pos.x) + gamma * pos.x);
+	ans.y += dt * (pos.x * (3.0 * pos.z + 1.0 - pos.x * pos.x) + gamma * pos.y);
+	ans.z += dt * (-2.0 * pos.z * (alpha + pos.x * pos.y));
+	return ans;
+}
+
+vec3 sprott_step(vec3 pos, float a, float b) {
+	vec3 ans = pos;
+	ans.x += dt * (pos.y + a * pos.x * pos.y + pos.x * pos.z);
+	ans.y += dt * (1.0 - b * pos.x * pos.x + pos.y * pos.z);
+	ans.z += dt * (pos.x - pos.x * pos.x - pos.y * pos.y);
+	return ans;
+}
+
 void main() {
-	int particle_id = int(gl_GlobalInvocationID.x);
+	int particle_id = int(gl_GlobalInvocationID.x + 0.0001);
 	vec3 pos = posData[particle_id].xyz;
 	vec3 vel = velData[particle_id].xyz;
 	vec3 hue = hueData[particle_id].xyz;
 	
+	/*
 	//gravity
 	vel += gravity * dt;
 	
 	//integrate
 	pos += vel * dt;
+	*/
 	
-	posData[particle_id].xyz = pos;
-	velData[particle_id].xyz = vel;
+	//vec3 n_pos = lorentz_step(pos, 28, 10, 8.0 / 3.0);
+	//vec3 n_pos = thomas_step(pos, 0.208186);
+	//vec3 n_pos = rabinovich_step(pos, 0.14, 0.1);
+	vec3 n_pos = sprott_step(pos, 2.07, 1.79);
+	vec3 n_hue = hue;
+	vec3 n_vel = vel;
+	
+	posData[particle_id].xyz = n_pos;
+	velData[particle_id].xyz = n_vel;
+	hueData[particle_id].xyz = n_hue;
 }
