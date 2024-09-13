@@ -19,6 +19,9 @@ import static org.lwjgl.opengl.GL44.*;
 import static org.lwjgl.opengl.GL45.*;
 import static org.lwjgl.opengl.GL46.*;
 
+import java.util.ArrayDeque;
+import java.util.Queue;
+
 import org.lwjgl.glfw.GLFW;
 
 import lwjglengine.graphics.Framebuffer;
@@ -50,11 +53,27 @@ public class HW2Window extends Window {
 	//     Instead, we can initialize blocks of particles. 
 	// - physics scene
 	//   - perhaps use BVH to speed up particle vs environment collisions?
+	// - correctly render particles
+	//   - currently, im doing very jank thing of just calling glRenderArrays without having an array bound
+	//   - perhaps rendering will be faster with a vao / vbo?
 
-	//particle buffers
-	private static final int MAX_PARTICLE_CNT = (1 << 21); //maximum amount of particles possible within buffer
-	private static final int PARTICLE_GEN_PER_SECOND = 100; //number of tries to generate particles. 
-	private ShaderStorageBuffer posbo, velbo, huebo;
+	//maximum amount of particles possible within buffer
+	private static final int MAX_PARTICLE_CNT = (1 << 20);
+
+	//how many particles we'll read from the buffer to try to generate new ones
+	//should be a divisor of MAX_PARTICLE_CNT
+	private static final int GEN_BATCH_SIZE = (1 << 12);
+
+	//how many batches we'll pull out of the particle buffer before giving up on generating particles
+	//per update
+	private static final int GEN_MAX_TRIES = (1 << 4);
+
+	private int genPtr = 0;
+	private Queue<Particle> genList;
+
+	private ShaderStorageBuffer posbo; //{x, y, z, lifespan}
+	private ShaderStorageBuffer velbo; //{vx, vy, vz, -1}
+	private ShaderStorageBuffer huebo; //{r, g, b, -1}
 
 	private Shader particleUpdateShader, particleRenderShader;
 
@@ -73,6 +92,8 @@ public class HW2Window extends Window {
 		this.setDeselectOnEscPressed(true);
 		this.setUnlockCursorOnEscPressed(true);
 
+		this.genList = new ArrayDeque<>();
+
 		this.pic = new PlayerInputController(new Vec3(0, 0, 30));
 
 		this.particleUpdateShader = ShaderUtils.createShader("/csce_vis/hw2/particle_update.compute", GL_COMPUTE_SHADER);
@@ -82,7 +103,6 @@ public class HW2Window extends Window {
 		// - position
 		// - velocity
 		// - hue
-
 		this.posbo = new ShaderStorageBuffer(MAX_PARTICLE_CNT * 4 * 4);
 		this.posbo.setUsage(GL_DYNAMIC_DRAW);
 
@@ -92,15 +112,13 @@ public class HW2Window extends Window {
 		this.huebo = new ShaderStorageBuffer(MAX_PARTICLE_CNT * 4 * 4);
 		this.huebo.setUsage(GL_DYNAMIC_DRAW);
 
-		this.regenerateParticles();
+		this.resetParticles();
 
 		this._resize();
 	}
 
 	@Override
 	protected void _kill() {
-		//		glDeleteVertexArrays(new int[] { this.vao });
-
 		this.posbo.kill();
 		this.velbo.kill();
 		this.huebo.kill();
@@ -133,8 +151,7 @@ public class HW2Window extends Window {
 		return "Homework 2";
 	}
 
-	private void regenerateParticles() {
-		//initialize particles here for now
+	private void resetParticles() {
 		float[] pos_data = new float[MAX_PARTICLE_CNT * 4];
 		float[] vel_data = new float[MAX_PARTICLE_CNT * 4];
 		float[] hue_data = new float[MAX_PARTICLE_CNT * 4];
@@ -145,22 +162,39 @@ public class HW2Window extends Window {
 			hue.normalize();
 			hue = hue.mul(0.5f).add(new Vec3(0.5));
 
+			//position
 			pos_data[i * 4 + 0] = pos.x;
 			pos_data[i * 4 + 1] = pos.y;
 			pos_data[i * 4 + 2] = pos.z;
 
+			//velocity
 			vel_data[i * 4 + 0] = vel.x;
 			vel_data[i * 4 + 1] = vel.y;
 			vel_data[i * 4 + 2] = vel.z;
 
+			//hue
 			hue_data[i * 4 + 0] = hue.x;
 			hue_data[i * 4 + 1] = hue.y;
 			hue_data[i * 4 + 2] = hue.z;
+
+			//lifespan
+			pos_data[i * 4 + 3] = -1;
 		}
 
 		this.posbo.setData(pos_data);
 		this.velbo.setData(vel_data);
 		this.huebo.setData(hue_data);
+	}
+
+	//tries to generate whatever is inside genList
+	//if it runs out of tries, then try to generate on next update
+	private void generateParticles() {
+		for (int i = 0; i < GEN_MAX_TRIES && this.genList.size() != 0; i++) {
+			float[] pos_data = new float[GEN_BATCH_SIZE * 4];
+			float[] vel_data = new float[GEN_BATCH_SIZE * 4];
+			float[] hue_data = new float[GEN_BATCH_SIZE * 4];
+
+		}
 	}
 
 	@Override
@@ -214,7 +248,7 @@ public class HW2Window extends Window {
 			glEnable(GL_DEPTH_TEST);
 			glDepthFunc(GL_LESS);
 
-			glPointSize(1f);
+			glPointSize(5f);
 			glViewport(0, 0, this.getWidth(), this.getHeight());
 			glDrawArrays(GL_POINTS, 0, MAX_PARTICLE_CNT);
 		}
@@ -288,6 +322,18 @@ public class HW2Window extends Window {
 	protected void _keyReleased(int key) {
 		// TODO Auto-generated method stub
 
+	}
+
+	class Particle {
+		Vec3 pos, vel, hue;
+		float lifespan;
+
+		public Particle(Vec3 _pos, Vec3 _vel, Vec3 _hue, float _lifespan) {
+			this.pos = new Vec3(_pos);
+			this.vel = new Vec3(_vel);
+			this.hue = new Vec3(_hue);
+			this.lifespan = _lifespan;
+		}
 	}
 
 }
