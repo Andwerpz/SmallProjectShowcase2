@@ -14,8 +14,11 @@ layout(binding = 3) buffer hueBuffer {
 	vec4[] hueData;
 };
 
-const float dt = 1.0 / 120.0;
+const float dt = 1.0 / 30.0;
 const vec3 gravity = vec3(0, -1, 0);
+
+uniform int ydim;
+uniform int zdim;
 
 vec3 lorentz_step(vec3 pos, float rho, float sigma, float beta) {
 	vec3 ans = pos;
@@ -50,10 +53,11 @@ vec3 sprott_step(vec3 pos, float a, float b) {
 }
 
 void main() {
-	int particle_id = int(gl_GlobalInvocationID.x + 0.0001);
+	int particle_id = int(gl_GlobalInvocationID.x);
 	vec3 pos = posData[particle_id].xyz;
 	vec3 vel = velData[particle_id].xyz;
 	vec3 hue = hueData[particle_id].xyz;
+	float lifespan = posData[particle_id].w;
 	
 	/*
 	//gravity
@@ -70,7 +74,10 @@ void main() {
 	vec3 n_hue = hue;
 	vec3 n_vel = vel;
 	
-	posData[particle_id].xyz = n_pos;
+	//life
+	lifespan -= dt;
+	
+	posData[particle_id].xyzw = vec4(n_pos, lifespan);
 	velData[particle_id].xyz = n_vel;
 	hueData[particle_id].xyz = n_hue;
 }

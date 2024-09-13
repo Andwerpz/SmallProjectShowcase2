@@ -58,7 +58,7 @@ public class HW2Window extends Window {
 	//   - perhaps rendering will be faster with a vao / vbo?
 
 	//maximum amount of particles possible within buffer
-	private static final int MAX_PARTICLE_CNT = (1 << 20);
+	private static final int MAX_PARTICLE_CNT = (1 << 15);
 
 	//how many particles we'll read from the buffer to try to generate new ones
 	//should be a divisor of MAX_PARTICLE_CNT
@@ -67,8 +67,12 @@ public class HW2Window extends Window {
 	//how many batches we'll pull out of the particle buffer before giving up on generating particles
 	//per update
 	private static final int GEN_MAX_TRIES = (1 << 4);
+	
+	private static final int COMPUTE_X_DIM = (1 << 5);
+	private static final int COMPUTE_Y_DIM = (1 << 5);
+	private static final int COMPUTE_Z_DIM = MAX_PARTICLE_CNT / COMPUTE_X_DIM / COMPUTE_Y_DIM;
 
-	private int genPtr = 0;
+	private long genBytePtr = 0;
 	private Queue<Particle> genList;
 
 	private ShaderStorageBuffer posbo; //{x, y, z, lifespan}
@@ -151,34 +155,13 @@ public class HW2Window extends Window {
 		return "Homework 2";
 	}
 
+	//just kill all particles
 	private void resetParticles() {
 		float[] pos_data = new float[MAX_PARTICLE_CNT * 4];
 		float[] vel_data = new float[MAX_PARTICLE_CNT * 4];
 		float[] hue_data = new float[MAX_PARTICLE_CNT * 4];
 		for (int i = 0; i < MAX_PARTICLE_CNT; i++) {
-			Vec3 pos = MathUtils.random(new Vec3(-10), new Vec3(10));
-			Vec3 vel = new Vec3(0);
-			Vec3 hue = new Vec3(pos);
-			hue.normalize();
-			hue = hue.mul(0.5f).add(new Vec3(0.5));
-
-			//position
-			pos_data[i * 4 + 0] = pos.x;
-			pos_data[i * 4 + 1] = pos.y;
-			pos_data[i * 4 + 2] = pos.z;
-
-			//velocity
-			vel_data[i * 4 + 0] = vel.x;
-			vel_data[i * 4 + 1] = vel.y;
-			vel_data[i * 4 + 2] = vel.z;
-
-			//hue
-			hue_data[i * 4 + 0] = hue.x;
-			hue_data[i * 4 + 1] = hue.y;
-			hue_data[i * 4 + 2] = hue.z;
-
-			//lifespan
-			pos_data[i * 4 + 3] = -1;
+			pos_data[i * 4 + 3] = -1;	
 		}
 
 		this.posbo.setData(pos_data);
@@ -188,28 +171,80 @@ public class HW2Window extends Window {
 
 	//tries to generate whatever is inside genList
 	//if it runs out of tries, then try to generate on next update
-	private void generateParticles() {
+	private void _generateParticles() {
 		for (int i = 0; i < GEN_MAX_TRIES && this.genList.size() != 0; i++) {
 			float[] pos_data = new float[GEN_BATCH_SIZE * 4];
 			float[] vel_data = new float[GEN_BATCH_SIZE * 4];
 			float[] hue_data = new float[GEN_BATCH_SIZE * 4];
-
+			
+			this.posbo.getSubData(pos_data, this.genBytePtr);
+			this.velbo.getSubData(vel_data, this.genBytePtr);
+			this.huebo.getSubData(hue_data, this.genBytePtr);
+			
+			for(int j = 0; j < GEN_BATCH_SIZE && this.genList.size() != 0; j++) {
+				if(pos_data[j * 4 + 3] > 0) {
+					//still alive
+					continue;
+				}
+				
+				//put particle here
+				Particle p = this.genList.poll();
+				pos_data[j * 4 + 0] = p.pos.x;
+				pos_data[j * 4 + 1] = p.pos.y;
+				pos_data[j * 4 + 2] = p.pos.z;
+				pos_data[j * 4 + 3] = p.lifespan;
+				
+				vel_data[j * 4 + 0] = p.vel.x;
+				vel_data[j * 4 + 1] = p.vel.y;
+				vel_data[j * 4 + 2] = p.vel.z;
+				
+				hue_data[j * 4 + 0] = p.hue.x;
+				hue_data[j * 4 + 1] = p.hue.y;
+				hue_data[j * 4 + 2] = p.hue.z;
+			}
+			
+			this.posbo.setSubData(pos_data, this.genBytePtr);
+			this.velbo.setSubData(vel_data, this.genBytePtr);
+			this.huebo.setSubData(hue_data, this.genBytePtr);
+			
+			this.genBytePtr = (this.genBytePtr + GEN_BATCH_SIZE * 4 * 4) % (MAX_PARTICLE_CNT * 4 * 4);
 		}
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+	}
+	
+	private void generateParticle(Particle p) {
+		this.genList.add(p);
 	}
 
 	@Override
 	protected void _update() {
 		this.pic.update();
+		
+		for(int i = 0; i < 100; i++) {
+			Vec3 pos = MathUtils.random(new Vec3(-10), new Vec3(10));
+			Vec3 vel = new Vec3(0);
+			Vec3 hue = new Vec3(pos);
+			hue.normalize();
+			hue = hue.mul(0.5f).add(new Vec3(0.5));
+			float lifespan = 5f;
+			
+			this.generateParticle(new Particle(pos, vel, hue, lifespan));
+		}
 
+		//generate particles
+		this._generateParticles();
+		
 		//update particles
-		this.particleUpdateShader.enable();
+		{
+			this.particleUpdateShader.enable();
 
-		this.posbo.bindToBase(1);
-		this.velbo.bindToBase(2);
-		this.huebo.bindToBase(3);
-
-		glDispatchCompute(MAX_PARTICLE_CNT, 1, 1);
-		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+			this.posbo.bindToBase(1);
+			this.velbo.bindToBase(2);
+			this.huebo.bindToBase(3);
+			
+			glDispatchCompute(MAX_PARTICLE_CNT, 1, 1);
+			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		}
 
 		//print some stuff
 		//		{
@@ -313,7 +348,7 @@ public class HW2Window extends Window {
 	protected void _keyPressed(int key) {
 		switch (key) {
 		case GLFW.GLFW_KEY_Q:
-			this.regenerateParticles();
+			this.resetParticles();
 			break;
 		}
 	}

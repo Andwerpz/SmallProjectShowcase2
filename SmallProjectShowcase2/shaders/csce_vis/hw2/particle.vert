@@ -15,6 +15,7 @@ layout (binding = 3) readonly buffer hueBuffer {
 out vec3 frag_pos;
 out vec3 frag_vel;
 out vec3 frag_hue;
+out float frag_lifespan;
 
 uniform mat4 pr_matrix;
 uniform mat4 vw_matrix;
@@ -23,6 +24,7 @@ void main() {
 	frag_pos = posData[gl_VertexID].xyz;
    	frag_vel = velData[gl_VertexID].xyz;
    	frag_hue = hueData[gl_VertexID].xyz;
+   	frag_lifespan = posData[gl_VertexID].w;
    	
    	gl_Position = pr_matrix * vw_matrix * vec4(frag_pos, 1);
 }
