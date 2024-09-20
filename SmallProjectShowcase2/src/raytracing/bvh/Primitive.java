@@ -7,9 +7,9 @@ import myutils.math.Vec3;
 public abstract class Primitive extends Shape {
 	public static final int PRIMITIVE_TYPE_SPHERE = 1;
 	public static final int PRIMITIVE_TYPE_TRIANGLE = 2;
-	
+
 	public Material material;
-	
+
 	public Primitive(Material material) {
 		this.material = new Material(material);
 	}

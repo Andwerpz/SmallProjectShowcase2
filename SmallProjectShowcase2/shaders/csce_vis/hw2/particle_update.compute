@@ -14,11 +14,317 @@ layout(binding = 3) buffer hueBuffer {
 	vec4[] hueData;
 };
 
-const float dt = 1.0 / 30.0;
+layout(binding = 4) buffer attrBuffer {
+	vec4[] attrData;
+};
+
+layout (binding = 5) readonly buffer bvhBuffer {
+	int bvhData[];
+};
+
+layout (binding = 6) readonly buffer boundingBoxBuffer {
+	float boundingBoxData[];
+};
+
+layout (binding = 7) readonly buffer primitiveBuffer {
+	float primitiveData[];
+};
+
+struct Ray {
+	vec3 origin;
+	vec3 dir;
+};
+
+struct HitInfo {
+	bool didHit;
+	float dist;
+	vec3 hitPoint;
+	vec3 hitNormal;
+	bool is_internal;
+};
+
+struct Triangle {
+	vec3 a;
+	vec3 b;
+	vec3 c;
+};
+
+struct BoundingBox {
+	vec3 b_min;
+	vec3 b_max;
+};
+
+BoundingBox createBoundingBox() {
+	return BoundingBox(vec3(0), vec3(0));
+}
+
+HitInfo createHitInfo() {
+	return HitInfo(false, 0, vec3(0), vec3(0), false);
+}
+
+Triangle createTriangle() {
+	return Triangle(vec3(0), vec3(0), vec3(0));
+}
+
+BoundingBox parseBoundingBox(inout int boundingBoxOffset) {
+	BoundingBox box = createBoundingBox();
+	box.b_min.x = boundingBoxData[boundingBoxOffset ++];
+	box.b_min.y = boundingBoxData[boundingBoxOffset ++];
+	box.b_min.z = boundingBoxData[boundingBoxOffset ++];
+	box.b_max.x = boundingBoxData[boundingBoxOffset ++];
+	box.b_max.y = boundingBoxData[boundingBoxOffset ++];
+	box.b_max.z = boundingBoxData[boundingBoxOffset ++];
+	return box;
+}
+
+Triangle parseTriangle(inout int primitiveOffset) {
+	Triangle ret = createTriangle();
+	ret.a.x = primitiveData[primitiveOffset ++];
+	ret.a.y = primitiveData[primitiveOffset ++];
+	ret.a.z = primitiveData[primitiveOffset ++];
+	ret.b.x = primitiveData[primitiveOffset ++];
+	ret.b.y = primitiveData[primitiveOffset ++];
+	ret.b.z = primitiveData[primitiveOffset ++];
+	ret.c.x = primitiveData[primitiveOffset ++];
+	ret.c.y = primitiveData[primitiveOffset ++];
+	ret.c.z = primitiveData[primitiveOffset ++];
+	return ret;
+}
+
+bool pointInsideBoundingBox(vec3 pt, BoundingBox box) {
+	float epsilon = 0.0001;
+	vec3 b_min = box.b_min;
+	vec3 b_max = box.b_max;
+	return 
+		pt.x + epsilon > b_min.x && 
+		pt.y + epsilon > b_min.y && 
+		pt.z + epsilon > b_min.z && 
+		pt.x - epsilon < b_max.x && 
+		pt.y - epsilon < b_max.y && 
+		pt.z - epsilon < b_max.z;
+}
+
+HitInfo rayBoundingBox(Ray ray, BoundingBox box) {
+	HitInfo hit = createHitInfo();
+	hit.dist = 100000000;
+
+	vec3 b_min = box.b_min;
+	vec3 b_max = box.b_max;
+	if(pointInsideBoundingBox(ray.origin, box)) {
+		hit.didHit = true;
+		hit.dist = 0;
+		hit.hitPoint = ray.origin;
+		return hit;
+	}	
+	
+	float dir_component[3] = float[](ray.dir.x, ray.dir.y, ray.dir.z);
+	float pos_component[3] = float[](ray.origin.x, ray.origin.y, ray.origin.z);
+	float min_component[3] = float[](b_min.x, b_min.y, b_min.z);
+	float max_component[3] = float[](b_max.x, b_max.y, b_max.z);
+	for(int i = 0; i < 3; i++){
+		if(dir_component[i] == 0) {
+			continue;
+		}
+		float tgt = (dir_component[i] < 0) ? max_component[i] : min_component[i];
+		float dist = tgt - pos_component[i];
+		float ray_mul = dist / dir_component[i];
+		vec3 test_pos = ray.origin + ray.dir * ray_mul;
+		if(pointInsideBoundingBox(test_pos, box) && ray_mul >= 0) {
+			hit.didHit = true;
+			hit.dist = min(hit.dist, ray_mul);
+		}
+	}
+	hit.hitPoint = ray.origin + ray.dir * hit.dist;
+	return hit;
+}
+
+HitInfo rayTriangle(Ray ray, Triangle triangle) {
+	HitInfo ret = createHitInfo();
+	
+	vec3 t0 = triangle.a.xyz;
+	vec3 t1 = triangle.b.xyz;
+	vec3 t2 = triangle.c.xyz;
+	
+	vec3 d0 = normalize(t1 - t0);
+	vec3 d1 = normalize(t2 - t1);
+	vec3 d2 = normalize(t0 - t2);
+	
+	vec3 plane_origin = t0;
+	vec3 plane_normal = normalize(cross(d0, d1));
+	
+	if(dot(plane_normal, ray.dir) > 0) {
+		//ray dir and plane normal are facing in the same direction, so it must be an internal hit
+		ret.is_internal = true;
+		
+		//reverse plane normal so that the rest of calculations work
+		t0 = triangle.a.xyz;
+		t1 = triangle.c.xyz;
+		t2 = triangle.b.xyz;
+		
+		d0 = normalize(t1 - t0);
+		d1 = normalize(t2 - t1);
+		d2 = normalize(t0 - t2);
+		
+		plane_origin = t0;
+		plane_normal = normalize(cross(d0, d1));
+	}
+	
+	//see if ray origin is already past the plane
+	if(dot(plane_normal, ray.origin - plane_origin) < 0.0001) {
+		return ret;
+	} 
+
+	//calculate intersection point between ray and plane defined by triangle
+	float ray_dirStepRatio = dot(plane_normal, ray.dir);	// for each step in ray_dir, you go ray_dirStepRatio steps towards the plane
+	// in plane_normal
+	if (ray_dirStepRatio == 0) {
+		// ray is parallel to plane, no intersection
+		return ret;
+	}
+	
+	float t = dot(plane_origin - ray.origin, plane_normal) / ray_dirStepRatio;
+	vec3 plane_intersect = ray.origin + (ray.dir * t);
+
+	// now, we just have to make sure that the intersection point is inside the triangle.
+	vec3 n0 = cross(d0, plane_normal);
+	vec3 n1 = cross(d1, plane_normal);
+	vec3 n2 = cross(d2, plane_normal);
+	
+	if(dot(n0, t0 - plane_intersect) < 0 || dot(n1, t1 - plane_intersect) < 0 || dot(n2, t2 - plane_intersect) < 0) {
+		//intersection point is outside of the triangle
+		return ret;
+	}
+	
+	ret.didHit = true;
+	ret.dist = t;	//ray.dir has to be normalized on function call for this to work
+	ret.hitPoint = plane_intersect;
+	ret.hitNormal = plane_normal;
+
+	return ret;
+}
+
+//TODO : prune nodes if they are farther away than the current closest hit
+HitInfo calculateRayCollision(Ray ray, float max_bb_dist) {
+	HitInfo closest_hit = createHitInfo();
+	closest_hit.dist = 10000000;	//very large number
+	ray.dir = normalize(ray.dir);
+	
+	int root_offset = bvhData[0];
+	
+	const int max_stack_size = 64;
+	int ind_stack[max_stack_size];	//keeps track of what we still need to visit
+	
+	int stack_ind = 0;
+	ind_stack[0] = root_offset;
+	
+	while(stack_ind >= 0) {		
+		//read current node from stack
+		int cur_bvh_ind = ind_stack[stack_ind];	
+		bool is_leaf = bvhData[cur_bvh_ind + 1] == -1;
+		stack_ind --;
+		
+		//check if ray intersects with outside bounding box
+		int cur_box_ind = bvhData[cur_bvh_ind + 0];
+		BoundingBox box = parseBoundingBox(cur_box_ind);
+		HitInfo rbb = rayBoundingBox(ray, box);
+		if(!rbb.didHit || rbb.dist > max_bb_dist) {
+			//ray doesn't hit box, get next node
+			continue;
+		}
+		
+		if(is_leaf) {
+			int primitivePtr = bvhData[cur_bvh_ind + 2];
+			int nr_primitives = bvhData[cur_bvh_ind + 4];
+			int bvhPtr = cur_bvh_ind + 5;
+			for(int i = 0; i < nr_primitives; i++){
+				Triangle triangle = parseTriangle(primitivePtr);
+				HitInfo hit = rayTriangle(ray, triangle);
+				if(hit.didHit && hit.dist < closest_hit.dist) {
+					closest_hit = hit;
+				}
+			}
+			continue;
+		}
+		
+		//node is not a leaf
+		//push both children to stack
+		int first_child_ind = cur_bvh_ind + 2;
+		int second_child_ind = bvhData[cur_bvh_ind + 1];
+		
+		stack_ind ++;
+		ind_stack[stack_ind] = first_child_ind;
+			
+		stack_ind ++;
+		ind_stack[stack_ind] = second_child_ind;
+	}
+	
+	return closest_hit;
+}
+
+uniform float dt;
 const vec3 gravity = vec3(0, -1, 0);
 
-uniform int ydim;
-uniform int zdim;
+uniform int compute_x_dim;
+uniform int compute_y_dim;
+
+void main() {
+	int particle_id = int(gl_GlobalInvocationID.x) + int(gl_GlobalInvocationID.y) * compute_x_dim;
+	vec3 pos = posData[particle_id].xyz;
+	vec3 vel = velData[particle_id].xyz;
+	vec3 hue = hueData[particle_id].xyz;
+	float lifespan = posData[particle_id].w;
+	float air_friction_coeff = velData[particle_id].w;
+	float coeff_restitution = 1;
+	bool is_static = hueData[particle_id].w > 0;
+	
+	vec3 n_vel = vel;
+	vec3 n_pos = pos;
+	vec3 n_hue = hue;
+	
+	if(lifespan > 0 && !is_static){
+		vec3 accel = vec3(0);
+		accel += gravity * dt;
+		accel -= vel * air_friction_coeff * dt;
+		
+		//collision 
+		bool did_collide = false;
+		{
+			vec3 vel_norm = normalize(vel);
+			float max_coll_dist = length(vel) * dt * 1.5;
+			Ray ray = Ray(pos, vel_norm);
+			HitInfo hit = calculateRayCollision(ray, max_coll_dist);
+			if(hit.didHit && hit.dist < max_coll_dist) {
+				//do collision
+				
+				did_collide = true;
+				
+				vec3 normal = hit.hitNormal;
+				float norm_scalar = dot(normal, vel);
+				vec3 norm_vel = normal * dot(normal, vel);
+				vec3 tang_vel = vel - norm_vel;
+				
+				accel += -norm_vel * (1.0 + coeff_restitution);
+				n_pos = hit.hitPoint + hit.hitNormal * 0.001;
+			}
+		}
+		
+		n_vel += accel;	
+		
+		if(!did_collide) {
+			n_pos += n_vel * dt;
+		}
+		
+		lifespan -= dt;
+	}
+	
+	posData[particle_id].xyzw = vec4(n_pos, lifespan);
+	velData[particle_id].xyzw = vec4(n_vel, air_friction_coeff);
+	hueData[particle_id].xyz = n_hue;
+}
+
+
+
+
 
 vec3 lorentz_step(vec3 pos, float rho, float sigma, float beta) {
 	vec3 ans = pos;
@@ -52,32 +358,8 @@ vec3 sprott_step(vec3 pos, float a, float b) {
 	return ans;
 }
 
-void main() {
-	int particle_id = int(gl_GlobalInvocationID.x);
-	vec3 pos = posData[particle_id].xyz;
-	vec3 vel = velData[particle_id].xyz;
-	vec3 hue = hueData[particle_id].xyz;
-	float lifespan = posData[particle_id].w;
-	
-	/*
-	//gravity
-	vel += gravity * dt;
-	
-	//integrate
-	pos += vel * dt;
-	*/
-	
-	//vec3 n_pos = lorentz_step(pos, 28, 10, 8.0 / 3.0);
-	vec3 n_pos = thomas_step(pos, 0.208186);
-	//vec3 n_pos = rabinovich_step(pos, 0.14, 0.1);
-	//vec3 n_pos = sprott_step(pos, 2.07, 1.79);
-	vec3 n_hue = hue;
-	vec3 n_vel = vel;
-	
-	//life
-	lifespan -= dt;
-	
-	posData[particle_id].xyzw = vec4(n_pos, lifespan);
-	velData[particle_id].xyz = n_vel;
-	hueData[particle_id].xyz = n_hue;
-}
+//for fun. thomas is best imo
+//vec3 n_pos = lorentz_step(pos, 28, 10, 8.0 / 3.0);
+//vec3 n_pos = thomas_step(pos, 0.208186);
+//vec3 n_pos = rabinovich_step(pos, 0.14, 0.1);
+//vec3 n_pos = sprott_step(pos, 2.07, 1.79);

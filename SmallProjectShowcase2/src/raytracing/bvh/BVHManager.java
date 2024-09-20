@@ -37,10 +37,15 @@ import myutils.misc.Pair;
 public class BVHManager {
 	//just manages the root
 
+	//TODO
+	// - add support for BVH instancing
+
 	private BVH root;
 
 	private static final long SSBO_SIZE = (1 << 29);
 	private ShaderStorageBuffer bvhSSBO, boundingBoxSSBO, primitiveSSBO, materialSSBO;
+
+	private BVHNode treeRoot = null;
 
 	public BVHManager() {
 		this.root = new BVH();
@@ -86,6 +91,60 @@ public class BVHManager {
 
 	public BVH getRoot() {
 		return this.root;
+	}
+
+	public Pair<Vec3, Material> rayCollision(Vec3 origin, Vec3 dir) {
+		if (this.treeRoot == null) {
+			return null;
+		}
+		return this._rayCollision(origin, dir, this.treeRoot);
+	}
+
+	private Pair<Vec3, Material> _takeMin(Vec3 x, Pair<Vec3, Material> a, Pair<Vec3, Material> b) {
+		if (a == null)
+			return b;
+		if (b == null)
+			return a;
+		return (new Vec3(x, a.first).lengthSq() < new Vec3(x, b.first).lengthSq()) ? a : b;
+	}
+
+	private Pair<Vec3, Material> _rayCollision(Vec3 origin, Vec3 dir, BVHNode cur) {
+		Pair<Vec3, Material> ans = null;
+
+		//see if this ray collides with the bounding box
+		boolean coll_bb = MathUtils.ray_boundingBoxIntersect(origin, dir, cur.boundingBox.bMin, cur.boundingBox.bMax) != null;
+		if (!coll_bb) {
+			//can skip entire subtree
+			return null;
+		}
+
+		if (cur.isLeaf) {
+			//ok, test it against any shapes held here
+			for (Shape s : cur.shapes) {
+				//for now, a shape can only be primitive
+				Primitive p = (Primitive) s;
+				Vec3 coll_pt = null;
+				if (p instanceof Sphere) {
+					Sphere sphere = (Sphere) p;
+					coll_pt = MathUtils.ray_sphereIntersect(origin, dir, sphere.center, sphere.radius);
+				}
+				else if (p instanceof Triangle) {
+					Triangle tri = (Triangle) p;
+					coll_pt = MathUtils.ray_triangleIntersect(origin, dir, tri.a, tri.b, tri.c);
+				}
+
+				ans = _takeMin(origin, ans, coll_pt == null ? null : new Pair<>(coll_pt, p.material));
+			}
+		}
+		else {
+			//recurse to children
+			Pair<Vec3, Material> ca = this._rayCollision(origin, dir, cur.a);
+			Pair<Vec3, Material> cb = this._rayCollision(origin, dir, cur.b);
+			ans = _takeMin(origin, ans, ca);
+			ans = _takeMin(origin, ans, cb);
+		}
+
+		return ans;
 	}
 
 	public void addBVHInstance(BVH bvh, Mat4 transform) {
@@ -244,6 +303,8 @@ public class BVHManager {
 		this.boundingBoxSSBO.setSubData(boundingBoxFloats, 0);
 		this.primitiveSSBO.setSubData(primitiveFloats, 0);
 		this.materialSSBO.setSubData(materialFloats, 0);
+
+		this.treeRoot = bvhNodes[0]; //all other bvhs should be contained under this first one
 
 		long timeElapsed = System.currentTimeMillis() - startTime;
 		System.out.println("BVHManager : End Build, " + timeElapsed + " millis");
