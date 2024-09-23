@@ -54,7 +54,7 @@ void main() {
    	frag_uv = frag_uv * 0.5 + 0.5;
    	frag_depth = frag_depth * 0.5 + 0.5;
    	
-   	//gl_PointSize = 5.0 / proj_pos.w;
+   	gl_PointSize = max(1.0, 5.0 / proj_pos.w);
    	
    	gl_Position = proj_pos;
 }

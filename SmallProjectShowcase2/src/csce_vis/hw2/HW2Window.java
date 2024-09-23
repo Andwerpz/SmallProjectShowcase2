@@ -24,6 +24,8 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.PriorityQueue;
 import java.util.Queue;
 
 import org.lwjgl.glfw.GLFW;
@@ -47,6 +49,9 @@ import lwjglengine.scene.PointLight;
 import lwjglengine.scene.Scene;
 import lwjglengine.screen.PerspectiveScreen;
 import lwjglengine.screen.ScreenQuad;
+import lwjglengine.screen.UIScreen;
+import lwjglengine.ui.Text;
+import lwjglengine.ui.UIElement;
 import lwjglengine.util.BufferUtils;
 import lwjglengine.util.ShaderUtils;
 import lwjglengine.window.Window;
@@ -60,6 +65,8 @@ import raytracing.bvh.BVH;
 import raytracing.bvh.BVHManager;
 
 public class HW2Window extends Window {
+
+	//i give up. Just going to showcase large number. Large number is nice
 
 	//TODO
 	// - ok, seems like we hit a bottleneck on rendering at around 8 million particles. 
@@ -124,7 +131,7 @@ public class HW2Window extends Window {
 	private ShaderStorageBuffer posbo; //{x, y, z, lifespan}
 	private ShaderStorageBuffer velbo; //{vx, vy, vz, air friction coeff}
 	private ShaderStorageBuffer huebo; //{r, g, b, is_static}
-	private ShaderStorageBuffer attrbo; //{proximity hue, -1, -1, -1}
+	private ShaderStorageBuffer attrbo; //{proximity hue, restitution, -1, -1}
 
 	private Shader particleUpdateShader, particleRenderShader;
 
@@ -142,6 +149,14 @@ public class HW2Window extends Window {
 
 	private boolean lightsOn = true;
 
+	private boolean mousePressed = false;
+
+	private PriorityQueue<Long> activeParticles = new PriorityQueue<>();
+
+	private UIScreen uiScreen;
+	private final int UI_SCENE = Scene.generateScene();
+	private Text particleCountText;
+
 	public HW2Window(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
 		this.init();
@@ -152,12 +167,19 @@ public class HW2Window extends Window {
 		this.setDeselectOnEscPressed(true);
 		this.setUnlockCursorOnEscPressed(true);
 
+		this.uiScreen = new UIScreen();
+		this.particleCountText = new Text(10, 10, " ", UI_SCENE);
+		this.particleCountText.setFrameAlignmentStyle(UIElement.FROM_LEFT, UIElement.FROM_TOP);
+		this.particleCountText.setContentAlignmentStyle(UIElement.ALIGN_LEFT, UIElement.ALIGN_TOP);
+		this.particleCountText.bind(this.rootUIElement);
+
 		this.genList = new ArrayDeque<>();
 
-		this.pic = new PlayerInputController(new Vec3(0, 0, 30));
+		this.pic = new PlayerInputController(new Vec3(-21.08027f, 1.7262033f, 10.618463f));
 		this.pic.setNoclipSpeed(0.125f);
 		this.pic.setCollisionScene(WORLD_SCENE);
 		this.pic.setAcceptPlayerInputs(false);
+		this.pic.setDoNoclip(false);
 
 		this.particleUpdateShader = ShaderUtils.createShader("/csce_vis/hw2/particle_update.compute", GL_COMPUTE_SHADER);
 		this.particleRenderShader = ShaderUtils.createShader("/csce_vis/hw2/particle.vert", "/csce_vis/hw2/particle.frag");
@@ -210,23 +232,23 @@ public class HW2Window extends Window {
 			e.printStackTrace();
 		}
 
-		try {
-			this.scp173 = Model.loadModelFileRelative("/res/scp173/scp173.obj");
-
-			Mat4 transform = Mat4.identity();
-			transform.muli(Mat4.scale(0.8f));
-			transform.muli(Mat4.translate(new Vec3(-26.721302f, 0.4315538f, -23.567879f)));
-
-			ModelInstance scp_inst = new ModelInstance(this.scp173, WORLD_SCENE);
-			scp_inst.setModelTransform(new ModelTransform(transform));
-			scp_inst.setMaterial(new Material(new Vec3(1, 0, 0)));
-
-			this.addModelInstanceToBVH(scp_inst);
-		}
-		catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		//		try {
+		//			this.scp173 = Model.loadModelFileRelative("/res/scp173/scp173.obj");
+		//
+		//			Mat4 transform = Mat4.identity();
+		//			transform.muli(Mat4.scale(0.8f));
+		//			transform.muli(Mat4.translate(new Vec3(-26.721302f, 0.4315538f, -23.567879f)));
+		//
+		//			ModelInstance scp_inst = new ModelInstance(this.scp173, WORLD_SCENE);
+		//			scp_inst.setModelTransform(new ModelTransform(transform));
+		//			scp_inst.setMaterial(new Material(new Vec3(1, 0, 0)));
+		//
+		//			this.addModelInstanceToBVH(scp_inst);
+		//		}
+		//		catch (IOException e) {
+		//			// TODO Auto-generated catch block
+		//			e.printStackTrace();
+		//		}
 
 		//		{
 		//			Model suzanne = Model.loadModelFile(FileUtils.loadFileRelative("/res/suzanne/suzanne.obj"));
@@ -295,6 +317,9 @@ public class HW2Window extends Window {
 
 	@Override
 	protected void _kill() {
+		this.uiScreen.kill();
+		Scene.removeScene(UI_SCENE);
+
 		this.posbo.kill();
 		this.velbo.kill();
 		this.huebo.kill();
@@ -328,6 +353,7 @@ public class HW2Window extends Window {
 		}
 
 		this.perspectiveScreen.setScreenDimensions(this.getWidth(), this.getHeight());
+		this.uiScreen.setScreenDimensions(this.getWidth(), this.getHeight());
 	}
 
 	@Override
@@ -342,6 +368,8 @@ public class HW2Window extends Window {
 			pos_data[i * 4 + 3] = -1; //set lifespan
 		}
 		this.posbo.setData(pos_data);
+
+		this.activeParticles.clear();
 	}
 
 	//tries to generate whatever is inside genList
@@ -382,6 +410,9 @@ public class HW2Window extends Window {
 				hue_data[j * 4 + 3] = p.is_static ? 1 : -1;
 
 				attr_data[j * 4 + 0] = p.proximity_hue ? 1 : -1;
+				attr_data[j * 4 + 1] = p.coeff_restitution;
+
+				this.activeParticles.add(System.currentTimeMillis() + (int) (p.lifespan * 1000));
 			}
 
 			this.posbo.setSubData(pos_data, this.genBytePtr);
@@ -401,29 +432,28 @@ public class HW2Window extends Window {
 	protected void _update() {
 		this.pic.update();
 
-		//big square
-		//		for (int i = 0; i < (1 << 10); i++) {
-		//			Vec3 pos = MathUtils.random(new Vec3(-30), new Vec3(30));
-		//			Vec3 vel = new Vec3(0);
-		//			Vec3 hue = new Vec3(pos);
-		//			hue.normalize();
-		//			hue = hue.mul(0.5f).add(new Vec3(0.5));
-		//			float lifespan = 60f;
-		//
-		//			this.generateParticle(new Particle(pos, vel, hue, lifespan));
-		//		}
-
-		//		for (int i = 0; i < (1 << 6); i++) {
-		//			Vec3 pos = new Vec3(this.pic.getTop());
-		//			Vec3 vel = new Vec3(this.pic.getFacing());
-		//			vel.muli(20);
-		//			float deviation = 4.0f * (float) Math.sqrt(Math.random());
-		//			vel.addi(MathUtils.generateRandomPerpendicularVec3(vel).mul(deviation));
-		//			this.generateParticle(new Particle(pos, vel));
-		//		}
+		if (this.mousePressed) {
+			for (int i = 0; i < (1 << 10); i++) {
+				Vec3 pos = new Vec3(this.pic.getTop());
+				Vec3 vel = new Vec3(this.pic.getFacing());
+				vel.muli(MathUtils.random(8, 8.5f));
+				float deviation = 0.4f * (float) Math.random();
+				vel.addi(MathUtils.generateRandomPerpendicularVec3(vel).mul(deviation));
+				Particle p = new Particle(pos, vel);
+				p.lifespan = MathUtils.random(8, 12);
+				p.coeff_restitution = MathUtils.random(0.8f, 1);
+				this.generateParticle(p);
+			}
+		}
 
 		//generate particles
 		this._generateParticles();
+
+		while (this.activeParticles.size() != 0 && this.activeParticles.peek() < System.currentTimeMillis()) {
+			this.activeParticles.poll();
+		}
+		this.particleCountText.setText(this.activeParticles.size() + "");
+		this.particleCountText.setWidth(this.particleCountText.getTextWidth());
 
 		//update particles
 		{
@@ -443,17 +473,6 @@ public class HW2Window extends Window {
 
 			glDispatchCompute(COMPUTE_X_DIM, COMPUTE_Y_DIM, 1);
 		}
-
-		//print some stuff
-		//		{
-		//			float[] pos_data = new float[4];
-		//			this.posbo.getSubData(pos_data, 0);
-		//
-		//			for (int i = 0; i < 4; i++) {
-		//				System.out.print(pos_data[i] + " ");
-		//			}
-		//			System.out.println();
-		//		}
 	}
 
 	@Override
@@ -497,8 +516,8 @@ public class HW2Window extends Window {
 			//			glEnable(GL_BLEND);
 			//			glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-			glPointSize(2f);
-			//			glEnable(GL_PROGRAM_POINT_SIZE);
+			//			glPointSize(2f);
+			glEnable(GL_PROGRAM_POINT_SIZE);
 			glViewport(0, 0, this.getWidth(), this.getHeight());
 			glDrawArrays(GL_POINTS, 0, MAX_PARTICLE_CNT);
 		}
@@ -511,6 +530,9 @@ public class HW2Window extends Window {
 			this.renderColorMap.bind(GL_TEXTURE0);
 			ScreenQuad.screenQuad.render();
 		}
+
+		this.uiScreen.setUIScene(UI_SCENE);
+		this.uiScreen.render(outputBuffer);
 	}
 
 	@Override
@@ -543,14 +565,12 @@ public class HW2Window extends Window {
 
 	@Override
 	protected void _mousePressed(int button) {
-		// TODO Auto-generated method stub
-
+		this.mousePressed = true;
 	}
 
 	@Override
 	protected void _mouseReleased(int button) {
-		// TODO Auto-generated method stub
-
+		this.mousePressed = false;
 	}
 
 	@Override
@@ -603,7 +623,7 @@ public class HW2Window extends Window {
 					}
 
 					Vec3 coll_pt = ecoll.first;
-					coll_pt.subi(dir.mul(0.1f));
+					//					coll_pt.subi(dir.mul(0.1f));
 					Particle p = new Particle(coll_pt);
 					p.hue = ecoll.second.getDiffuse().xyz();
 
@@ -637,7 +657,7 @@ public class HW2Window extends Window {
 		}
 
 		case GLFW.GLFW_KEY_P:
-			pos_list.add(new Vec3(this.pic.getTop()));
+			pos_list.add(new Vec3(this.pic.getPos()));
 			break;
 
 		case GLFW.GLFW_KEY_O:
@@ -653,6 +673,10 @@ public class HW2Window extends Window {
 		case GLFW.GLFW_KEY_C:
 			this.pic.setDoNoclip(false);
 			break;
+
+		case GLFW.GLFW_KEY_R:
+			this.resetParticles();
+			break;
 		}
 	}
 
@@ -664,7 +688,7 @@ public class HW2Window extends Window {
 
 	class Particle {
 		Vec3 pos, vel, hue;
-		float lifespan, air_friction_coeff;
+		float lifespan, air_friction_coeff, coeff_restitution;
 		boolean is_static, proximity_hue;
 
 		public Particle(Vec3 _pos) {
@@ -683,6 +707,7 @@ public class HW2Window extends Window {
 			this.lifespan = _lifespan;
 			this.air_friction_coeff = _air_friction_coeff;
 			this.is_static = false;
+			this.coeff_restitution = 1;
 		}
 	}
 

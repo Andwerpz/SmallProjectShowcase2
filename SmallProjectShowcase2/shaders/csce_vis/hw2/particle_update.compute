@@ -262,7 +262,7 @@ HitInfo calculateRayCollision(Ray ray, float max_bb_dist) {
 }
 
 uniform float dt;
-const vec3 gravity = vec3(0, -1, 0);
+const vec3 gravity = vec3(0, -9.8, 0);
 
 uniform int compute_x_dim;
 uniform int compute_y_dim;
@@ -274,7 +274,7 @@ void main() {
 	vec3 hue = hueData[particle_id].xyz;
 	float lifespan = posData[particle_id].w;
 	float air_friction_coeff = velData[particle_id].w;
-	float coeff_restitution = 1;
+	float coeff_restitution = attrData[particle_id].y;
 	bool is_static = hueData[particle_id].w > 0;
 	
 	vec3 n_vel = vel;
@@ -290,7 +290,7 @@ void main() {
 		bool did_collide = false;
 		{
 			vec3 vel_norm = normalize(vel);
-			float max_coll_dist = length(vel) * dt * 1.5;
+			float max_coll_dist = length(vel) * dt * 2;
 			Ray ray = Ray(pos, vel_norm);
 			HitInfo hit = calculateRayCollision(ray, max_coll_dist);
 			if(hit.didHit && hit.dist < max_coll_dist) {
@@ -304,7 +304,8 @@ void main() {
 				vec3 tang_vel = vel - norm_vel;
 				
 				accel += -norm_vel * (1.0 + coeff_restitution);
-				n_pos = hit.hitPoint + hit.hitNormal * 0.001;
+				
+				n_pos = hit.hitPoint + hit.hitNormal * 0.1;
 			}
 		}
 		
@@ -315,6 +316,10 @@ void main() {
 		}
 		
 		lifespan -= dt;
+		
+		if(n_pos.y < -1.8) {
+			lifespan = -1;
+		}
 	}
 	
 	posData[particle_id].xyzw = vec4(n_pos, lifespan);
