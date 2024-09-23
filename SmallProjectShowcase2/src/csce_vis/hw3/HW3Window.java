@@ -82,19 +82,85 @@ public class HW3Window extends Window {
 	private static float viscositySmoothingKernelVolume = (float) (Math.PI * Math.pow(smoothingRadius, 9) * 32.0 / 315.0);
 
 	private Shader waterCompute1;
+	
+	private static final int HASH_LUT_SIZE = (1 << 20);
+	private static final int HASH_MOD = (int) (1e6 + 7);
+	private static final int LUT_P1 = 8443;
+	private static final int LUT_P2 = 107;
+	private static final int LUT_P3 = 31;
+	private static final int LUT_P4 = 251527;
+	private static final int LUT_P5 = 6037;
+	private static final int LUT_P6 = 417;
 
-	/*
-	 struct Water {
-	 	vec4 pos;
-	 	vec4 vel;
-	 };
-	 */
-	private ShaderStorageBuffer posBuffer; //xyz = pos, w = density
-	private ShaderStorageBuffer velBuffer; //xyz = vel, w = near density
-	private ShaderStorageBuffer hashBuffer; //x = hash, y = hash start index
-	private ShaderStorageBuffer predPosBuffer; //xyz = pred pos
-	private ShaderStorageBuffer viscosityBuffer; //xyz = viscosity force
-
+	private ShaderStorageBuffer hashLUTBuffer;
+	
+/*
+// 80 bytes
+struct Particle {
+	vec3 pos;
+	vec3 vel;
+	vec3 pred_pos;
+	vec3 visc_force;
+	int hash;
+	int hash_start_ind;
+	float density;
+	float near_density;
+};
+*/
+	private static final int SIZEOF_PARTICLE = 80;
+	class Particle {
+		Vec3 pos, vel, pred_pos, visc_force;
+		int hash, hash_start_ind;
+		float density, near_density;
+		
+		public Particle(Vec3 _pos) {
+			this.pos = new Vec3(_pos);
+			this.vel = new Vec3(0);
+			this.pred_pos = new Vec3(0);
+			this.visc_force = new Vec3(0);
+			this.hash = -1;
+			this.hash_start_ind = -1;
+			this.density = 0;
+			this.near_density = 0;
+		}
+		
+		public Particle(int[] buffer, int offset) {
+			this.pos = new Vec3(Float.intBitsToFloat(buffer[offset + 0]), Float.intBitsToFloat(buffer[offset + 1]), Float.intBitsToFloat(buffer[offset + 2]));
+			this.vel = new Vec3(Float.intBitsToFloat(buffer[offset + 4]), Float.intBitsToFloat(buffer[offset + 5]), Float.intBitsToFloat(buffer[offset + 6]));
+			this.pred_pos = new Vec3(Float.intBitsToFloat(buffer[offset + 8]), Float.intBitsToFloat(buffer[offset + 9]), Float.intBitsToFloat(buffer[offset + 10]));
+			this.visc_force = new Vec3(Float.intBitsToFloat(buffer[offset + 12]), Float.intBitsToFloat(buffer[offset + 13]), Float.intBitsToFloat(buffer[offset + 14]));
+			this.hash = buffer[offset + 16];
+			this.hash_start_ind = buffer[offset + 17];
+			this.density = Float.intBitsToFloat(buffer[offset + 18]);
+			this.near_density = Float.intBitsToFloat(buffer[offset + 19]);
+		}
+		
+		public void writeToBuffer(int[] buffer, int offset) {
+			buffer[offset + 0] = Float.floatToIntBits(pos.x);
+			buffer[offset + 1] = Float.floatToIntBits(pos.y);
+			buffer[offset + 2] = Float.floatToIntBits(pos.z);
+			
+			buffer[offset + 4] = Float.floatToIntBits(vel.x);
+			buffer[offset + 5] = Float.floatToIntBits(vel.y);
+			buffer[offset + 6] = Float.floatToIntBits(vel.z);
+			
+			buffer[offset + 8] = Float.floatToIntBits(pred_pos.x);
+			buffer[offset + 9] = Float.floatToIntBits(pred_pos.y);
+			buffer[offset + 10] = Float.floatToIntBits(pred_pos.z);
+			
+			buffer[offset + 12] = Float.floatToIntBits(visc_force.x);
+			buffer[offset + 13] = Float.floatToIntBits(visc_force.y);
+			buffer[offset + 14] = Float.floatToIntBits(visc_force.z);
+			
+			buffer[offset + 16] = hash;
+			buffer[offset + 17] = hash_start_ind;
+			buffer[offset + 18] = Float.floatToIntBits(density);
+			buffer[offset + 19] = Float.floatToIntBits(near_density);
+		}
+	}
+	
+	private ShaderStorageBuffer particleBuffer;
+	
 	private final int WORLD_SCENE = Scene.generateScene();
 	private PerspectiveScreen perspectiveScreen;
 
@@ -103,6 +169,7 @@ public class HW3Window extends Window {
 	private float cubeScale = 0.1f;
 
 	private Vec3 bbDimensions = new Vec3(10, 10, 10); //box centered at origin
+	private float boundaryRestitution = 0.5f;
 	private Vec3 gravity = new Vec3(0, -9.8, 0);
 
 	private PlayerInputController pic;
@@ -155,23 +222,19 @@ public class HW3Window extends Window {
 			this.cubeInstances[i] = m;
 		}
 
-		this.posBuffer = new ShaderStorageBuffer();
-		this.posBuffer.setUsage(GL_DYNAMIC_DRAW);
-		this.posBuffer.setSize(NR_PARTICLES * 4 * 4);
-
-		this.velBuffer = new ShaderStorageBuffer();
-		this.velBuffer.setUsage(GL_DYNAMIC_DRAW);
-		this.velBuffer.setSize(NR_PARTICLES * 4 * 4);
-
-		this.hashBuffer = new ShaderStorageBuffer();
-		this.hashBuffer.setUsage(GL_DYNAMIC_DRAW);
-		this.hashBuffer.setSize(NR_PARTICLES * 4 * 4);
-
-		this.predPosBuffer = new ShaderStorageBuffer();
-		this.predPosBuffer.setUsage(GL_DYNAMIC_DRAW);
-		this.predPosBuffer.setSize(NR_PARTICLES * 4 * 4);
-
-		this.viscosityBuffer = new ShaderStorageBuffer();
+		this.particleBuffer = new ShaderStorageBuffer();
+		this.particleBuffer.setSize(NR_PARTICLES * SIZEOF_PARTICLE);
+		this.particleBuffer.setUsage(GL_DYNAMIC_DRAW);
+		
+		this.hashLUTBuffer = new ShaderStorageBuffer();
+		this.hashLUTBuffer.setSize(HASH_LUT_SIZE * 4);
+		this.hashLUTBuffer.setUsage(GL_DYNAMIC_DRAW);
+		
+		//initialize every element of LUT to 0
+		{
+			int[] data = new int[HASH_LUT_SIZE];
+			this.hashLUTBuffer.setSubData(data, 0);
+		}
 
 		this.resetParticles();
 
@@ -183,9 +246,8 @@ public class HW3Window extends Window {
 		this.cubeModel.kill();
 		this.perspectiveScreen.kill();
 
-		this.posBuffer.kill();
-		this.velBuffer.kill();
-		this.hashBuffer.kill();
+		this.particleBuffer.kill();
+		this.hashLUTBuffer.kill();
 
 		this.waterCompute1.kill();
 
@@ -203,22 +265,13 @@ public class HW3Window extends Window {
 	}
 
 	private void resetParticles() {
-		float[] pos_data = new float[NR_PARTICLES * 4];
-		float[] vel_data = new float[NR_PARTICLES * 4];
+		int[] data = new int[NR_PARTICLES * SIZEOF_PARTICLE / 4];
 		for (int i = 0; i < NR_PARTICLES; i++) {
 			Vec3 pos = MathUtils.random(bbDimensions.mul(-1), bbDimensions);
-			Vec3 vel = new Vec3(0);
-
-			pos_data[i * 4 + 0] = pos.x;
-			pos_data[i * 4 + 1] = pos.y;
-			pos_data[i * 4 + 2] = pos.z;
-
-			vel_data[i * 4 + 0] = vel.x;
-			vel_data[i * 4 + 1] = vel.y;
-			vel_data[i * 4 + 2] = vel.z;
+			Particle p = new Particle(pos);
+			p.writeToBuffer(data, i * SIZEOF_PARTICLE / 4);
 		}
-		this.posBuffer.setData(pos_data);
-		this.velBuffer.setData(vel_data);
+		this.particleBuffer.setSubData(data, 0);
 	}
 
 	@Override
@@ -227,32 +280,55 @@ public class HW3Window extends Window {
 
 		float dt = Main.getDeltaSeconds();
 
-		// -- WATER PHASE 1 --
+		// -- PHASE 1 --
 		//update position due to velocity, compute hashes
 		{
 			this.waterCompute1.enable();
 			this.waterCompute1.setUniform1f("dt", dt);
 			this.waterCompute1.setUniform3f("bounds_min", this.bbDimensions.mul(-1));
 			this.waterCompute1.setUniform3f("bounds_max", this.bbDimensions);
+			this.waterCompute1.setUniform1f("boundary_restitution", this.boundaryRestitution);
 			this.waterCompute1.setUniform3f("gravity", this.gravity);
-			this.waterCompute1.setUniform1f("boundary_restitution", 0.7f);
+			
+			this.waterCompute1.setUniform1f("smoothing_radius", smoothingRadius);
+			this.waterCompute1.setUniform1i("hash_mod", HASH_MOD);
+			this.waterCompute1.setUniform1i("LUT_P1", LUT_P1);
+			this.waterCompute1.setUniform1i("LUT_P2", LUT_P2);
+			this.waterCompute1.setUniform1i("LUT_P3", LUT_P3);
+			this.waterCompute1.setUniform1i("LUT_P4", LUT_P4);
+			this.waterCompute1.setUniform1i("LUT_P5", LUT_P5);
+			this.waterCompute1.setUniform1i("LUT_P6", LUT_P6);
 
-			this.posBuffer.bindToBase(0);
-			this.velBuffer.bindToBase(1);
-			this.hashBuffer.bindToBase(2);
+			this.particleBuffer.bindToBase(0);
 
 			glDispatchCompute(NR_PARTICLES, 1, 1);
 		}
 
+		// -- PHASE 2.1 -- 
+		//sort particles according to their hashes
+		{
+			//bitonic merge sort
+			
+		}
+		
+		// -- PHASE 2.2 -- 
+		//generate hash lookup tables. For each hash, will save index at which particles belonging to that hash start
+		
+		// -- PHASE 3 --
+		//compute density and viscosity forces per particle
+		
+		// -- PHASE 4 --
+		//compute pressure forces. apply all forces to particles
+		
 		//update cube model instances
 		{
-			float[] pos_data = new float[NR_PARTICLES * 4];
-			this.posBuffer.getSubData(pos_data, 0);
+			int[] data = new int[NR_PARTICLES * SIZEOF_PARTICLE / 4];
+			this.particleBuffer.getSubData(data, 0);
 			for (int i = 0; i < NR_PARTICLES; i++) {
-				Vec3 pos = new Vec3(pos_data[i * 4 + 0], pos_data[i * 4 + 1], pos_data[i * 4 + 2]);
+				Particle p = new Particle(data, i * SIZEOF_PARTICLE / 4);
 
 				Mat4 transform = Mat4.scale(this.cubeScale);
-				transform.muli(Mat4.translate(pos));
+				transform.muli(Mat4.translate(p.pos));
 				this.cubeInstances[i].setModelTransform(new ModelTransform(transform));
 			}
 		}

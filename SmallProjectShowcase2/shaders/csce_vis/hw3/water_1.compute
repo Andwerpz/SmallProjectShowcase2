@@ -5,19 +5,16 @@ layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 struct Particle {
 	vec3 pos;
 	vec3 vel;
-	
+	vec3 pred_pos;
+	vec3 visc_force;
+	int hash;
+	int hash_start_ind;
+	float density;
+	float near_density;
 };
 
-layout(binding = 0) buffer posBuffer {
-	vec4[] posData;
-};
-
-layout(binding = 1) buffer velBuffer {
-	vec4[] velData;
-};
-
-layout(binding = 2) buffer hashBuffer {
-	int[] hashData;
+layout(binding = 0) buffer particleBuffer {
+	Particle[] particleData;
 };
 
 uniform float dt;
@@ -26,21 +23,20 @@ uniform vec3 bounds_max;
 uniform vec3 gravity;
 uniform float boundary_restitution;
 
-uniform int hash_mod;
 uniform float smoothing_radius;
+uniform int hash_mod;
 uniform int LUT_P1;
 uniform int LUT_P2;
 uniform int LUT_P3;
 uniform int LUT_P4;
 uniform int LUT_P5;
 uniform int LUT_P6;
-uniform int LUT_P7;
 
 int computeHash(int x, int y, int z) {
 	x += LUT_P1;
 	y += LUT_P2;
 	z += LUT_P3;
-	return abs(x * LUT_P4 + y * LUT_P5 + z * LUT_P6 + LUT_P7) % hash_mod;
+	return abs(x * LUT_P4 + y * LUT_P5 + z * LUT_P6) % hash_mod;
 }
 
 int computeHash(vec3 pos) {
@@ -52,44 +48,43 @@ int computeHash(vec3 pos) {
 
 void main() {
 	int particle_id = int(gl_GlobalInvocationID.x);
-	vec3 pos = posData[particle_id].xyz;
-	vec3 vel = velData[particle_id].xyz;
+	Particle p = particleData[particle_id];
 	
 	//update position
-	pos += vel * dt;
+	p.pos += p.vel * dt;
 	
 	//gravity
-	vel += gravity * dt;
+	p.vel += gravity * dt;
 	
 	//boundary collisions
 	{
-		if (pos.x < bounds_min.x) {
-			pos.x = bounds_min.x;
-			vel.x *= -boundary_restitution;
+		if (p.pos.x < bounds_min.x) {
+			p.pos.x = bounds_min.x;
+			p.vel.x *= -boundary_restitution;
 		}
-		if (pos.x > bounds_max.x) {
-			pos.x = bounds_max.x;
-			vel.x *= -boundary_restitution;
+		if (p.pos.x > bounds_max.x) {
+			p.pos.x = bounds_max.x;
+			p.vel.x *= -boundary_restitution;
 		}
-		if (pos.y < bounds_min.y) {
-			pos.y = bounds_min.y;
-			vel.y *= -boundary_restitution;
+		if (p.pos.y < bounds_min.y) {
+			p.pos.y = bounds_min.y;
+			p.vel.y *= -boundary_restitution;
 		}
-		if (pos.y > bounds_max.y) {
-			pos.y = bounds_max.y;
-			vel.y *= -boundary_restitution;
+		if (p.pos.y > bounds_max.y) {
+			p.pos.y = bounds_max.y;
+			p.vel.y *= -boundary_restitution;
 		}
-		if (pos.z < bounds_min.z) {
-			pos.z = bounds_min.z;
-			vel.z *= -boundary_restitution;
+		if (p.pos.z < bounds_min.z) {
+			p.pos.z = bounds_min.z;
+			p.vel.z *= -boundary_restitution;
 		}
-		if (pos.z > bounds_max.z) {
-			pos.z = bounds_max.z;
-			vel.z *= -boundary_restitution;
+		if (p.pos.z > bounds_max.z) {
+			p.pos.z = bounds_max.z;
+			p.vel.z *= -boundary_restitution;
 		}
 	}
 	
-	posData[particle_id].xyz = pos;
-	velData[particle_id].xyz = vel;
-	hashData[particle_id * 4 + 0] = computeHash(pos);
+	p.hash = computeHash(p.pos);
+	
+	particleData[particle_id] = p;
 }
