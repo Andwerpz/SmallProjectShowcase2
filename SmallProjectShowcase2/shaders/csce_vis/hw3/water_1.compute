@@ -5,12 +5,7 @@ layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 struct Particle {
 	vec3 pos;
 	vec3 vel;
-	vec3 pred_pos;
-	vec3 visc_force;
 	int hash;
-	int hash_start_ind;
-	float density;
-	float near_density;
 };
 
 layout(binding = 0) buffer particleBuffer {
@@ -18,10 +13,6 @@ layout(binding = 0) buffer particleBuffer {
 };
 
 uniform float dt;
-uniform vec3 bounds_min;
-uniform vec3 bounds_max;
-uniform vec3 gravity;
-uniform float boundary_restitution;
 
 uniform float smoothing_radius;
 uniform int hash_mod;
@@ -31,12 +22,13 @@ uniform int LUT_P3;
 uniform int LUT_P4;
 uniform int LUT_P5;
 uniform int LUT_P6;
+uniform int LUT_P7;
 
 int computeHash(int x, int y, int z) {
 	x += LUT_P1;
 	y += LUT_P2;
 	z += LUT_P3;
-	return abs(x * LUT_P4 + y * LUT_P5 + z * LUT_P6) % hash_mod;
+	return abs(x * LUT_P4 + y * LUT_P5 + z * LUT_P6 + LUT_P7) % hash_mod;
 }
 
 int computeHash(vec3 pos) {
@@ -53,38 +45,7 @@ void main() {
 	//update position
 	p.pos += p.vel * dt;
 	
-	//gravity
-	p.vel += gravity * dt;
-	
-	//boundary collisions
-	{
-		if (p.pos.x < bounds_min.x) {
-			p.pos.x = bounds_min.x;
-			p.vel.x *= -boundary_restitution;
-		}
-		if (p.pos.x > bounds_max.x) {
-			p.pos.x = bounds_max.x;
-			p.vel.x *= -boundary_restitution;
-		}
-		if (p.pos.y < bounds_min.y) {
-			p.pos.y = bounds_min.y;
-			p.vel.y *= -boundary_restitution;
-		}
-		if (p.pos.y > bounds_max.y) {
-			p.pos.y = bounds_max.y;
-			p.vel.y *= -boundary_restitution;
-		}
-		if (p.pos.z < bounds_min.z) {
-			p.pos.z = bounds_min.z;
-			p.vel.z *= -boundary_restitution;
-		}
-		if (p.pos.z > bounds_max.z) {
-			p.pos.z = bounds_max.z;
-			p.vel.z *= -boundary_restitution;
-		}
-	}
-	
-	p.hash = computeHash(p.pos);
-	
+	p.hash = computeHash(p.pos.xyz);
+
 	particleData[particle_id] = p;
 }

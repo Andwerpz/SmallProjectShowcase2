@@ -1,6 +1,8 @@
 #version 430 core
 layout (location = 0) out vec4 out_color;
 
+layout(depth_greater) out float gl_FragDepth;
+
 //3D particle information
 in vec3 frag_pos;
 in vec3 frag_vel;

@@ -111,7 +111,7 @@ public class HW2Window extends Window {
 	// - allow for pre-processed point light shadow cubemaps for faster rendering. 
 
 	//maximum amount of particles possible within buffer
-	private static final int MAX_PARTICLE_CNT = (1 << 20);
+	private static final int MAX_PARTICLE_CNT = (1 << 21);
 
 	//how many particles we'll read from the buffer to try to generate new ones
 	//should be a divisor of MAX_PARTICLE_CNT
@@ -119,7 +119,7 @@ public class HW2Window extends Window {
 
 	//how many batches we'll pull out of the particle buffer before giving up on generating particles
 	//per update
-	private static final int GEN_MAX_TRIES = (1 << 4);
+	private static final int GEN_MAX_TRIES = 1;
 
 	//need to use all dimensions, as enforced dimension size is 65536 or 2^16
 	private static final int COMPUTE_X_DIM = (1 << 16);
@@ -131,7 +131,7 @@ public class HW2Window extends Window {
 	private ShaderStorageBuffer posbo; //{x, y, z, lifespan}
 	private ShaderStorageBuffer velbo; //{vx, vy, vz, air friction coeff}
 	private ShaderStorageBuffer huebo; //{r, g, b, is_static}
-	private ShaderStorageBuffer attrbo; //{proximity hue, restitution, -1, -1}
+	private ShaderStorageBuffer attrbo; //{proximity hue, restitution, follow attractor, -1}
 
 	private Shader particleUpdateShader, particleRenderShader;
 
@@ -147,7 +147,8 @@ public class HW2Window extends Window {
 
 	private PerspectiveScreen perspectiveScreen;
 
-	private boolean lightsOn = true;
+	private boolean lightsOn = false;
+	private boolean spawnAttractorParticles = true;
 
 	private boolean mousePressed = false;
 
@@ -179,7 +180,7 @@ public class HW2Window extends Window {
 		this.pic.setNoclipSpeed(0.125f);
 		this.pic.setCollisionScene(WORLD_SCENE);
 		this.pic.setAcceptPlayerInputs(false);
-		this.pic.setDoNoclip(false);
+		this.pic.setDoNoclip(true);
 
 		this.particleUpdateShader = ShaderUtils.createShader("/csce_vis/hw2/particle_update.compute", GL_COMPUTE_SHADER);
 		this.particleRenderShader = ShaderUtils.createShader("/csce_vis/hw2/particle.vert", "/csce_vis/hw2/particle.frag");
@@ -411,6 +412,7 @@ public class HW2Window extends Window {
 
 				attr_data[j * 4 + 0] = p.proximity_hue ? 1 : -1;
 				attr_data[j * 4 + 1] = p.coeff_restitution;
+				attr_data[j * 4 + 2] = p.follow_attractor ? 1 : -1;
 
 				this.activeParticles.add(System.currentTimeMillis() + (int) (p.lifespan * 1000));
 			}
@@ -433,16 +435,29 @@ public class HW2Window extends Window {
 		this.pic.update();
 
 		if (this.mousePressed) {
-			for (int i = 0; i < (1 << 10); i++) {
-				Vec3 pos = new Vec3(this.pic.getTop());
-				Vec3 vel = new Vec3(this.pic.getFacing());
-				vel.muli(MathUtils.random(8, 8.5f));
-				float deviation = 0.4f * (float) Math.random();
-				vel.addi(MathUtils.generateRandomPerpendicularVec3(vel).mul(deviation));
-				Particle p = new Particle(pos, vel);
-				p.lifespan = MathUtils.random(8, 12);
-				p.coeff_restitution = MathUtils.random(0.8f, 1);
-				this.generateParticle(p);
+			for (int i = 0; i < (1 << 12); i++) {
+				if (this.spawnAttractorParticles) {
+					Vec3 pos = MathUtils.random(new Vec3(-10), new Vec3(10));
+					Vec3 hue = new Vec3(pos);
+					hue.normalize();
+					hue = hue.mul(0.5f).add(new Vec3(0.5));
+					Particle p = new Particle(pos, new Vec3(0));
+					p.hue.set(hue);
+					p.lifespan = MathUtils.random(60, 70);
+					p.follow_attractor = true;
+					this.generateParticle(p);
+				}
+				else {
+					Vec3 pos = new Vec3(this.pic.getTop());
+					Vec3 vel = new Vec3(this.pic.getFacing());
+					vel.muli(MathUtils.random(8, 8.5f));
+					float deviation = 0.4f * (float) Math.random();
+					vel.addi(MathUtils.generateRandomPerpendicularVec3(vel).mul(deviation));
+					Particle p = new Particle(pos, vel);
+					p.lifespan = MathUtils.random(8, 12);
+					p.coeff_restitution = MathUtils.random(0.8f, 1);
+					this.generateParticle(p);
+				}
 			}
 		}
 
@@ -584,8 +599,8 @@ public class HW2Window extends Window {
 	@Override
 	protected void _keyPressed(int key) {
 		switch (key) {
-		case GLFW.GLFW_KEY_Q:
-			this.resetParticles();
+		case GLFW.GLFW_KEY_T:
+			this.spawnAttractorParticles = false;
 			break;
 
 		//lidar scanner
@@ -689,7 +704,7 @@ public class HW2Window extends Window {
 	class Particle {
 		Vec3 pos, vel, hue;
 		float lifespan, air_friction_coeff, coeff_restitution;
-		boolean is_static, proximity_hue;
+		boolean is_static, proximity_hue, follow_attractor;
 
 		public Particle(Vec3 _pos) {
 			this(_pos, new Vec3(0));
@@ -707,6 +722,8 @@ public class HW2Window extends Window {
 			this.lifespan = _lifespan;
 			this.air_friction_coeff = _air_friction_coeff;
 			this.is_static = false;
+			this.follow_attractor = false;
+			this.proximity_hue = false;
 			this.coeff_restitution = 1;
 		}
 	}

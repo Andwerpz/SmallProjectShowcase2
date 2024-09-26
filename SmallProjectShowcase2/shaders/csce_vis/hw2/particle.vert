@@ -35,6 +35,7 @@ void main() {
    	frag_hue = hueData[gl_VertexID].xyz;
    	frag_lifespan = posData[gl_VertexID].w;
    	bool proximity_hue = attrData[gl_VertexID].x > 0;
+   	bool follow_attractor = attrData[gl_VertexID].z > 0;
    	
    	if(proximity_hue) {
    		float ramp_min = 1f;
@@ -54,7 +55,7 @@ void main() {
    	frag_uv = frag_uv * 0.5 + 0.5;
    	frag_depth = frag_depth * 0.5 + 0.5;
    	
-   	gl_PointSize = max(1.0, 5.0 / proj_pos.w);
+   	gl_PointSize = follow_attractor? 1.0 : max(1.0, 5.0 / proj_pos.w);
    	
    	gl_Position = proj_pos;
 }
