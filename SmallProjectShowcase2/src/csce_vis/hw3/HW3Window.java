@@ -262,17 +262,17 @@ public class HW3Window extends Window {
 		this.setDeselectOnEscPressed(true);
 		this.setUnlockCursorOnEscPressed(true);
 
-		this.waterCompute1 = ShaderUtils.createShader("/csce_vis/hw3/water_1.compute", GL_COMPUTE_SHADER);
-		this.waterCompute21 = ShaderUtils.createShader("/csce_vis/hw3/water_2_1.compute", GL_COMPUTE_SHADER);
-		this.waterCompute22 = ShaderUtils.createShader("/csce_vis/hw3/water_2_2.compute", GL_COMPUTE_SHADER);
-		this.waterCompute3 = ShaderUtils.createShader("/csce_vis/hw3/water_3.compute", GL_COMPUTE_SHADER);
-		this.waterCompute4 = ShaderUtils.createShader("/csce_vis/hw3/water_4.compute", GL_COMPUTE_SHADER);
+		this.waterCompute1 = ShaderUtils.createShader("/csce_vis/hw3/r_cube_local/water_1.compute", GL_COMPUTE_SHADER);
+		this.waterCompute21 = ShaderUtils.createShader("/csce_vis/hw3/r_cube_local/water_2_1.compute", GL_COMPUTE_SHADER);
+		this.waterCompute22 = ShaderUtils.createShader("/csce_vis/hw3/r_cube_local/water_2_2.compute", GL_COMPUTE_SHADER);
+		this.waterCompute3 = ShaderUtils.createShader("/csce_vis/hw3/r_cube_local/water_3.compute", GL_COMPUTE_SHADER);
+		this.waterCompute4 = ShaderUtils.createShader("/csce_vis/hw3/r_cube_local/water_4.compute", GL_COMPUTE_SHADER);
 
-		this.particleRenderShader = ShaderUtils.createShader("/csce_vis/hw3/particle.vert", "/csce_vis/hw3/particle.frag");
-		this.waterRenderShader = ShaderUtils.createShader("/csce_vis/hw3/water_render.vert", "/csce_vis/hw3/water_render.frag");
+		this.particleRenderShader = ShaderUtils.createShader("/csce_vis/hw3/r_cube_local/particle.vert", "/csce_vis/hw3/r_cube_local/particle.frag");
+		this.waterRenderShader = ShaderUtils.createShader("/csce_vis/hw3/r_cube_local/water_render.vert", "/csce_vis/hw3/r_cube_local/water_render.frag");
 
-		this.sphereRasterShader = ShaderUtils.createShader("/csce_vis/hw3/sphere_raster.vert", "/csce_vis/hw3/sphere_raster.frag");
-		this.isosurfaceExtractShader = ShaderUtils.createShader("/csce_vis/hw3/isosurface_extract.vert", "/csce_vis/hw3/isosurface_extract.frag");
+		this.sphereRasterShader = ShaderUtils.createShader("/csce_vis/hw3/r_cube_local/sphere_raster.vert", "/csce_vis/hw3/r_cube_local/sphere_raster.frag");
+		this.isosurfaceExtractShader = ShaderUtils.createShader("/csce_vis/hw3/r_cube_local/isosurface_extract.vert", "/csce_vis/hw3/r_cube_local/isosurface_extract.frag");
 		try {
 			this.cubeModel = Model.loadModelFileRelative("/res/cube/cube.obj");
 		}
