@@ -21,6 +21,7 @@ import static org.lwjgl.opengl.GL46.*;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.util.Stack;
 
 import org.lwjgl.glfw.GLFW;
 
@@ -72,37 +73,73 @@ public class HW3Window extends Window {
 	// - unified spray, foam, bubbles : https://cg.informatik.uni-freiburg.de/publications/2012_CGI_sprayFoamBubbles.pdf
 	//   - 2D simulation might be better for this one. 
 
+	//to speed up, can try to load particles in workgroup into local memory. When looking for a particle that exists in local memory, 
+	//just load from local. 
+
+	//however, this only reliably works for particles within the same hash cube. So it's 26 / 27 or 7 / 8 speedup depending on size of hash cube. 
+	//somehow manipulate hash to make adjacent cells hash adjacent to eachother. This might increase efficiency. 
+
+	//maybe do 27 or 8 passes (depending on cube size) each focusing on comparing current particle with one of the adjacent hash cubes. 
+	//for each pass, can look at workgroup thread 0, and just grab particles starting from proper cell. 
+	//try to make workgroup size around equal to amount of particles that can fit in a cell. 
+	//too few, and each particle is going to still have to lookup many particles in global memory.
+	//too many, and many particles will not be properly represented in local memory. 
+
+	//for each workgroup, we can still ask each thread to load in many particles to shared memory. Ex: 256 threads, but each loads 4 particles
+	//to shared. 
+
 	//TODO
-	// - make SPH boundaries nicer
-	//   - currently, particles are clumping near the boundaries, reducing performance and making it look bad
-	//   - add repulsion forces to boundary? Don't want to have to add ghost particles
 	// - velocity color rendering
-	// - nice water rendering
+	// - improve rendering speed
 	//   - ok, slow raymarching rendering is in place. It takes around 30ms to render once the water settles. 
 	//   - if we can make it 60fps at 16k particles, I'd be happy
 	//   - nice idea here : https://jcgt.org/published/0007/01/02/paper-lowres.pdf 
 	//   - idea is to speed up raytracing by first rasterizing particle spheres and using that position information as
 	//     starting point for the raycasts. 
+	// - improve update speed
+	//   - experiment to determine what is best spatialWorkgroupSz
 
-	// (TODO measure performance better. Need to look at when the GPU stops running the update)
-	// Time per update (after settles, pipelineV0):
-	// - hash cube size = smoothing_radius
+	// Time per update after water settles:
+	// Simulation Settings:
+	// - pipelineV0
+	// - 20x20 box centered at origin	
+	// - viscosityStrength = 1f;
+	// - pressureMultiplier = 512f;
+	// - nearPressureMultiplier = 0.1f;
+	// - targetDensity = 16f;
+
+	// hash cube size = smoothing_radius
 	// - (2 << 12) : ~4ms
 	// - (2 << 13) : ~10ms
 	// - (2 << 14) : ~18ms
 	// - (2 << 15) : ~38ms
 	// - (2 << 16) : ~90ms
 
-	// - hash cube size = smoothing_radius * 2
-	// - (2 << 12) : 
-	// - (2 << 13) : 
-	// - (2 << 14) : 
-	// - (2 << 15) : 
-	// - (2 << 16) : 
+	// hash cube size = smoothing_radius * 2
+	// - (2 << 12) : ~3ms
+	// - (2 << 13) : ~9ms
+	// - (2 << 14) : ~27ms
+	// - (2 << 15) : ~140ms
+
+	// hash cube size = smoothing_radius
+	// spatialWorkgroupSz = 32
+	// - (2 << 12) : ~0.8ms
+	// - (2 << 13) : ~1.2ms
+	// - (2 << 14) : ~1.7ms
+	// - (2 << 15) : ~2.9ms	(15x15 base)
+	// - (2 << 16) : ~6ms	(15x15 base)
+	// - (2 << 17) : ~12ms  (15x15 base)
+	// - (2 << 18) : ~50ms  (15x15 base)
 
 	private boolean printUpdateTimes = false;
+	private boolean printRenderTimes = true;
+	private boolean doUpdate = true;
 
-	private static final int NR_PARTICLES_LOG2 = 12; //must be \geq 10 due to bitonic sort
+	private int timeAvgAmt = 100;
+	private Stack<Float> updateTimes = new Stack<>();
+	private Stack<Float> renderTimes = new Stack<>();
+
+	private static final int NR_PARTICLES_LOG2 = 16; //must be \geq 10 due to bitonic sort
 	private static final int NR_PARTICLES = (1 << NR_PARTICLES_LOG2);
 
 	//to compute volumes, just have to take spherical integral.
@@ -118,6 +155,10 @@ public class HW3Window extends Window {
 	//(S^2 - r^2)^3
 	//https://www.wolframalpha.com/input?i=int+%5B%2F%2Fmath%3Arho%5E2+*+sin%28phi%29+*+%28S%5E2+-+rho%5E2%29%5E3%2F%2F%5D+%5B%2F%2Fmath%3Adrho+dphi+dtheta%2F%2F%5D+%2C+rho%3D%5B%2F%2Fmath%3A0%2F%2F%5D..%5B%2F%2Fmath%3AS%2F%2F%5D%2C+phi%3D%5B%2F%2Fmath%3A0%2F%2F%5D..%5B%2F%2Fmath%3Api%2F2%2F%2F%5D%2C+theta%3D%5B%2F%2Fmath%3A0%2F%2F%5D..%5B%2F%2Fmath%3A2pi%2F%2F%5D+
 	private static float viscositySmoothingKernelVolume = (float) (Math.PI * Math.pow(smoothingRadius, 9) * 32.0 / 315.0);
+
+	//want this to be around equal to the number of particles in a filled hash cell. 
+	//TODO do some testing to figure out best value. 
+	private static int spatialWorkgroupSz = 32;
 
 	private Shader waterCompute1;
 	private Shader waterCompute21, waterCompute22;
@@ -199,12 +240,13 @@ public class HW3Window extends Window {
 	private Texture renderPositionMap;
 	private TextureViewerWindow colorMapViewer, positionMapViewer;
 
-	private Vec3 bbDimensions = new Vec3(10); //box centered at origin
+	//	private Vec3 bbDimensions = new Vec3(10, 15, 15); //box centered at origin
+	private Vec3 bbDimensions = new Vec3(20, 30, 20);
 	private ModelInstance[] bbLines;
 	private Vec3 gravity = new Vec3(0, -9.8, 0);
 
-	private float viscosityStrength = 0.25f;
-	public float pressureMultiplier = 128f;
+	private float viscosityStrength = 1f;
+	public float pressureMultiplier = 256f;
 	public float nearPressureMultiplier = 0.1f;
 	public float targetDensity = 16f;
 
@@ -350,11 +392,66 @@ public class HW3Window extends Window {
 		Vec3 max_b = bbDimensions.mul(0.95f);
 
 		int[] data = new int[NR_PARTICLES * SIZEOF_PARTICLE / 4];
-		for (int i = 0; i < NR_PARTICLES; i++) {
-			Vec3 pos = MathUtils.random(min_b, max_b);
-			Particle p = new Particle(pos);
-			p.writeToBuffer(data, i * SIZEOF_PARTICLE / 4);
+
+		int col_height = 32;
+		int col_wh = 32;
+
+		int p_ptr = 0;
+		for (int y = 0; y < col_height; y++) {
+			for (int x = 0; x < col_wh; x++) {
+				for (int z = 0; z < col_wh && p_ptr != NR_PARTICLES; z++) {
+					Vec3 pos = new Vec3(x, y, z).add(MathUtils.random(new Vec3(-0.05), new Vec3(0.05)));
+					pos.muli(0.535f);
+					pos.addi(min_b);
+					Particle p = new Particle(pos);
+					p.writeToBuffer(data, p_ptr * SIZEOF_PARTICLE / 4);
+					p_ptr++;
+				}
+			}
 		}
+
+		for (int y = 0; y < col_height; y++) {
+			for (int x = 0; x < col_wh; x++) {
+				for (int z = 0; z < col_wh && p_ptr != NR_PARTICLES; z++) {
+					Vec3 pos = new Vec3(x, y, z).add(MathUtils.random(new Vec3(-0.05), new Vec3(0.05)));
+					pos.muli(0.535f);
+					pos.addi(min_b);
+					pos = Mat4.rotateY((float) Math.toRadians(180f)).mul(pos, 0);
+					Particle p = new Particle(pos);
+					p.writeToBuffer(data, p_ptr * SIZEOF_PARTICLE / 4);
+					p_ptr++;
+				}
+			}
+		}
+
+		for (int y = 0; y < col_height; y++) {
+			for (int x = 0; x < col_wh; x++) {
+				for (int z = 0; z < col_wh && p_ptr != NR_PARTICLES; z++) {
+					Vec3 pos = new Vec3(x, y, z).add(MathUtils.random(new Vec3(-0.05), new Vec3(0.05)));
+					pos.muli(0.535f);
+					pos.addi(min_b);
+					pos = Mat4.rotateY((float) Math.toRadians(90f)).mul(pos, 0);
+					Particle p = new Particle(pos);
+					p.writeToBuffer(data, p_ptr * SIZEOF_PARTICLE / 4);
+					p_ptr++;
+				}
+			}
+		}
+
+		for (int y = 0; y < col_height; y++) {
+			for (int x = 0; x < col_wh; x++) {
+				for (int z = 0; z < col_wh && p_ptr != NR_PARTICLES; z++) {
+					Vec3 pos = new Vec3(x, y, z).add(MathUtils.random(new Vec3(-0.05), new Vec3(0.05)));
+					pos.muli(0.535f);
+					pos.addi(min_b);
+					pos = Mat4.rotateY((float) Math.toRadians(270f)).mul(pos, 0);
+					Particle p = new Particle(pos);
+					p.writeToBuffer(data, p_ptr * SIZEOF_PARTICLE / 4);
+					p_ptr++;
+				}
+			}
+		}
+
 		this.particleBuffer.setSubData(data, 0);
 		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 	}
@@ -394,24 +491,13 @@ public class HW3Window extends Window {
 		this.bbLines[11] = Line.addDefaultLine(c3, c7, WORLD_SCENE);
 	}
 
-	@Override
-	protected void _update() {
-		this.pic.update();
-
+	private void waterUpdate() {
 		float dt = Main.getDeltaSeconds();
 		dt = Math.min(16.0f / 1000.0f, dt);
-
-		// query max shader workgroup shared memory in bytes
-		// around 49k bytes
-		//		int[] res = new int[1];
-		//		glGetIntegerv(GL_MAX_COMPUTE_SHARED_MEMORY_SIZE, res);
-		//		System.err.println("MAX MEM : " + res[0]);
 
 		// -- PHASE 1 --
 		//update position due to velocity, compute hashes
 		{
-			long start_millis = System.currentTimeMillis();
-
 			this.waterCompute1.enable();
 			this.waterCompute1.setUniform1f("dt", dt);
 
@@ -429,10 +515,6 @@ public class HW3Window extends Window {
 
 			glDispatchCompute(NR_PARTICLES, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-			if (this.printUpdateTimes) {
-				System.out.println("PHASE 1 Elapsed Millis : " + (System.currentTimeMillis() - start_millis));
-			}
 		}
 
 		// -- PHASE 2.1 -- 
@@ -447,8 +529,6 @@ public class HW3Window extends Window {
 		// - 8 bytes per element means 4096 in local sorting stage. 4 bytes per element is not feasible, as that limits us to (2 << 16)
 		//   particles (if we split the bytes equally between hash and index). 
 		{
-			long start_millis = System.currentTimeMillis();
-
 			this.waterCompute21.enable();
 
 			this.particleBuffer.bindToBase(0);
@@ -478,18 +558,12 @@ public class HW3Window extends Window {
 				glDispatchCompute(NR_PARTICLES / 1024, 1, 1);
 				glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 			}
-
-			if (this.printUpdateTimes) {
-				System.out.println("Sort Time Elapsed Millis : " + (System.currentTimeMillis() - start_millis));
-			}
 		}
 
 		// -- PHASE 2.2 -- 
 		//generate hash lookup tables. For each hash, will save index at which particles belonging to that hash start
 		//since hashes are sorted, can just see if current hash is unequal to previous hash.
 		{
-			long start_millis = System.currentTimeMillis();
-
 			this.waterCompute22.enable();
 
 			this.particleBuffer.bindToBase(0);
@@ -497,17 +571,11 @@ public class HW3Window extends Window {
 
 			glDispatchCompute(NR_PARTICLES, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-			if (this.printUpdateTimes) {
-				System.out.println("Build LUT Elapsed Millis : " + (System.currentTimeMillis() - start_millis));
-			}
 		}
 
 		// -- PHASE 3 --
 		//compute density and viscosity forces per particle
 		{
-			long start_millis = System.currentTimeMillis();
-
 			this.waterCompute3.enable();
 
 			this.particleBuffer.bindToBase(0);
@@ -533,19 +601,13 @@ public class HW3Window extends Window {
 
 			this.waterCompute3.setUniform1f("viscosity_strength", this.viscosityStrength);
 
-			glDispatchCompute(NR_PARTICLES, 1, 1);
+			glDispatchCompute(NR_PARTICLES / spatialWorkgroupSz, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-			if (this.printUpdateTimes) {
-				System.out.println("PHASE 3 Elapsed Millis : " + (System.currentTimeMillis() - start_millis));
-			}
 		}
 
 		// -- PHASE 4 --
 		//compute pressure forces. apply all forces to particles
 		{
-			long start_millis = System.currentTimeMillis();
-
 			this.waterCompute4.enable();
 
 			this.particleBuffer.bindToBase(0);
@@ -577,13 +639,47 @@ public class HW3Window extends Window {
 			this.waterCompute4.setUniform1f("pressure_multiplier", this.pressureMultiplier);
 			this.waterCompute4.setUniform1f("near_pressure_multiplier", this.nearPressureMultiplier);
 
-			glDispatchCompute(NR_PARTICLES, 1, 1);
+			glDispatchCompute(NR_PARTICLES / spatialWorkgroupSz, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		}
+	}
+
+	@Override
+	protected void _update() {
+		this.pic.update();
+
+		// query max shader workgroup shared memory in bytes
+		// around 49k bytes
+		//		int[] res = new int[1];
+		//		glGetIntegerv(GL_MAX_COMPUTE_SHARED_MEMORY_SIZE, res);
+		//		System.err.println("MAX MEM : " + res[0]);
+
+		if (this.doUpdate) {
+			int time_query = -1;
+			if (this.printUpdateTimes) {
+				time_query = glGenQueries();
+				glBeginQuery(GL_TIME_ELAPSED, time_query);
+			}
+
+			this.waterUpdate();
 
 			if (this.printUpdateTimes) {
-				System.out.println("PHASE 4 Elapsed Millis : " + (System.currentTimeMillis() - start_millis));
+				glEndQuery(GL_TIME_ELAPSED);
+				int[] time_elapsed_res = new int[1];
+				glGetQueryObjectuiv(time_query, GL_QUERY_RESULT, time_elapsed_res);
+				this.updateTimes.push((float) (time_elapsed_res[0] / 1000000.0));
+
+				if (this.updateTimes.size() == this.timeAvgAmt) {
+					float avg = 0;
+					while (this.updateTimes.size() != 0) {
+						avg += this.updateTimes.pop();
+					}
+					avg /= this.timeAvgAmt;
+					System.out.println("Average last " + this.timeAvgAmt + " update times : " + avg);
+				}
 			}
 		}
+
 	}
 
 	private void waterRenderPipelineV2(Framebuffer outputBuffer) {
@@ -603,7 +699,7 @@ public class HW3Window extends Window {
 			this.sphereRasterShader.enable();
 			this.sphereRasterShader.setUniformMat4("pr_matrix", camera.getProjectionMatrix());
 			this.sphereRasterShader.setUniformMat4("vw_matrix", camera.getViewMatrix());
-			this.sphereRasterShader.setUniform1f("smoothing_radius", smoothingRadius);
+			this.sphereRasterShader.setUniform1f("smoothing_radius", smoothingRadius * 0.5f);
 			this.sphereRasterShader.setUniform3f("view_pos", camera.getPos());
 
 			this.particleBuffer.bindToBase(0);
@@ -766,7 +862,29 @@ public class HW3Window extends Window {
 		this.perspectiveScreen.setCamera(camera);
 		this.perspectiveScreen.render(outputBuffer);
 
-		this.waterRenderPipelineV0(outputBuffer);
+		int time_query = -1;
+		if (this.printRenderTimes) {
+			time_query = glGenQueries();
+			glBeginQuery(GL_TIME_ELAPSED, time_query);
+		}
+
+		this.waterRenderPipelineV2(outputBuffer);
+
+		if (this.printRenderTimes) {
+			glEndQuery(GL_TIME_ELAPSED);
+			int[] time_elapsed_res = new int[1];
+			glGetQueryObjectuiv(time_query, GL_QUERY_RESULT, time_elapsed_res);
+			this.renderTimes.push((float) (time_elapsed_res[0] / 1000000.0));
+
+			if (this.renderTimes.size() == this.timeAvgAmt) {
+				float avg = 0;
+				while (this.renderTimes.size() != 0) {
+					avg += this.renderTimes.pop();
+				}
+				avg /= this.timeAvgAmt;
+				System.out.println("Average last " + this.timeAvgAmt + " render times : " + avg);
+			}
+		}
 	}
 
 	@Override

@@ -1,0 +1,26 @@
+#version 430 core
+
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+struct Particle {
+	vec3 pos;
+	vec3 vel;
+	int hash;
+};
+
+layout(binding = 0) buffer particleBuffer {
+	Particle[] particleData;
+};
+
+layout(binding = 1) buffer hashLUTBuffer {
+	int[] hashLUT;
+};
+
+void main() {
+	int particle_id = int(gl_GlobalInvocationID.x);
+	Particle p = particleData[particle_id];
+	
+	if(particle_id == 0 || (p.hash != particleData[particle_id - 1].hash)) {
+		hashLUT[p.hash] = particle_id;
+	}
+}

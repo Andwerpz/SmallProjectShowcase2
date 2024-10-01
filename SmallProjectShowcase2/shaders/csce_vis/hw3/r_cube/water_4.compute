@@ -1,6 +1,6 @@
 #version 430 core
 
-layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 struct Particle {
 	vec3 pos;
@@ -26,9 +26,6 @@ struct ParticleInfo {
 layout(binding = 2) buffer particleInfoBuffer {
 	ParticleInfo[] particleInfoData;
 };
-
-shared Particle local_particle_data[gl_WorkGroupSize.x];
-shared ParticleInfo local_particle_info_data[gl_WorkGroupSize.x];
 
 uniform float dt;
 uniform vec3 gravity;
@@ -62,12 +59,11 @@ int computeHash(int x, int y, int z) {
 	return abs(x * LUT_P4 + y * LUT_P5 + z * LUT_P6 + LUT_P7) % hash_mod;
 }
 
-int computeHash(ivec3 h) {
-	return computeHash(h.x, h.y, h.z);
-}
-
 int computeHash(vec3 pos) {
-	return computeHash(ivec3(floor(pos / smoothing_radius)));
+	int hash_x = int(pos.x / smoothing_radius);
+	int hash_y = int(pos.y / smoothing_radius);
+	int hash_z = int(pos.z / smoothing_radius);
+	return computeHash(hash_x, hash_y, hash_z);
 }
 
 float densitySmoothingKernelSlope(float dist) {
@@ -105,88 +101,55 @@ vec2 calculateSharedPressure(vec2 d1, vec2 d2) {
 	return vec2((p1.x + p2.x) / 2.0, (p1.y + p2.y) / 2.0);
 }
 
-const ivec3 d_hpos[27] = ivec3[27] (
-	ivec3(1, 1, 1), ivec3(1, 1, 0), ivec3(1, 1, -1),
-	ivec3(1, 0, 1), ivec3(1, 0, 0), ivec3(1, 0, -1),
-	ivec3(1, -1, 1), ivec3(1, -1, 0), ivec3(1, -1, -1),
-	ivec3(0, 1, 1), ivec3(0, 1, 0), ivec3(0, 1, -1),
-	ivec3(0, 0, 1), ivec3(0, 0, 0), ivec3(0, 0, -1),
-	ivec3(0, -1, 1), ivec3(0, -1, 0), ivec3(0, -1, -1),
-	ivec3(-1, 1, 1), ivec3(-1, 1, 0), ivec3(-1, 1, -1),
-	ivec3(-1, 0, 1), ivec3(-1, 0, 0), ivec3(-1, 0, -1),
-	ivec3(-1, -1, 1), ivec3(-1, -1, 0), ivec3(-1, -1, -1)
-);
+const int dx[27] = int[27](-1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1);
+const int dy[27] = int[27](-1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1);
+const int dz[27] = int[27](-1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1);
 
-Particle getParticle(int ind, int local_particle_start) {
-	if(ind >= local_particle_start && ind < local_particle_start + gl_WorkGroupSize.x) {
-		return local_particle_data[ind - local_particle_start];
-	}
-	return particleData[ind];
-}
-
-ParticleInfo getParticleInfo(int ind, int local_particle_start) {
-	if(ind >= local_particle_start && ind < local_particle_start + gl_WorkGroupSize.x) {
-		return local_particle_info_data[ind - local_particle_start];
-	}
-	return particleInfoData[ind];
-}
-
-void main() {
-	int global_id = int(gl_GlobalInvocationID.x);
-	int local_id = int(gl_LocalInvocationID.x);
-	int local0_id = int(gl_WorkGroupID.x) * int(gl_WorkGroupSize.x);
-
-	Particle p = particleData[global_id];
-	ParticleInfo p_info = particleInfoData[global_id];
-	vec2 p_density = vec2(p_info.density, p_info.near_density);
-	
-	ivec3 p_hpos = ivec3(floor(p.pos / smoothing_radius));
-	ivec3 local0_hpos = ivec3(floor(particleData[local0_id].pos / smoothing_radius));
-	
-	//compute pressure force
+vec3 calculatePressureForce(int particle_id, vec3 pos, vec2 density) {
 	vec3 pressure_force = vec3(0);
+	int hash_x = int(pos.x / smoothing_radius);
+	int hash_y = int(pos.y / smoothing_radius);
+	int hash_z = int(pos.z / smoothing_radius);
 	for(int i = 0; i < 27; i++){
-		//put stuff into local mem
-		int local0_hash = computeHash(local0_hpos + d_hpos[i]);
-		int local0_start = hashLUT[local0_hash];
-		
-		if(local0_start + local_id < nr_particles) {
-			local_particle_data[local_id] = particleData[local0_start + local_id];
-			local_particle_info_data[local_id] = particleInfoData[local0_start + local_id];
-		}
-		barrier();
-		
-		//compute contribution to pressure force
-		int p_hash = computeHash(p_hpos + d_hpos[i]);
-		int p_start = hashLUT[p_hash];
-		for(int j = p_start; j < nr_particles; j++){
-			if(j == global_id) {
-				continue;
-			}
-			Particle next = getParticle(j, local0_start);
-			ParticleInfo next_info = getParticleInfo(j, local0_start);
-			if(next.hash != p_hash) {
+		int nx = hash_x + dx[i];
+		int ny = hash_y + dy[i];
+		int nz = hash_z + dz[i];
+		int nhash = computeHash(nx, ny, nz);
+		int start_ind = hashLUT[nhash];
+		for(int j = start_ind; j < nr_particles; j++){
+			int chash = particleData[j].hash;
+			if(chash != nhash) {
 				break;
 			}
-			
-			vec2 next_density = vec2(next_info.density, next_info.near_density);
-			float dist = distance(p.pos, next.pos);
-			vec3 dir = p.pos - next.pos;
-			if(dist < 0.001){
-				dir = vec3(1, 0, 0);
+			if(j == particle_id) {
+				continue;
+			}
+			vec3 cpos = particleData[j].pos;
+			vec2 cdensity = vec2(particleInfoData[j].density, particleInfoData[j].near_density);
+			float dist = distance(pos, cpos);
+			vec3 dir = pos - cpos;
+			if(dist < 0.001) {
+				dir.x = 1;
+				dir.y = 0;
 			}
 			else {
 				dir /= dist;
 			}
 			float density_slope = densitySmoothingKernelSlope(dist);
 			float near_density_slope = nearDensitySmoothingKernelSlope(dist);
-			vec2 shared_pressure = calculateSharedPressure(p_density, next_density);
-			pressure_force -= dir * ((shared_pressure.x * density_slope / p_density.x) + (shared_pressure.y * near_density_slope / p_density.y));
+			vec2 shared_pressure = calculateSharedPressure(density, cdensity);
+			pressure_force -= dir * ((shared_pressure.x * density_slope / density.x) + (shared_pressure.y * near_density_slope / density.y));
 		}
-		barrier();
 	}
+	return pressure_force;
+}
+
+void main() {
+	int particle_id = int(gl_GlobalInvocationID.x);
+	Particle p = particleData[particle_id];
+	ParticleInfo p_info = particleInfoData[particle_id];
 	
-	
+	vec3 pressure_force = calculatePressureForce(particle_id, p.pos, vec2(p_info.density, p_info.near_density));
 	vec3 viscosity_force = p_info.visc_force;
 	vec3 gravity_force = gravity;
 	vec3 boundary_force = vec3(0);
@@ -242,12 +205,12 @@ void main() {
 	}
 	
 	vec3 force = pressure_force + viscosity_force + gravity_force + boundary_force * 20;
-	if(length(force) > 1000){
-		force = normalize(force) * 1000;
+	if(length(force) > 200){
+		force = normalize(force) * 200;
 	}
 	p.vel += force * dt;
 	
-	particleData[global_id] = p;
+	particleData[particle_id] = p;
 }
 
 

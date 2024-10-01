@@ -1,10 +1,11 @@
 #version 440 core
 layout (location = 0) out vec4 out_color;
+layout (location = 1) out vec4 out_pos;
 
 in vec3 in_frag_dir;
 uniform vec3 camera_pos;
 
-uniform samplerCube skybox;
+uniform sampler2D pos_tex;
 
 struct Particle {
 	vec3 pos;
@@ -42,12 +43,11 @@ int computeHash(int x, int y, int z) {
 	return abs(x * LUT_P4 + y * LUT_P5 + z * LUT_P6 + LUT_P7) % hash_mod;
 }
 
-int computeHash(ivec3 h) {
-	return computeHash(h.x, h.y, h.z);
-}
-
 int computeHash(vec3 pos) {
-	return computeHash(ivec3(floor(pos / smoothing_radius)));
+	int hash_x = int(pos.x / smoothing_radius);
+	int hash_y = int(pos.y / smoothing_radius);
+	int hash_z = int(pos.z / smoothing_radius);
+	return computeHash(hash_x, hash_y, hash_z);
 }
 
 float densitySmoothingKernel(float dist) {
@@ -67,9 +67,9 @@ const int dz[27] = int[27](-1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1,
 
 float computeDensity(vec3 pos) {
 	float density = 0;
-	int hash_x = int(floor(pos.x / smoothing_radius));
-	int hash_y = int(floor(pos.y / smoothing_radius));
-	int hash_z = int(floor(pos.z / smoothing_radius));
+	int hash_x = int(pos.x / smoothing_radius);
+	int hash_y = int(pos.y / smoothing_radius);
+	int hash_z = int(pos.z / smoothing_radius);
 	for(int i = 0; i < 27; i++){
 		int nx = hash_x + dx[i];
 		int ny = hash_y + dy[i];
@@ -90,9 +90,9 @@ float computeDensity(vec3 pos) {
 
 vec3 computeDensityGradient(vec3 pos) {
 	vec3 gradient = vec3(0);
-	int hash_x = int(floor(pos.x / smoothing_radius));
-	int hash_y = int(floor(pos.y / smoothing_radius));
-	int hash_z = int(floor(pos.z / smoothing_radius));
+	int hash_x = int(pos.x / smoothing_radius);
+	int hash_y = int(pos.y / smoothing_radius);
+	int hash_z = int(pos.z / smoothing_radius);
 	for(int i = 0; i < 27; i++){
 		int nx = hash_x + dx[i];
 		int ny = hash_y + dy[i];
@@ -164,30 +164,40 @@ bool refract(vec3 incident, vec3 normal, float n1, float n2, inout vec3 ans) {
 	return true;
 }
 
-const int max_iter = 64;
+const int max_iter = 128;
 const float water_ior = 2;
 const vec3 water_color = vec3(10, 100, 160) * (1.0 / 255.0);
 const float water_alpha = 0.75;
 
 void main() {	
 	vec3 frag_dir = normalize(in_frag_dir);
-	vec3 pos = camera_pos;
+	ivec2 frag_coord = ivec2(gl_FragCoord.xy);
+	
+	vec4 pos_info = texelFetch(pos_tex, frag_coord, 0);
+	if(pos_info.w == 0){
+		discard;
+	}
+	
+	vec3 pos = pos_info.xyz;
 	bool did_hit = false;
-	float render_target_density = target_density * 0.25f;
+	float render_target_density = target_density * 0.5f;
 	
 	for(int i = 0; i < max_iter; i++){
 		float diff = render_target_density - computeDensity(pos);
-		if(diff < 0.01){
+		if(diff < 0){
 			did_hit = true;
 			break;
 		}
 		//pos += frag_dir * min(8, diff / 4.0);
-		pos += frag_dir * (diff / 8.0);
+		pos += frag_dir * max(0.1, diff / target_density);
 	}
 	
 	if(did_hit) {
 		vec3 normal = normalize(computeDensityGradient(pos));
+		out_color = vec4(normal, 1.0);
+		out_pos = vec4(0);
 		
+		/*
 		float f = fresnelDielectric(-frag_dir, normal, 1.0, water_ior);
 		if(computeDensity(camera_pos) > render_target_density) {
 			f = 0;
@@ -200,6 +210,7 @@ void main() {
 		vec3 color = (skybox_color * f + water_color * water_alpha - water_color * f * water_alpha) / alpha;
 		
 		out_color = vec4(color, alpha);
+		*/
 	}
 } 
 

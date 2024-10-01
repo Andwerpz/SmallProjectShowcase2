@@ -42,12 +42,11 @@ int computeHash(int x, int y, int z) {
 	return abs(x * LUT_P4 + y * LUT_P5 + z * LUT_P6 + LUT_P7) % hash_mod;
 }
 
-int computeHash(ivec3 h) {
-	return computeHash(h.x, h.y, h.z);
-}
-
 int computeHash(vec3 pos) {
-	return computeHash(ivec3(floor(pos / smoothing_radius)));
+	int hash_x = int(pos.x / (smoothing_radius * 2.0));
+	int hash_y = int(pos.y / (smoothing_radius * 2.0));
+	int hash_z = int(pos.z / (smoothing_radius * 2.0));
+	return computeHash(hash_x, hash_y, hash_z);
 }
 
 float densitySmoothingKernel(float dist) {
@@ -61,19 +60,18 @@ float densitySmoothingKernelSlope(float dist) {
 	return -3.0 * pow(max(0.0, smoothing_radius - dist), 2.0);
 }
 
-const int dx[27] = int[27](-1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1);
-const int dy[27] = int[27](-1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1);
-const int dz[27] = int[27](-1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1);
-
 float computeDensity(vec3 pos) {
 	float density = 0;
-	int hash_x = int(floor(pos.x / smoothing_radius));
-	int hash_y = int(floor(pos.y / smoothing_radius));
-	int hash_z = int(floor(pos.z / smoothing_radius));
-	for(int i = 0; i < 27; i++){
-		int nx = hash_x + dx[i];
-		int ny = hash_y + dy[i];
-		int nz = hash_z + dz[i];
+	int hash_x = int(pos.x / (smoothing_radius * 2.0));
+	int hash_y = int(pos.y / (smoothing_radius * 2.0));
+	int hash_z = int(pos.z / (smoothing_radius * 2.0));
+	int dx = mod(pos.x, smoothing_radius * 2.0) < smoothing_radius? -1 : 1;
+	int dy = mod(pos.y, smoothing_radius * 2.0) < smoothing_radius? -1 : 1;
+	int dz = mod(pos.z, smoothing_radius * 2.0) < smoothing_radius? -1 : 1;
+	for(int i = 0; i < 8; i++){
+		int nx = hash_x + ((i & 1) == 0? 0 : dx);
+		int ny = hash_y + ((i & 2) == 0? 0 : dy);
+		int nz = hash_z + ((i & 4) == 0? 0 : dz);
 		int nhash = computeHash(nx, ny, nz);
 		int start_ind = hashLUT[nhash];
 		for(int j = start_ind; j < nr_particles; j++){
@@ -90,13 +88,16 @@ float computeDensity(vec3 pos) {
 
 vec3 computeDensityGradient(vec3 pos) {
 	vec3 gradient = vec3(0);
-	int hash_x = int(floor(pos.x / smoothing_radius));
-	int hash_y = int(floor(pos.y / smoothing_radius));
-	int hash_z = int(floor(pos.z / smoothing_radius));
-	for(int i = 0; i < 27; i++){
-		int nx = hash_x + dx[i];
-		int ny = hash_y + dy[i];
-		int nz = hash_z + dz[i];
+	int hash_x = int(pos.x / (smoothing_radius * 2.0));
+	int hash_y = int(pos.y / (smoothing_radius * 2.0));
+	int hash_z = int(pos.z / (smoothing_radius * 2.0));
+	int dx = mod(pos.x, smoothing_radius * 2.0) < smoothing_radius? -1 : 1;
+	int dy = mod(pos.y, smoothing_radius * 2.0) < smoothing_radius? -1 : 1;
+	int dz = mod(pos.z, smoothing_radius * 2.0) < smoothing_radius? -1 : 1;
+	for(int i = 0; i < 8; i++){
+		int nx = hash_x + ((i & 1) == 0? 0 : dx);
+		int ny = hash_y + ((i & 2) == 0? 0 : dy);
+		int nz = hash_z + ((i & 4) == 0? 0 : dz);
 		int nhash = computeHash(nx, ny, nz);
 		int start_ind = hashLUT[nhash];
 		for(int j = start_ind; j < nr_particles; j++){
@@ -111,6 +112,7 @@ vec3 computeDensityGradient(vec3 pos) {
 	}
 	return gradient;
 }
+
 
 //n1 is ior of current material, n2 is incident material
 float fresnelDielectric(vec3 incident, vec3 normal, float n1, float n2) {
@@ -182,7 +184,7 @@ void main() {
 			break;
 		}
 		//pos += frag_dir * min(8, diff / 4.0);
-		pos += frag_dir * (diff / 8.0);
+		pos += frag_dir * max(0.05, diff / 8.0);
 	}
 	
 	if(did_hit) {

@@ -1,6 +1,6 @@
 #version 430 core
 
-layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 struct Particle {
 	vec3 pos;
@@ -26,6 +26,8 @@ struct ParticleInfo {
 layout(binding = 2) buffer particleInfoBuffer {
 	ParticleInfo[] particleInfoData;
 };
+
+shared Particle local_particle_data[gl_WorkGroupSize.x];
 
 uniform float dt;
 uniform int nr_particles;
@@ -54,11 +56,12 @@ int computeHash(int x, int y, int z) {
 	return abs(x * LUT_P4 + y * LUT_P5 + z * LUT_P6 + LUT_P7) % hash_mod;
 }
 
+int computeHash(ivec3 h) {
+	return computeHash(h.x, h.y, h.z);
+}
+
 int computeHash(vec3 pos) {
-	int hash_x = int(pos.x / smoothing_radius);
-	int hash_y = int(pos.y / smoothing_radius);
-	int hash_z = int(pos.z / smoothing_radius);
-	return computeHash(hash_x, hash_y, hash_z);
+	return computeHash(ivec3(floor(pos / smoothing_radius)));
 }
 
 float densitySmoothingKernel(float dist) {
@@ -82,77 +85,94 @@ float viscositySmoothingKernel(float dist) {
 	return ans;
 }
 
-const int dx[27] = int[27](-1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1);
-const int dy[27] = int[27](-1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1, -1, -1, -1, 0, 0, 0, 1, 1, 1);
-const int dz[27] = int[27](-1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1);
+const ivec3 d_hpos[27] = ivec3[27] (
+	ivec3(1, 1, 1), ivec3(1, 1, 0), ivec3(1, 1, -1),
+	ivec3(1, 0, 1), ivec3(1, 0, 0), ivec3(1, 0, -1),
+	ivec3(1, -1, 1), ivec3(1, -1, 0), ivec3(1, -1, -1),
+	ivec3(0, 1, 1), ivec3(0, 1, 0), ivec3(0, 1, -1),
+	ivec3(0, 0, 1), ivec3(0, 0, 0), ivec3(0, 0, -1),
+	ivec3(0, -1, 1), ivec3(0, -1, 0), ivec3(0, -1, -1),
+	ivec3(-1, 1, 1), ivec3(-1, 1, 0), ivec3(-1, 1, -1),
+	ivec3(-1, 0, 1), ivec3(-1, 0, 0), ivec3(-1, 0, -1),
+	ivec3(-1, -1, 1), ivec3(-1, -1, 0), ivec3(-1, -1, -1)
+);
 
-vec2 computeDensity(vec3 pos) {
-	float density = 0;
-	float near_density = 0;
-	int hash_x = int(pos.x / smoothing_radius);
-	int hash_y = int(pos.y / smoothing_radius);
-	int hash_z = int(pos.z / smoothing_radius);
-	for(int i = 0; i < 27; i++){
-		int nx = hash_x + dx[i];
-		int ny = hash_y + dy[i];
-		int nz = hash_z + dz[i];
-		int nhash = computeHash(nx, ny, nz);
-		int start_ind = hashLUT[nhash];
-		for(int j = start_ind; j < nr_particles; j++){
-			int chash = particleData[j].hash;
-			if(chash != nhash) {
-				break;
-			}
-			vec3 cpos = particleData[j].pos;
-			density += densitySmoothingKernel(distance(pos, cpos));
-			near_density += nearDensitySmoothingKernel(distance(pos, cpos));
-		}
+Particle getParticle(int ind, int local_particle_start) {
+	if(ind >= local_particle_start && ind < local_particle_start + gl_WorkGroupSize.x) {
+		return local_particle_data[ind - local_particle_start];
 	}
-	return vec2(density, near_density);
-}
-
-vec3 computeViscosityForce(int particle_id, vec3 pos, vec3 vel) {
-	vec3 viscosity_force = vec3(0);
-	int hash_x = int(pos.x / smoothing_radius);
-	int hash_y = int(pos.y / smoothing_radius);
-	int hash_z = int(pos.z / smoothing_radius);
-	for(int i = 0; i < 27; i++){
-		int nx = hash_x + dx[i];
-		int ny = hash_y + dy[i];
-		int nz = hash_z + dz[i];
-		int nhash = computeHash(nx, ny, nz);
-		int start_ind = hashLUT[nhash];
-		for(int j = start_ind; j < nr_particles; j++){
-			int chash = particleData[j].hash;
-			if(chash != nhash) {
-				break;
-			}
-			if(j == particle_id) {
-				continue;
-			}
-			vec3 cpos = particleData[j].pos;
-			vec3 cvel = particleData[j].vel;
-			float dist = distance(pos, cpos);
-			float influence = viscositySmoothingKernel(dist);
-			viscosity_force += (cvel - vel) * influence;
-		}
-	}
-	viscosity_force *= viscosity_strength;
-	return viscosity_force;
+	return particleData[ind];
 }
 
 void main() {
-	int particle_id = int(gl_GlobalInvocationID.x);
-	Particle p = particleData[particle_id];
-	ParticleInfo p_info = particleInfoData[particle_id];
+	int global_id = int(gl_GlobalInvocationID.x);
+	int local_id = int(gl_LocalInvocationID.x);
+	int local0_id = int(gl_WorkGroupID.x) * int(gl_WorkGroupSize.x);
 	
-	p_info.pred_pos = p.pos + p.vel * dt;
-	vec2 dvec = computeDensity(p_info.pred_pos);
-	p_info.density = dvec.x;
-	p_info.near_density = dvec.y;
-	p_info.visc_force = computeViscosityForce(particle_id, p.pos, p.vel);
+	Particle p = particleData[global_id];
+	ParticleInfo p_info = ParticleInfo(vec3(0), 0, vec3(0), 0);
 	
-	particleInfoData[particle_id] = p_info;
+	vec3 predicted_pos = p.pos + p.vel * dt;
+	float density = 0;
+	float near_density = 0;
+	vec3 viscosity_force = vec3(0);
+	
+	ivec3 p_hpos = ivec3(floor(p.pos / smoothing_radius));
+	ivec3 pred_hpos = ivec3(floor(predicted_pos / smoothing_radius));
+	ivec3 local0_hpos = ivec3(floor(particleData[local0_id].pos / smoothing_radius));
+	
+	for(int i = 0; i < 27; i++){
+		//each thread looks at local_id 0 particle, and figures out the hash for that one
+		int local0_hash = computeHash(local0_hpos + d_hpos[i]);
+		int local0_start = hashLUT[local0_hash];
+		
+		//then, load the particle into local memory
+		if(local0_start + local_id < nr_particles) {
+			local_particle_data[local_id] = particleData[local0_start + local_id];
+		}
+		barrier();
+		
+		//compute current particle's hash stuff
+		int pred_hash = computeHash(pred_hpos + d_hpos[i]);
+		int pred_start = hashLUT[pred_hash];
+		
+		int p_hash = computeHash(p_hpos + d_hpos[i]);
+		int p_start = hashLUT[p_hash];
+		
+		//density
+		for(int j = pred_start; j < nr_particles; j++){
+			Particle next = getParticle(j, local0_start);
+			if(next.hash != pred_hash) {
+				break;
+			}
+			density += densitySmoothingKernel(distance(predicted_pos, next.pos));
+			near_density += nearDensitySmoothingKernel(distance(predicted_pos, next.pos));
+		}
+		
+		//viscosity
+		for(int j = p_start; j < nr_particles; j++){
+			if(j == global_id){
+				continue;
+			}
+			Particle next = getParticle(j, local0_start);
+			if(next.hash != p_hash) {
+				break;
+			}
+			float dist = distance(p.pos, next.pos);
+			float influence = viscositySmoothingKernel(dist);
+			viscosity_force += (next.vel - p.vel) * influence;
+		}
+		barrier();
+	}
+	
+	viscosity_force *= viscosity_strength;
+	
+	p_info.pred_pos = predicted_pos;
+	p_info.density = density;
+	p_info.near_density = near_density;
+	p_info.visc_force = viscosity_force;
+	
+	particleInfoData[global_id] = p_info;
 }
 
 

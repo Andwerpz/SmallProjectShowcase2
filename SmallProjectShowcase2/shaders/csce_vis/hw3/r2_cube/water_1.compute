@@ -31,12 +31,11 @@ int computeHash(int x, int y, int z) {
 	return abs(x * LUT_P4 + y * LUT_P5 + z * LUT_P6 + LUT_P7) % hash_mod;
 }
 
-int computeHash(ivec3 h) {
-	return computeHash(h.x, h.y, h.z);
-}
-
 int computeHash(vec3 pos) {
-	return computeHash(ivec3(floor(pos / smoothing_radius)));
+	int hash_x = int(pos.x / (smoothing_radius * 2.0));
+	int hash_y = int(pos.y / (smoothing_radius * 2.0));
+	int hash_z = int(pos.z / (smoothing_radius * 2.0));
+	return computeHash(hash_x, hash_y, hash_z);
 }
 
 void main() {

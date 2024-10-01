@@ -43,11 +43,12 @@ int computeHash(int x, int y, int z) {
 	return abs(x * LUT_P4 + y * LUT_P5 + z * LUT_P6 + LUT_P7) % hash_mod;
 }
 
+int computeHash(ivec3 h) {
+	return computeHash(h.x, h.y, h.z);
+}
+
 int computeHash(vec3 pos) {
-	int hash_x = int(pos.x / smoothing_radius);
-	int hash_y = int(pos.y / smoothing_radius);
-	int hash_z = int(pos.z / smoothing_radius);
-	return computeHash(hash_x, hash_y, hash_z);
+	return computeHash(ivec3(floor(pos / smoothing_radius)));
 }
 
 float densitySmoothingKernel(float dist) {
@@ -67,9 +68,9 @@ const int dz[27] = int[27](-1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1, 0, 1, -1,
 
 float computeDensity(vec3 pos) {
 	float density = 0;
-	int hash_x = int(pos.x / smoothing_radius);
-	int hash_y = int(pos.y / smoothing_radius);
-	int hash_z = int(pos.z / smoothing_radius);
+	int hash_x = int(floor(pos.x / smoothing_radius));
+	int hash_y = int(floor(pos.y / smoothing_radius));
+	int hash_z = int(floor(pos.z / smoothing_radius));
 	for(int i = 0; i < 27; i++){
 		int nx = hash_x + dx[i];
 		int ny = hash_y + dy[i];
@@ -90,9 +91,9 @@ float computeDensity(vec3 pos) {
 
 vec3 computeDensityGradient(vec3 pos) {
 	vec3 gradient = vec3(0);
-	int hash_x = int(pos.x / smoothing_radius);
-	int hash_y = int(pos.y / smoothing_radius);
-	int hash_z = int(pos.z / smoothing_radius);
+	int hash_x = int(floor(pos.x / smoothing_radius));
+	int hash_y = int(floor(pos.y / smoothing_radius));
+	int hash_z = int(floor(pos.z / smoothing_radius));
 	for(int i = 0; i < 27; i++){
 		int nx = hash_x + dx[i];
 		int ny = hash_y + dy[i];
