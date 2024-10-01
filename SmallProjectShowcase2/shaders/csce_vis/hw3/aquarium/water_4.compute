@@ -3,8 +3,8 @@
 layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 struct Particle {
-	vec3 pos;
-	vec3 vel;
+	vec2 pos;
+	vec2 vel;
 	int hash;
 };
 
@@ -17,9 +17,9 @@ layout(binding = 1) buffer hashLUTBuffer {
 };
 
 struct ParticleInfo {
-	vec3 pred_pos;
+	vec2 pred_pos;
+	vec2 visc_force;
 	float density;
-	vec3 visc_force;
 	float near_density;
 };	
 
@@ -31,11 +31,11 @@ shared Particle local_particle_data[gl_WorkGroupSize.x];
 shared ParticleInfo local_particle_info_data[gl_WorkGroupSize.x];
 
 uniform float dt;
-uniform vec3 gravity;
+uniform vec2 gravity;
 uniform int nr_particles;
 
-uniform vec3 bounds_min;
-uniform vec3 bounds_max;
+uniform vec2 bounds_min;
+uniform vec2 bounds_max;
 
 uniform float smoothing_radius;
 uniform int hash_mod;
@@ -44,8 +44,6 @@ uniform int LUT_P2;
 uniform int LUT_P3;
 uniform int LUT_P4;
 uniform int LUT_P5;
-uniform int LUT_P6;
-uniform int LUT_P7;
 
 uniform float density_smoothing_kernel_volume;
 uniform float near_density_smoothing_kernel_volume;
@@ -55,19 +53,18 @@ uniform float target_density;
 uniform float pressure_multiplier;
 uniform float near_pressure_multiplier;
 
-int computeHash(int x, int y, int z) {
+int computeHash(int x, int y) {
 	x += LUT_P1;
 	y += LUT_P2;
-	z += LUT_P3;
-	return abs(x * LUT_P4 + y * LUT_P5 + z * LUT_P6 + LUT_P7) % hash_mod;
+	return abs(x * LUT_P3 + y * LUT_P4 + LUT_P5) % hash_mod;
 }
 
-int computeHash(ivec3 h) {
-	return computeHash(h.x, h.y, h.z);
+int computeHash(ivec2 h) {
+	return computeHash(h.x, h.y);
 }
 
-int computeHash(vec3 pos) {
-	return computeHash(ivec3(floor(pos / smoothing_radius)));
+int computeHash(vec2 pos) {
+	return computeHash(ivec2(floor(pos / smoothing_radius)));
 }
 
 float densitySmoothingKernelSlope(float dist) {
@@ -105,16 +102,10 @@ vec2 calculateSharedPressure(vec2 d1, vec2 d2) {
 	return vec2((p1.x + p2.x) / 2.0, (p1.y + p2.y) / 2.0);
 }
 
-const ivec3 d_hpos[27] = ivec3[27] (
-	ivec3(1, 1, 1), ivec3(1, 1, 0), ivec3(1, 1, -1),
-	ivec3(1, 0, 1), ivec3(1, 0, 0), ivec3(1, 0, -1),
-	ivec3(1, -1, 1), ivec3(1, -1, 0), ivec3(1, -1, -1),
-	ivec3(0, 1, 1), ivec3(0, 1, 0), ivec3(0, 1, -1),
-	ivec3(0, 0, 1), ivec3(0, 0, 0), ivec3(0, 0, -1),
-	ivec3(0, -1, 1), ivec3(0, -1, 0), ivec3(0, -1, -1),
-	ivec3(-1, 1, 1), ivec3(-1, 1, 0), ivec3(-1, 1, -1),
-	ivec3(-1, 0, 1), ivec3(-1, 0, 0), ivec3(-1, 0, -1),
-	ivec3(-1, -1, 1), ivec3(-1, -1, 0), ivec3(-1, -1, -1)
+const ivec2 d_hpos[9] = ivec2[9] (
+	ivec2(1, 1), ivec2(1, 0), ivec2(1, -1),
+	ivec2(0, 1), ivec2(0, 0), ivec2(0, -1),
+	ivec2(-1, 1), ivec2(-1, 0), ivec2(-1, -1)
 );
 
 Particle getParticle(int ind, int local_particle_start) {
@@ -140,12 +131,12 @@ void main() {
 	ParticleInfo p_info = particleInfoData[global_id];
 	vec2 p_density = vec2(p_info.density, p_info.near_density);
 	
-	ivec3 p_hpos = ivec3(floor(p.pos / smoothing_radius));
-	ivec3 local0_hpos = ivec3(floor(particleData[local0_id].pos / smoothing_radius));
+	ivec2 p_hpos = ivec2(floor(p.pos / smoothing_radius));
+	ivec2 local0_hpos = ivec2(floor(particleData[local0_id].pos / smoothing_radius));
 	
 	//compute pressure force
-	vec3 pressure_force = vec3(0);
-	for(int i = 0; i < 27; i++){
+	vec2 pressure_force = vec2(0);
+	for(int i = 0; i < 9; i++){
 		//put stuff into local mem
 		int local0_hash = computeHash(local0_hpos + d_hpos[i]);
 		int local0_start = hashLUT[local0_hash];
@@ -171,9 +162,9 @@ void main() {
 			
 			vec2 next_density = vec2(next_info.density, next_info.near_density);
 			float dist = distance(p.pos, next.pos);
-			vec3 dir = p.pos - next.pos;
+			vec2 dir = p.pos - next.pos;
 			if(dist < 0.001){
-				dir = vec3(1, 0, 0);
+				dir = vec2(1, 0);
 			}
 			else {
 				dir /= dist;
@@ -187,9 +178,9 @@ void main() {
 	}
 	
 	
-	vec3 viscosity_force = p_info.visc_force;
-	vec3 gravity_force = gravity;
-	vec3 boundary_force = vec3(0);
+	vec2 viscosity_force = p_info.visc_force;
+	vec2 gravity_force = gravity;
+	vec2 boundary_force = vec2(0);
 	
 	//boundary clamping
 	{
@@ -209,39 +200,25 @@ void main() {
 			p.pos.y = bounds_max.y - 0.001;
 			p.vel.y *= -0.1;
 		}
-		if (p.pos.z < bounds_min.z + 0.001) {
-			p.pos.z = bounds_min.z + 0.001;
-			p.vel.z *= -0.1;
-		}
-		if (p.pos.z > bounds_max.z - 0.001) {
-			p.pos.z = bounds_max.z - 0.001;
-			p.vel.z *= -0.1;
-		}
 	}
 	
 	//boundary forces
 	{
 		if(p.pos.x - bounds_min.x < smoothing_radius) {
-			boundary_force -= nearDensitySmoothingKernelSlope(p.pos.x - bounds_min.x) * vec3(1, 0, 0);
+			boundary_force -= nearDensitySmoothingKernelSlope(p.pos.x - bounds_min.x) * vec2(1, 0);
 		}
 		if(bounds_max.x - p.pos.x < smoothing_radius) {
-			boundary_force -= nearDensitySmoothingKernelSlope(bounds_max.x - p.pos.x) * vec3(-1, 0, 0);
+			boundary_force -= nearDensitySmoothingKernelSlope(bounds_max.x - p.pos.x) * vec2(-1, 0);
 		}
 		if(p.pos.y - bounds_min.y < smoothing_radius) {
-			boundary_force -= nearDensitySmoothingKernelSlope(p.pos.y - bounds_min.y) * vec3(0, 1, 0);
+			boundary_force -= nearDensitySmoothingKernelSlope(p.pos.y - bounds_min.y) * vec2(0, 1);
 		}
 		if(bounds_max.y - p.pos.y < smoothing_radius) {
-			boundary_force -= nearDensitySmoothingKernelSlope(bounds_max.y - p.pos.y) * vec3(0, -1, 0);
-		}
-		if(p.pos.z - bounds_min.z < smoothing_radius) {
-			boundary_force -= nearDensitySmoothingKernelSlope(p.pos.z - bounds_min.z) * vec3(0, 0, 1);
-		}
-		if(bounds_max.z - p.pos.z < smoothing_radius) {
-			boundary_force -= nearDensitySmoothingKernelSlope(bounds_max.z - p.pos.z) * vec3(0, 0, -1);
+			boundary_force -= nearDensitySmoothingKernelSlope(bounds_max.y - p.pos.y) * vec2(0, -1);
 		}
 	}
 	
-	vec3 force = pressure_force + viscosity_force + gravity_force + boundary_force * 20;
+	vec2 force = pressure_force + viscosity_force + gravity_force + boundary_force * 20;
 	if(length(force) > 1000){
 		force = normalize(force) * 1000;
 	}

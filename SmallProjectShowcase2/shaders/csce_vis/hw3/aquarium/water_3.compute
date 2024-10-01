@@ -3,8 +3,8 @@
 layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 struct Particle {
-	vec3 pos;
-	vec3 vel;
+	vec2 pos;
+	vec2 vel;
 	int hash;
 };
 
@@ -17,9 +17,9 @@ layout(binding = 1) buffer hashLUTBuffer {
 };
 
 struct ParticleInfo {
-	vec3 pred_pos;
+	vec2 pred_pos;
+	vec2 visc_force;
 	float density;
-	vec3 visc_force;
 	float near_density;
 };	
 
@@ -39,8 +39,6 @@ uniform int LUT_P2;
 uniform int LUT_P3;
 uniform int LUT_P4;
 uniform int LUT_P5;
-uniform int LUT_P6;
-uniform int LUT_P7;
 
 uniform float density_smoothing_kernel_volume;
 uniform float near_density_smoothing_kernel_volume;
@@ -49,19 +47,18 @@ uniform float viscosity_smoothing_kernel_volume;
 uniform float viscosity_strength;
 uniform float predict_delta_time;
 
-int computeHash(int x, int y, int z) {
+int computeHash(int x, int y) {
 	x += LUT_P1;
 	y += LUT_P2;
-	z += LUT_P3;
-	return abs(x * LUT_P4 + y * LUT_P5 + z * LUT_P6 + LUT_P7) % hash_mod;
+	return abs(x * LUT_P3 + y * LUT_P4 + LUT_P5) % hash_mod;
 }
 
-int computeHash(ivec3 h) {
-	return computeHash(h.x, h.y, h.z);
+int computeHash(ivec2 h) {
+	return computeHash(h.x, h.y);
 }
 
-int computeHash(vec3 pos) {
-	return computeHash(ivec3(floor(pos / smoothing_radius)));
+int computeHash(vec2 pos) {
+	return computeHash(ivec2(floor(pos / smoothing_radius)));
 }
 
 float densitySmoothingKernel(float dist) {
@@ -85,16 +82,10 @@ float viscositySmoothingKernel(float dist) {
 	return ans;
 }
 
-const ivec3 d_hpos[27] = ivec3[27] (
-	ivec3(1, 1, 1), ivec3(1, 1, 0), ivec3(1, 1, -1),
-	ivec3(1, 0, 1), ivec3(1, 0, 0), ivec3(1, 0, -1),
-	ivec3(1, -1, 1), ivec3(1, -1, 0), ivec3(1, -1, -1),
-	ivec3(0, 1, 1), ivec3(0, 1, 0), ivec3(0, 1, -1),
-	ivec3(0, 0, 1), ivec3(0, 0, 0), ivec3(0, 0, -1),
-	ivec3(0, -1, 1), ivec3(0, -1, 0), ivec3(0, -1, -1),
-	ivec3(-1, 1, 1), ivec3(-1, 1, 0), ivec3(-1, 1, -1),
-	ivec3(-1, 0, 1), ivec3(-1, 0, 0), ivec3(-1, 0, -1),
-	ivec3(-1, -1, 1), ivec3(-1, -1, 0), ivec3(-1, -1, -1)
+const ivec2 d_hpos[9] = ivec2[9] (
+	ivec2(1, 1), ivec2(1, 0), ivec2(1, -1),
+	ivec2(0, 1), ivec2(0, 0), ivec2(0, -1),
+	ivec2(-1, 1), ivec2(-1, 0), ivec2(-1, -1)
 );
 
 Particle getParticle(int ind, int local_particle_start) {
@@ -110,18 +101,18 @@ void main() {
 	int local0_id = int(gl_WorkGroupID.x) * int(gl_WorkGroupSize.x);
 	
 	Particle p = particleData[global_id];
-	ParticleInfo p_info = ParticleInfo(vec3(0), 0, vec3(0), 0);
+	ParticleInfo p_info = ParticleInfo(vec2(0), vec2(0), 0, 0);
 	
-	vec3 predicted_pos = p.pos + p.vel * dt;
+	vec2 predicted_pos = p.pos + p.vel * dt;
 	float density = 0;
 	float near_density = 0;
-	vec3 viscosity_force = vec3(0);
+	vec2 viscosity_force = vec2(0);
 	
-	ivec3 p_hpos = ivec3(floor(p.pos / smoothing_radius));
-	ivec3 pred_hpos = ivec3(floor(predicted_pos / smoothing_radius));
-	ivec3 local0_hpos = ivec3(floor(particleData[local0_id].pos / smoothing_radius));
+	ivec2 p_hpos = ivec2(floor(p.pos / smoothing_radius));
+	ivec2 pred_hpos = ivec2(floor(predicted_pos / smoothing_radius));
+	ivec2 local0_hpos = ivec2(floor(particleData[local0_id].pos / smoothing_radius));
 	
-	for(int i = 0; i < 27; i++){
+	for(int i = 0; i < 9; i++){
 		//each thread looks at local_id 0 particle, and figures out the hash for that one
 		int local0_hash = computeHash(local0_hpos + d_hpos[i]);
 		int local0_start = hashLUT[local0_hash];

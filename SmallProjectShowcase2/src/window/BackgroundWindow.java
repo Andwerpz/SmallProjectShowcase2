@@ -5,6 +5,7 @@ import java.awt.Font;
 
 import csce_vis.hw1.HW1Window;
 import csce_vis.hw2.HW2Window;
+import csce_vis.hw3.HW3Aquarium;
 import csce_vis.hw3.HW3Window;
 import genetic_image_builder.GeneticImageBuilder;
 import hydraulic_terrain.HydraulicTerrainWindow;
@@ -363,6 +364,11 @@ public class BackgroundWindow extends Window {
 			}
 
 			case "Homework 3": {
+				AdjustableWindow window = new AdjustableWindow(new HW3Aquarium(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+			
+			case "Homework 3 3D": {
 				AdjustableWindow window = new AdjustableWindow(new HW3Window(x, y, width, height, null), BackgroundWindow.this);
 				break;
 			}
