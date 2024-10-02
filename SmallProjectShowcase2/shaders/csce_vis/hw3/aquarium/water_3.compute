@@ -4,6 +4,7 @@ layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 struct Particle {
 	vec2 pos;
+	vec2 pred_pos;
 	vec2 vel;
 	int hash;
 };
@@ -17,10 +18,9 @@ layout(binding = 1) buffer hashLUTBuffer {
 };
 
 struct ParticleInfo {
-	vec2 pred_pos;
-	vec2 visc_force;
-	float density;
-	float near_density;
+    vec2 visc_force;
+    float density;
+    float near_density;
 };	
 
 layout(binding = 2) buffer particleInfoBuffer {
@@ -45,7 +45,6 @@ uniform float near_density_smoothing_kernel_volume;
 uniform float viscosity_smoothing_kernel_volume;
 
 uniform float viscosity_strength;
-uniform float predict_delta_time;
 
 int computeHash(int x, int y) {
 	x += LUT_P1;
@@ -101,16 +100,15 @@ void main() {
 	int local0_id = int(gl_WorkGroupID.x) * int(gl_WorkGroupSize.x);
 	
 	Particle p = particleData[global_id];
-	ParticleInfo p_info = ParticleInfo(vec2(0), vec2(0), 0, 0);
+	ParticleInfo p_info = ParticleInfo(vec2(0), 0, 0);
 	
-	vec2 predicted_pos = p.pos + p.vel * dt;
 	float density = 0;
 	float near_density = 0;
 	vec2 viscosity_force = vec2(0);
 	
 	ivec2 p_hpos = ivec2(floor(p.pos / smoothing_radius));
-	ivec2 pred_hpos = ivec2(floor(predicted_pos / smoothing_radius));
-	ivec2 local0_hpos = ivec2(floor(particleData[local0_id].pos / smoothing_radius));
+	ivec2 pred_hpos = ivec2(floor(p.pred_pos / smoothing_radius));
+	ivec2 local0_hpos = ivec2(floor(particleData[local0_id].pred_pos / smoothing_radius));
 	
 	for(int i = 0; i < 9; i++){
 		//each thread looks at local_id 0 particle, and figures out the hash for that one
@@ -136,11 +134,25 @@ void main() {
 			if(next.hash != pred_hash) {
 				break;
 			}
-			density += densitySmoothingKernel(distance(predicted_pos, next.pos));
-			near_density += nearDensitySmoothingKernel(distance(predicted_pos, next.pos));
+			density += densitySmoothingKernel(distance(p.pred_pos, next.pred_pos));
+			near_density += nearDensitySmoothingKernel(distance(p.pred_pos, next.pred_pos));
 		}
 		
 		//viscosity
+		for(int j = pred_start; j < nr_particles; j++){
+			if(j == global_id){
+				continue;
+			}
+			Particle next = getParticle(j, local0_start);
+			if(next.hash != pred_hash) {
+				break;
+			}
+			float dist = distance(p.pred_pos, next.pred_pos);
+			float influence = viscositySmoothingKernel(dist);
+			viscosity_force += (next.vel - p.vel) * influence;
+		}
+		
+		/*
 		for(int j = p_start; j < nr_particles; j++){
 			if(j == global_id){
 				continue;
@@ -149,19 +161,19 @@ void main() {
 			if(next.hash != p_hash) {
 				break;
 			}
-			float dist = distance(p.pos, next.pos);
+			float dist = distance(p.pos, next.pred_pos);
 			float influence = viscositySmoothingKernel(dist);
 			viscosity_force += (next.vel - p.vel) * influence;
 		}
+		*/
 		barrier();
 	}
 	
 	viscosity_force *= viscosity_strength;
 	
-	p_info.pred_pos = predicted_pos;
+	p_info.visc_force = viscosity_force;
 	p_info.density = density;
 	p_info.near_density = near_density;
-	p_info.visc_force = viscosity_force;
 	
 	particleInfoData[global_id] = p_info;
 }

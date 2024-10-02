@@ -162,6 +162,7 @@ public class BackgroundWindow extends Window {
 			proj_window.addToList("Homework 1");
 			proj_window.addToList("Homework 2");
 			proj_window.addToList("Homework 3");
+			proj_window.addToList("Homework 3 3D");
 			break;
 		}
 
@@ -364,10 +365,10 @@ public class BackgroundWindow extends Window {
 			}
 
 			case "Homework 3": {
-				AdjustableWindow window = new AdjustableWindow(new HW3Aquarium(x, y, width, height, null), BackgroundWindow.this);
+				AdjustableWindow window = new AdjustableWindow(new HW3Aquarium(x, y, (int) (width * 1.5f), height, null), BackgroundWindow.this);
 				break;
 			}
-			
+
 			case "Homework 3 3D": {
 				AdjustableWindow window = new AdjustableWindow(new HW3Window(x, y, width, height, null), BackgroundWindow.this);
 				break;

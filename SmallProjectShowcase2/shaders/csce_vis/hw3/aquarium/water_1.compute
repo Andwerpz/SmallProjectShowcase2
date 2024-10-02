@@ -4,6 +4,7 @@ layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 struct Particle {
 	vec2 pos;
+	vec2 pred_pos;
 	vec2 vel;
 	int hash;
 };
@@ -21,6 +22,8 @@ uniform int LUT_P2;
 uniform int LUT_P3;
 uniform int LUT_P4;
 uniform int LUT_P5;
+
+uniform float predict_delta_time;
 
 int computeHash(int x, int y) {
 	x += LUT_P1;
@@ -40,10 +43,9 @@ void main() {
 	int particle_id = int(gl_GlobalInvocationID.x);
 	Particle p = particleData[particle_id];
 	
-	//update position
 	p.pos += p.vel * dt;
-	
-	p.hash = computeHash(p.pos);
+	p.pred_pos = p.pos + p.vel * predict_delta_time;
+	p.hash = computeHash(p.pred_pos);
 
 	particleData[particle_id] = p;
 }

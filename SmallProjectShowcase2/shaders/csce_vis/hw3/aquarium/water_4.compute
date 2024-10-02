@@ -4,6 +4,7 @@ layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 struct Particle {
 	vec2 pos;
+	vec2 pred_pos;
 	vec2 vel;
 	int hash;
 };
@@ -17,11 +18,10 @@ layout(binding = 1) buffer hashLUTBuffer {
 };
 
 struct ParticleInfo {
-	vec2 pred_pos;
-	vec2 visc_force;
-	float density;
-	float near_density;
-};	
+    vec2 visc_force;
+    float density;
+    float near_density;
+};
 
 layout(binding = 2) buffer particleInfoBuffer {
 	ParticleInfo[] particleInfoData;
@@ -131,8 +131,8 @@ void main() {
 	ParticleInfo p_info = particleInfoData[global_id];
 	vec2 p_density = vec2(p_info.density, p_info.near_density);
 	
-	ivec2 p_hpos = ivec2(floor(p.pos / smoothing_radius));
-	ivec2 local0_hpos = ivec2(floor(particleData[local0_id].pos / smoothing_radius));
+	ivec2 pred_hpos = ivec2(floor(p.pred_pos / smoothing_radius));
+	ivec2 local0_hpos = ivec2(floor(particleData[local0_id].pred_pos / smoothing_radius));
 	
 	//compute pressure force
 	vec2 pressure_force = vec2(0);
@@ -148,21 +148,21 @@ void main() {
 		barrier();
 		
 		//compute contribution to pressure force
-		int p_hash = computeHash(p_hpos + d_hpos[i]);
-		int p_start = hashLUT[p_hash];
-		for(int j = p_start; j < nr_particles; j++){
+		int pred_hash = computeHash(pred_hpos + d_hpos[i]);
+		int pred_start = hashLUT[pred_hash];
+		for(int j = pred_start; j < nr_particles; j++){
 			if(j == global_id) {
 				continue;
 			}
 			Particle next = getParticle(j, local0_start);
 			ParticleInfo next_info = getParticleInfo(j, local0_start);
-			if(next.hash != p_hash) {
+			if(next.hash != pred_hash) {
 				break;
 			}
 			
 			vec2 next_density = vec2(next_info.density, next_info.near_density);
-			float dist = distance(p.pos, next.pos);
-			vec2 dir = p.pos - next.pos;
+			float dist = distance(p.pred_pos, next.pred_pos);
+			vec2 dir = p.pred_pos - next.pred_pos;
 			if(dist < 0.001){
 				dir = vec2(1, 0);
 			}
@@ -218,10 +218,7 @@ void main() {
 		}
 	}
 	
-	vec2 force = pressure_force + viscosity_force + gravity_force + boundary_force * 20;
-	if(length(force) > 1000){
-		force = normalize(force) * 1000;
-	}
+	vec2 force = pressure_force + viscosity_force + gravity_force + boundary_force;
 	p.vel += force * dt;
 	
 	particleData[global_id] = p;

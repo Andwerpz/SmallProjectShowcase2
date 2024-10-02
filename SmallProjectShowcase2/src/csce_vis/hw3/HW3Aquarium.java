@@ -1,30 +1,35 @@
 package csce_vis.hw3;
 
-import static org.lwjgl.opengl.GL11.GL_DEPTH_TEST;
-import static org.lwjgl.opengl.GL11.GL_POINTS;
-import static org.lwjgl.opengl.GL11.glDisable;
-import static org.lwjgl.opengl.GL11.glDrawArrays;
-import static org.lwjgl.opengl.GL11.glPointSize;
-import static org.lwjgl.opengl.GL11.glViewport;
-import static org.lwjgl.opengl.GL15.GL_DYNAMIC_DRAW;
-import static org.lwjgl.opengl.GL15.GL_QUERY_RESULT;
-import static org.lwjgl.opengl.GL15.glBeginQuery;
-import static org.lwjgl.opengl.GL15.glEndQuery;
-import static org.lwjgl.opengl.GL15.glGenQueries;
-import static org.lwjgl.opengl.GL15.glGetQueryObjectuiv;
-import static org.lwjgl.opengl.GL33.GL_TIME_ELAPSED;
-import static org.lwjgl.opengl.GL42.glMemoryBarrier;
-import static org.lwjgl.opengl.GL43.GL_COMPUTE_SHADER;
-import static org.lwjgl.opengl.GL43.GL_SHADER_STORAGE_BARRIER_BIT;
-import static org.lwjgl.opengl.GL43.glDispatchCompute;
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.*;
+import static org.lwjgl.opengl.GL13.*;
+import static org.lwjgl.opengl.GL14.*;
+import static org.lwjgl.opengl.GL15.*;
+import static org.lwjgl.opengl.GL20.*;
+import static org.lwjgl.opengl.GL21.*;
+import static org.lwjgl.opengl.GL30.*;
+import static org.lwjgl.opengl.GL31.*;
+import static org.lwjgl.opengl.GL32.*;
+import static org.lwjgl.opengl.GL33.*;
+import static org.lwjgl.opengl.GL40.*;
+import static org.lwjgl.opengl.GL41.*;
+import static org.lwjgl.opengl.GL42.*;
+import static org.lwjgl.opengl.GL43.*;
+import static org.lwjgl.opengl.GL44.*;
+import static org.lwjgl.opengl.GL45.*;
+import static org.lwjgl.opengl.GL46.*;
 
 import java.util.Stack;
+
+import org.lwjgl.glfw.GLFW;
 
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Shader;
 import lwjglengine.graphics.ShaderStorageBuffer;
+import lwjglengine.graphics.Texture;
 import lwjglengine.main.Main;
 import lwjglengine.player.Camera;
+import lwjglengine.screen.ScreenQuad;
 import lwjglengine.util.ShaderUtils;
 import lwjglengine.window.Window;
 import myutils.math.Mat4;
@@ -35,37 +40,49 @@ import myutils.math.Vec3;
 public class HW3Aquarium extends Window {
 
 	//TODO
-	// - implement sph in 2D
-	// - add foam / bubbles
+	// - better water rendering
+	//   - foam / bubbles : https://cg.informatik.uni-freiburg.de/publications/2012_CGI_sprayFoamBubbles.pdf
+	//   - don't really want to add diffuse particles, perhaps just fake it by giving each water particle a 'foam' attribute
+	//     and let the foam advect around that way. 
+	//   - bake in normals to edges of water? make the water 'pop out' more
 	// - add fish
-	
+
+	//ideas to speed up density portion of rendering:
+	// - can use compute shader to group batches of pixels and do local memory trick. 
+	// - can make these workgroup relatively large, maybe 32x32 pixels. Therefore, can load many particles into local memory. 
+	// - can also ensure that all pixels in a workgroup belong to same hash cell. Need to set renderScale accordingly. 
+
+	//ideas to improve water attenuation:
+	// - current attenutation looks bad because light usually scatters in water
+	// - i shortened it, it looks fine now
+	// - maybe apply a gaussian blur to it?
+
 	private boolean printUpdateTimes = false;
-	private boolean printRenderTimes = true;
-	private boolean doUpdate = true;
+	private boolean printRenderTimes = false;
 
 	private int timeAvgAmt = 100;
 	private Stack<Float> updateTimes = new Stack<>();
 	private Stack<Float> renderTimes = new Stack<>();
-	
-	private static final int NR_PARTICLES_LOG2 = 14; //must be \geq 10 due to bitonic sort
+
+	private static final int NR_PARTICLES_LOG2 = 15; //must be \geq 10 due to bitonic sort
 	private static final int NR_PARTICLES = (1 << NR_PARTICLES_LOG2);
-	
+
 	//used to sample properties from the point cloud
-	private static float smoothingRadius = 1f;
+	private static float smoothingRadius = 3f;
 	//(S - r)^3
 	private static float densitySmoothingKernelVolume = (float) (Math.PI * Math.pow(smoothingRadius, 5) / 10.0);
 	//(S - r)^6
 	private static float nearDensitySmoothingKernelVolume = (float) (Math.PI * Math.pow(smoothingRadius, 8) / 28.0);
 	//(S^2 - r^2)^3
 	private static float viscositySmoothingKernelVolume = (float) (Math.PI * Math.pow(smoothingRadius, 8) / 4.0);
-	
+
 	private static int spatialWorkgroupSz = 32;
-	
+
 	private Shader waterCompute1;
 	private Shader waterCompute21, waterCompute22;
 	private Shader waterCompute3;
 	private Shader waterCompute4;
-	
+
 	private static final int HASH_LUT_SIZE = (1 << 20);
 	private static final int HASH_MOD = (int) (1e6 + 7);
 	private static final int LUT_P1 = 8443;
@@ -73,83 +90,110 @@ public class HW3Aquarium extends Window {
 	private static final int LUT_P3 = 251527;
 	private static final int LUT_P4 = 6037;
 	private static final int LUT_P5 = 1721;
-	
+
 	private ShaderStorageBuffer hashLUTBuffer;
-	
-	private static final int SIZEOF_PARTICLE = 24;
-	private static final int SIZEOF_PARTICLE_INFO = 24;
-	
+
+	private static final int SIZEOF_PARTICLE = 32;
+	private static final int SIZEOF_PARTICLE_INFO = 16;
+
 	/*
-	// 24 bytes?
+	// 32 bytes
 	struct Particle {
 		vec2 pos;
+		vec2 pred_pos;
 		vec2 vel;
 		int hash;
 	};
 	
-	// 24 bytes
+	// 16 bytes
 	struct ParticleInfo {
-	    vec2 pred_pos;
 	    vec2 visc_force;
 	    float density;
 	    float near_density;
 	};
 	*/
 	class Particle {
-		Vec2 pos, vel;
+		Vec2 pos, pred_pos, vel;
 		int hash;
 
 		public Particle(Vec2 _pos) {
 			this.pos = new Vec2(_pos);
+			this.pred_pos = new Vec2(0);
 			this.vel = new Vec2(0);
 			this.hash = -1;
-		}
-
-		public Particle(int[] buffer, int offset) {
-			this.pos = new Vec2(Float.intBitsToFloat(buffer[offset + 0]), Float.intBitsToFloat(buffer[offset + 1]));
-			this.vel = new Vec2(Float.intBitsToFloat(buffer[offset + 2]), Float.intBitsToFloat(buffer[offset + 3]));
-			this.hash = buffer[offset + 4];
 		}
 
 		public void writeToBuffer(int[] buffer, int offset) {
 			buffer[offset + 0] = Float.floatToIntBits(pos.x);
 			buffer[offset + 1] = Float.floatToIntBits(pos.y);
 
-			buffer[offset + 2] = Float.floatToIntBits(vel.x);
-			buffer[offset + 3] = Float.floatToIntBits(vel.y);
+			buffer[offset + 2] = Float.floatToIntBits(pred_pos.x);
+			buffer[offset + 3] = Float.floatToIntBits(pred_pos.y);
 
-			buffer[offset + 4] = hash;
+			buffer[offset + 4] = Float.floatToIntBits(vel.x);
+			buffer[offset + 5] = Float.floatToIntBits(vel.y);
+
+			buffer[offset + 6] = hash;
 		}
 	}
-	
+
 	private ShaderStorageBuffer particleBuffer, particleInfoBuffer;
-	
-	private Vec2 gravity = new Vec2(0, -9.8);
-	
+
+	private Vec2 gravity = new Vec2(0, -20);
+
 	private float viscosityStrength = 1f;
-	public float pressureMultiplier = 256f;
+	public float pressureMultiplier = 50f;
 	public float nearPressureMultiplier = 0.1f;
-	public float targetDensity = 16f;
-	
-	private int renderScale = 20;	//how many pixels on screen is one unit in particle space
-	private Vec2 bbPos, bbDimensions;	//update this in update loop
-	
-	private Shader particleShader;
-	
+	public float targetDensity = 2f;
+
+	private float predictDeltaTime = 16.0f / 1000.0f;
+
+	private int renderScale = 5; //how many pixels on screen is one unit in particle space
+	private Vec2 bbPos, bbDimensions; //update this in update loop
+
+	private Shader particleShader, densityShader, waterColorShader;
+	private Shader shadowShader, gaussianShader, backgroundShader;
+
+	private float timeDebt = 0;
+
+	private Framebuffer densityBuffer;
+	private Texture densityMap;
+	private Texture normalMap;
+
+	private Framebuffer shadowBuffer;
+	private Texture shadowMap; //higher value is more shadows
+
+	private Framebuffer gaussianBlurBuffer;
+	private Texture gaussianBlurMap;
+
 	public HW3Aquarium(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
 		this.init();
 	}
-	
+
 	private void init() {
 		this.waterCompute1 = ShaderUtils.createShader("/csce_vis/hw3/aquarium/water_1.compute", GL_COMPUTE_SHADER);
 		this.waterCompute21 = ShaderUtils.createShader("/csce_vis/hw3/aquarium/water_2_1.compute", GL_COMPUTE_SHADER);
 		this.waterCompute22 = ShaderUtils.createShader("/csce_vis/hw3/aquarium/water_2_2.compute", GL_COMPUTE_SHADER);
 		this.waterCompute3 = ShaderUtils.createShader("/csce_vis/hw3/aquarium/water_3.compute", GL_COMPUTE_SHADER);
 		this.waterCompute4 = ShaderUtils.createShader("/csce_vis/hw3/aquarium/water_4.compute", GL_COMPUTE_SHADER);
-		
+
 		this.particleShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/particle.vert", "/csce_vis/hw3/aquarium/particle.frag");
-	
+		this.densityShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/density.vert", "/csce_vis/hw3/aquarium/density.frag");
+		this.waterColorShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/water_color.vert", "/csce_vis/hw3/aquarium/water_color.frag");
+		this.shadowShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/shadow.vert", "/csce_vis/hw3/aquarium/shadow.frag");
+		this.gaussianShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/gaussian.vert", "/csce_vis/hw3/aquarium/gaussian.frag");
+		this.backgroundShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/background.vert", "/csce_vis/hw3/aquarium/background.frag");
+
+		this.gaussianShader.setUniform1i("color_map", 0);
+
+		this.shadowShader.setUniform1i("density_map", 0);
+
+		this.waterColorShader.setUniform1i("density_map", 0);
+		this.waterColorShader.setUniform1i("normal_map", 1);
+
+		this.backgroundShader.setUniform1i("shadow_map", 0);
+
 		this.particleBuffer = new ShaderStorageBuffer(NR_PARTICLES * SIZEOF_PARTICLE);
 		this.particleBuffer.setUsage(GL_DYNAMIC_DRAW);
 
@@ -164,10 +208,10 @@ public class HW3Aquarium extends Window {
 			int[] data = new int[HASH_LUT_SIZE];
 			this.hashLUTBuffer.setSubData(data, 0);
 		}
-		
+
 		this.setBB();
 		this.resetParticles();
-		
+
 		this._resize();
 	}
 
@@ -176,23 +220,75 @@ public class HW3Aquarium extends Window {
 		this.particleBuffer.kill();
 		this.particleInfoBuffer.kill();
 		this.hashLUTBuffer.kill();
+
+		this.waterCompute1.kill();
+		this.waterCompute21.kill();
+		this.waterCompute22.kill();
+		this.waterCompute3.kill();
+		this.waterCompute4.kill();
+
+		this.particleShader.kill();
+		this.densityShader.kill();
+		this.waterColorShader.kill();
+		this.shadowShader.kill();
+		this.gaussianShader.kill();
+		this.backgroundShader.kill();
+
+		this.densityBuffer.kill();
+		this.shadowBuffer.kill();
+		this.gaussianBlurBuffer.kill();
 	}
 
 	@Override
 	protected void _resize() {
-		
+		if (this.densityBuffer != null) {
+			this.densityBuffer.kill();
+			this.densityBuffer = null;
+		}
+
+		if (this.shadowBuffer != null) {
+			this.shadowBuffer.kill();
+			this.shadowBuffer = null;
+		}
+
+		if (this.gaussianBlurBuffer != null) {
+			this.gaussianBlurBuffer.kill();
+			this.gaussianBlurBuffer = null;
+		}
+
+		if (this.getWidth() > 0 && this.getHeight() > 0) {
+			this.densityBuffer = new Framebuffer(this.getWidth(), this.getHeight());
+			this.densityMap = new Texture(this.getWidth(), this.getHeight(), GL_RGBA32F, GL_RGBA, GL_FLOAT);
+			this.normalMap = new Texture(this.getWidth(), this.getHeight(), GL_RGBA32F, GL_RGBA, GL_FLOAT);
+			this.densityBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.densityMap.getID());
+			this.densityBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, this.normalMap.getID());
+			this.densityBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 });
+			this.densityBuffer.isComplete();
+
+			this.shadowBuffer = new Framebuffer(this.getWidth(), this.getHeight());
+			this.shadowMap = new Texture(this.getWidth(), this.getHeight(), GL_RGBA32F, GL_RGBA, GL_FLOAT);
+			this.shadowBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.shadowMap.getID());
+			this.shadowBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
+			this.shadowBuffer.isComplete();
+
+			this.gaussianBlurBuffer = new Framebuffer(this.getWidth(), this.getHeight());
+			this.gaussianBlurMap = new Texture(this.getWidth(), this.getHeight(), GL_RGBA32F, GL_RGBA, GL_FLOAT);
+			this.gaussianBlurBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.gaussianBlurMap.getID());
+			this.gaussianBlurBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
+			this.gaussianBlurBuffer.isComplete();
+		}
 	}
 
 	@Override
 	public String getDefaultTitle() {
 		return "Homework 3";
 	}
-	
+
 	private void setBB() {
 		this.bbPos = this.getGlobalOffset().mul(1.0 / this.renderScale);
 		this.bbDimensions = new Vec2(this.getWidth(), this.getHeight()).mul(1.0 / this.renderScale);
 	}
-	
+
 	private Mat4 getPrMatrix() {
 		float left = this.bbPos.x;
 		float right = left + this.bbDimensions.x;
@@ -202,10 +298,10 @@ public class HW3Aquarium extends Window {
 		float far = 1000;
 		return Mat4.orthographic(left, right, bottom, top, near, far);
 	}
-	
+
 	private void resetParticles() {
 		int[] data = new int[NR_PARTICLES * SIZEOF_PARTICLE / 4];
-		for(int i = 0; i < NR_PARTICLES; i++) {
+		for (int i = 0; i < NR_PARTICLES; i++) {
 			Vec2 pos = MathUtils.random(new Vec2(0), this.bbDimensions);
 			pos.addi(this.bbPos);
 			Particle p = new Particle(pos);
@@ -213,11 +309,8 @@ public class HW3Aquarium extends Window {
 		}
 		this.particleBuffer.setSubData(data, 0);
 	}
-	
-	private void waterUpdate() {
-		float dt = Main.getDeltaSeconds();
-		dt = Math.min(16.0f / 1000.0f, dt);
 
+	private void waterUpdate(float dt) {
 		// -- PHASE 1 --
 		//update position due to velocity, compute hashes
 		{
@@ -232,13 +325,14 @@ public class HW3Aquarium extends Window {
 			this.waterCompute1.setUniform1i("LUT_P4", LUT_P4);
 			this.waterCompute1.setUniform1i("LUT_P5", LUT_P5);
 
+			this.waterCompute1.setUniform1f("predict_delta_time", this.predictDeltaTime);
+
 			this.particleBuffer.bindToBase(0);
 
 			glDispatchCompute(NR_PARTICLES / 32, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 		}
-		
-		
+
 		// -- PHASE 2.1 -- 
 		//sort particles according to their hashes using bitonic merge sort
 		//currently, have a mix of local and global sorting. Local sorting under 1024 elements, and global sorting past that. 
@@ -281,7 +375,7 @@ public class HW3Aquarium extends Window {
 				glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 			}
 		}
-		
+
 		// -- PHASE 2.2 -- 
 		//generate hash lookup tables. For each hash, will save index at which particles belonging to that hash start
 		//since hashes are sorted, can just see if current hash is unequal to previous hash.
@@ -291,7 +385,7 @@ public class HW3Aquarium extends Window {
 			this.particleBuffer.bindToBase(0);
 			this.hashLUTBuffer.bindToBase(1);
 
-			glDispatchCompute(NR_PARTICLES, 1, 1);
+			glDispatchCompute(NR_PARTICLES / 32, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 		}
 
@@ -324,7 +418,7 @@ public class HW3Aquarium extends Window {
 			glDispatchCompute(NR_PARTICLES / spatialWorkgroupSz, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 		}
-		
+
 		// -- PHASE 4 --
 		//compute pressure forces. apply all forces to particles
 		{
@@ -365,37 +459,147 @@ public class HW3Aquarium extends Window {
 	@Override
 	protected void _update() {
 		this.setBB();
-		
-		int time_query = -1;
-		if (this.printUpdateTimes) {
-			time_query = glGenQueries();
-			glBeginQuery(GL_TIME_ELAPSED, time_query);
-		}
 
-		this.waterUpdate();
+		float dt = 8.0f / 1000.0f;
+		this.timeDebt += Main.getDeltaSeconds() * 2;
 
-		if (this.printUpdateTimes) {
-			glEndQuery(GL_TIME_ELAPSED);
-			int[] time_elapsed_res = new int[1];
-			glGetQueryObjectuiv(time_query, GL_QUERY_RESULT, time_elapsed_res);
-			this.updateTimes.push((float) (time_elapsed_res[0] / 1000000.0));
+		this.timeDebt = Math.min(this.timeDebt, 100.0f / 1000.0f);
 
-			if (this.updateTimes.size() == this.timeAvgAmt) {
-				float avg = 0;
-				while (this.updateTimes.size() != 0) {
-					avg += this.updateTimes.pop();
+		while (this.timeDebt > dt) {
+			this.timeDebt -= dt;
+
+			int time_query = -1;
+			if (this.printUpdateTimes) {
+				time_query = glGenQueries();
+				glBeginQuery(GL_TIME_ELAPSED, time_query);
+			}
+
+			this.waterUpdate(dt);
+
+			if (this.printUpdateTimes) {
+				glEndQuery(GL_TIME_ELAPSED);
+				int[] time_elapsed_res = new int[1];
+				glGetQueryObjectuiv(time_query, GL_QUERY_RESULT, time_elapsed_res);
+				this.updateTimes.push((float) (time_elapsed_res[0] / 1000000.0));
+
+				if (this.updateTimes.size() == this.timeAvgAmt) {
+					float avg = 0;
+					while (this.updateTimes.size() != 0) {
+						avg += this.updateTimes.pop();
+					}
+					avg /= this.timeAvgAmt;
+					System.out.println("Average last " + this.timeAvgAmt + " update times : " + avg);
 				}
-				avg /= this.timeAvgAmt;
-				System.out.println("Average last " + this.timeAvgAmt + " update times : " + avg);
 			}
 		}
 	}
-	
+
+	private void gaussianBlur5x5(Texture t) {
+		this.gaussianBlurBuffer.bind();
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		this.gaussianShader.enable();
+		this.gaussianShader.setUniform1f("window_width", this.getWidth());
+		this.gaussianShader.setUniform1f("window_height", this.getHeight());
+
+		t.bind(GL_TEXTURE0);
+
+		glViewport(0, 0, this.getWidth(), this.getHeight());
+		ScreenQuad.screenQuad.render();
+	}
+
+	private void waterRenderPipelineV1(Framebuffer outputBuffer) {
+
+		//clear buffer
+		{
+			this.densityBuffer.bind();
+			glClear(GL_COLOR_BUFFER_BIT);
+
+			this.shadowBuffer.bind();
+			glClear(GL_COLOR_BUFFER_BIT);
+		}
+
+		//render water density
+		{
+			this.densityBuffer.bind();
+
+			this.densityShader.enable();
+			this.densityShader.setUniform1i("nr_particles", NR_PARTICLES);
+			this.densityShader.setUniform1f("smoothing_radius", smoothingRadius);
+			this.densityShader.setUniform1i("hash_mod", HASH_MOD);
+			this.densityShader.setUniform1i("LUT_P1", LUT_P1);
+			this.densityShader.setUniform1i("LUT_P2", LUT_P2);
+			this.densityShader.setUniform1i("LUT_P3", LUT_P3);
+			this.densityShader.setUniform1i("LUT_P4", LUT_P4);
+			this.densityShader.setUniform1i("LUT_P5", LUT_P5);
+
+			this.densityShader.setUniform1f("window_width", this.getWidth());
+			this.densityShader.setUniform1f("window_height", this.getHeight());
+			this.densityShader.setUniform1f("render_scale", this.renderScale);
+			this.densityShader.setUniform2f("window_bl_pos", this.bbPos);
+
+			this.densityShader.setUniform1f("density_threshold", this.targetDensity);
+
+			this.densityShader.setUniform1f("density_smoothing_kernel_volume", densitySmoothingKernelVolume);
+			this.densityShader.setUniform1f("near_density_smoothing_kernel_volume", nearDensitySmoothingKernelVolume);
+
+			glViewport(0, 0, this.getWidth(), this.getHeight());
+			ScreenQuad.screenQuad.render();
+		}
+
+		//render shadows
+		{
+			this.shadowBuffer.bind();
+
+			this.shadowShader.enable();
+			this.shadowShader.setUniform1f("window_width", this.getWidth());
+			this.shadowShader.setUniform1f("window_height", this.getHeight());
+
+			this.densityMap.bind(GL_TEXTURE0);
+
+			glViewport(0, 0, this.getWidth(), this.getHeight());
+			ScreenQuad.screenQuad.render();
+
+			//gaussian blur the shadows
+			this.gaussianBlur5x5(this.shadowMap);
+		}
+
+		//render background
+		{
+			outputBuffer.bind();
+
+			this.backgroundShader.enable();
+			this.backgroundShader.setUniform1f("window_width", this.getWidth());
+			this.backgroundShader.setUniform1f("window_height", this.getHeight());
+
+			this.gaussianBlurMap.bind(GL_TEXTURE0);
+
+			glViewport(0, 0, this.getWidth(), this.getHeight());
+			ScreenQuad.screenQuad.render();
+		}
+
+		//render water color + attenuation due to water
+		{
+			outputBuffer.bind();
+
+			this.waterColorShader.enable();
+			this.waterColorShader.setUniform1f("window_width", this.getWidth());
+			this.waterColorShader.setUniform1f("window_height", this.getHeight());
+
+			this.densityMap.bind(GL_TEXTURE0);
+			this.normalMap.bind(GL_TEXTURE1);
+
+			glViewport(0, 0, this.getWidth(), this.getHeight());
+			ScreenQuad.screenQuad.render();
+		}
+
+	}
+
 	private void waterRenderPipelineV0(Framebuffer outputBuffer) {
 		Mat4 pr_matrix = this.getPrMatrix();
-		
+
 		outputBuffer.bind();
-		
+
 		this.particleShader.enable();
 		this.particleShader.setUniformMat4("pr_matrix", pr_matrix);
 
@@ -415,7 +619,7 @@ public class HW3Aquarium extends Window {
 			glBeginQuery(GL_TIME_ELAPSED, time_query);
 		}
 
-		this.waterRenderPipelineV0(outputBuffer);
+		this.waterRenderPipelineV1(outputBuffer);
 
 		if (this.printRenderTimes) {
 			glEndQuery(GL_TIME_ELAPSED);
@@ -484,8 +688,11 @@ public class HW3Aquarium extends Window {
 
 	@Override
 	protected void _keyPressed(int key) {
-		// TODO Auto-generated method stub
-
+		switch (key) {
+		case GLFW.GLFW_KEY_R:
+			this.resetParticles();
+			break;
+		}
 	}
 
 	@Override

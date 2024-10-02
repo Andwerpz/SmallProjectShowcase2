@@ -2,6 +2,7 @@
 
 struct Particle {
 	vec2 pos;
+	vec2 pred_pos;
 	vec2 vel;
 	int hash;
 };
