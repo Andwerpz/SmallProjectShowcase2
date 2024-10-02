@@ -43,6 +43,12 @@ void main() {
 	int particle_id = int(gl_GlobalInvocationID.x);
 	Particle p = particleData[particle_id];
 	
+	//check if we need to reset this particle
+	if(isinf(p.pos.x) || isnan(p.pos.x) || isinf(p.vel.x) || isnan(p.vel.x)) {
+		p.pos = vec2(0);
+		p.vel = vec2(0);
+	}
+	
 	p.pos += p.vel * dt;
 	p.pred_pos = p.pos + p.vel * predict_delta_time;
 	p.hash = computeHash(p.pred_pos);

@@ -31,6 +31,7 @@ import lwjglengine.main.Main;
 import lwjglengine.player.Camera;
 import lwjglengine.screen.ScreenQuad;
 import lwjglengine.util.ShaderUtils;
+import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.Window;
 import myutils.math.Mat4;
 import myutils.math.MathUtils;
@@ -64,7 +65,7 @@ public class HW3Aquarium extends Window {
 	private Stack<Float> updateTimes = new Stack<>();
 	private Stack<Float> renderTimes = new Stack<>();
 
-	private static final int NR_PARTICLES_LOG2 = 15; //must be \geq 10 due to bitonic sort
+	private static final int NR_PARTICLES_LOG2 = 12; //must be \geq 10 due to bitonic sort
 	private static final int NR_PARTICLES = (1 << NR_PARTICLES_LOG2);
 
 	//used to sample properties from the point cloud
@@ -139,13 +140,6 @@ public class HW3Aquarium extends Window {
 
 	private ShaderStorageBuffer particleBuffer, particleInfoBuffer;
 
-	private Vec2 gravity = new Vec2(0, -20);
-
-	private float viscosityStrength = 1f;
-	public float pressureMultiplier = 50f;
-	public float nearPressureMultiplier = 0.1f;
-	public float targetDensity = 2f;
-
 	private float predictDeltaTime = 16.0f / 1000.0f;
 
 	private int renderScale = 5; //how many pixels on screen is one unit in particle space
@@ -165,6 +159,47 @@ public class HW3Aquarium extends Window {
 
 	private Framebuffer gaussianBlurBuffer;
 	private Texture gaussianBlurMap;
+	
+	public SimulationSettings settings = new SimulationSettings();
+	
+	public class SimulationSettings {
+		public Vec2 gravity = new Vec2(0, -20);
+		public float viscosityStrength = 1f;
+		public float pressureMultiplier = 50f;
+		public float nearPressureMultiplier = 0.1f;
+		public float targetDensity = 2f;
+		
+		public Vec2 getGravity() {
+			return gravity;
+		}
+		public void setGravity(Vec2 gravity) {
+			this.gravity = gravity;
+		}
+		public float getViscosityStrength() {
+			return viscosityStrength;
+		}
+		public void setViscosityStrength(float viscosityStrength) {
+			this.viscosityStrength = viscosityStrength;
+		}
+		public float getPressureMultiplier() {
+			return pressureMultiplier;
+		}
+		public void setPressureMultiplier(float pressureMultiplier) {
+			this.pressureMultiplier = pressureMultiplier;
+		}
+		public float getNearPressureMultiplier() {
+			return nearPressureMultiplier;
+		}
+		public void setNearPressureMultiplier(float nearPressureMultiplier) {
+			this.nearPressureMultiplier = nearPressureMultiplier;
+		}
+		public float getTargetDensity() {
+			return targetDensity;
+		}
+		public void setTargetDensity(float targetDensity) {
+			this.targetDensity = targetDensity;
+		}
+	}
 
 	public HW3Aquarium(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
@@ -202,6 +237,9 @@ public class HW3Aquarium extends Window {
 
 		this.hashLUTBuffer = new ShaderStorageBuffer(HASH_LUT_SIZE * 4);
 		this.hashLUTBuffer.setUsage(GL_DYNAMIC_DRAW);
+		
+		ObjectEditorWindow settings_window = new ObjectEditorWindow(this.settings);
+		this.addChildAdjWindow(settings_window);
 
 		//initialize every element of LUT to 0
 		{
@@ -413,7 +451,7 @@ public class HW3Aquarium extends Window {
 			this.waterCompute3.setUniform1f("near_density_smoothing_kernel_volume", nearDensitySmoothingKernelVolume);
 			this.waterCompute3.setUniform1f("viscosity_smoothing_kernel_volume", viscositySmoothingKernelVolume);
 
-			this.waterCompute3.setUniform1f("viscosity_strength", this.viscosityStrength);
+			this.waterCompute3.setUniform1f("viscosity_strength", settings.viscosityStrength);
 
 			glDispatchCompute(NR_PARTICLES / spatialWorkgroupSz, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -429,7 +467,7 @@ public class HW3Aquarium extends Window {
 			this.particleInfoBuffer.bindToBase(2);
 
 			this.waterCompute4.setUniform1f("dt", dt);
-			this.waterCompute4.setUniform2f("gravity", this.gravity);
+			this.waterCompute4.setUniform2f("gravity", settings.gravity);
 			this.waterCompute4.setUniform1i("nr_particles", NR_PARTICLES);
 
 			this.waterCompute4.setUniform2f("bounds_min", this.bbPos);
@@ -447,9 +485,9 @@ public class HW3Aquarium extends Window {
 			this.waterCompute4.setUniform1f("near_density_smoothing_kernel_volume", nearDensitySmoothingKernelVolume);
 			this.waterCompute4.setUniform1f("viscosity_smoothing_kernel_volume", viscositySmoothingKernelVolume);
 
-			this.waterCompute4.setUniform1f("target_density", this.targetDensity);
-			this.waterCompute4.setUniform1f("pressure_multiplier", this.pressureMultiplier);
-			this.waterCompute4.setUniform1f("near_pressure_multiplier", this.nearPressureMultiplier);
+			this.waterCompute4.setUniform1f("target_density", settings.targetDensity);
+			this.waterCompute4.setUniform1f("pressure_multiplier", settings.pressureMultiplier);
+			this.waterCompute4.setUniform1f("near_pressure_multiplier", settings.nearPressureMultiplier);
 
 			glDispatchCompute(NR_PARTICLES / spatialWorkgroupSz, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -538,7 +576,7 @@ public class HW3Aquarium extends Window {
 			this.densityShader.setUniform1f("render_scale", this.renderScale);
 			this.densityShader.setUniform2f("window_bl_pos", this.bbPos);
 
-			this.densityShader.setUniform1f("density_threshold", this.targetDensity);
+			this.densityShader.setUniform1f("density_threshold", settings.targetDensity);
 
 			this.densityShader.setUniform1f("density_smoothing_kernel_volume", densitySmoothingKernelVolume);
 			this.densityShader.setUniform1f("near_density_smoothing_kernel_volume", nearDensitySmoothingKernelVolume);
@@ -619,7 +657,7 @@ public class HW3Aquarium extends Window {
 			glBeginQuery(GL_TIME_ELAPSED, time_query);
 		}
 
-		this.waterRenderPipelineV1(outputBuffer);
+		this.waterRenderPipelineV0(outputBuffer);
 
 		if (this.printRenderTimes) {
 			glEndQuery(GL_TIME_ELAPSED);
@@ -700,5 +738,4 @@ public class HW3Aquarium extends Window {
 		// TODO Auto-generated method stub
 
 	}
-
 }

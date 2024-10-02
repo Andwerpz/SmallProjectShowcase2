@@ -163,11 +163,11 @@ void main() {
 			vec2 next_density = vec2(next_info.density, next_info.near_density);
 			float dist = distance(p.pred_pos, next.pred_pos);
 			vec2 dir = p.pred_pos - next.pred_pos;
-			if(dist < 0.001){
+			if(dist == 0){
 				dir = vec2(1, 0);
 			}
 			else {
-				dir /= dist;
+				dir = normalize(dir);
 			}
 			float density_slope = densitySmoothingKernelSlope(dist);
 			float near_density_slope = nearDensitySmoothingKernelSlope(dist);
