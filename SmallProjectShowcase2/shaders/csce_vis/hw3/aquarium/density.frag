@@ -132,18 +132,19 @@ void main() {
 	
 	vec2 density_vec = computeDensity(pos);
 	float density = density_vec.x + density_vec.y;
+	float threshold_mult = 0.35;
 	
 	vec4 result = vec4(0);
-	if(density > density_threshold * 0.25) {
+	if(density > density_threshold * threshold_mult) {
 		result = vec4(1);
 	}
 	out_density = result;
 	
 	//compute normal
 	vec3 normal = vec3(0, 0, 1);
-	if(density_threshold > density && density > density_threshold * 0.25) {
+	if(density_threshold > density && density > density_threshold * threshold_mult) {
 		vec3 gradient = vec3(normalize(computeDensityGradient(pos)), 0);
-		normal = lerp(normal, gradient, density_threshold, density_threshold * 0.25, density);
+		normal = lerp(normal, gradient, density_threshold, density_threshold * threshold_mult, density);
 	}
 	normal = normalize(normal);
 	normal = (normal * 0.5) + 0.5;

@@ -26,7 +26,7 @@ float sampleDensity(vec2 pos) {
 
 void main() {
 	vec2 pos = vec2(frag_uv.x * window_width, frag_uv.y * window_height);
-	vec3 water_color = vec3(14.0, 100.0, 150.0) / 255.0;
+	vec3 water_color = vec3(14.0, 120.0, 200.0) / 255.0;
 	vec3 normal = (texture(normal_map, frag_uv).rgb - 0.5) * 2;
 	
 	if(sampleDensity(pos) == 0) {
@@ -48,7 +48,7 @@ void main() {
 	float ambient = 0.4;
 	float total = ambient + (1.0 - ambient) * transmittance;
 	
-	out_color = vec4(total * water_color, 1);
+	out_color = vec4(total * water_color, 0.5);
 }
 
 

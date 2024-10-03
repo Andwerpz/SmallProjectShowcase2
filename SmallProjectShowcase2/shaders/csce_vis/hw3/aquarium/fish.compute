@@ -1,0 +1,226 @@
+#version 430 core
+
+layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+struct Particle {
+	vec2 pos;
+	vec2 pred_pos;
+	vec2 vel;
+	int hash;
+};
+
+layout(binding = 0) buffer particleBuffer {
+	Particle[] particleData;
+};
+
+layout(binding = 1) buffer hashLUTBuffer {
+	int[] hashLUT;
+};
+
+struct Fish {
+	vec2 pos;
+	vec2 vel;
+	float facing;
+};
+
+layout(binding = 2) buffer fishBuffer {
+	Fish[] fishData;
+};
+
+uniform float dt;
+uniform vec2 gravity;
+uniform int nr_particles;
+
+uniform vec2 bounds_min;
+uniform vec2 bounds_max;
+
+uniform float smoothing_radius;
+uniform int hash_mod;
+uniform int LUT_P1;
+uniform int LUT_P2;
+uniform int LUT_P3;
+uniform int LUT_P4;
+uniform int LUT_P5;
+
+uniform float density_smoothing_kernel_volume;
+uniform float near_density_smoothing_kernel_volume;
+uniform float viscosity_smoothing_kernel_volume;
+
+uniform float target_density;
+
+uniform int nr_fish;
+
+int computeHash(int x, int y) {
+	x += LUT_P1;
+	y += LUT_P2;
+	return abs(x * LUT_P3 + y * LUT_P4 + LUT_P5) % hash_mod;
+}
+
+int computeHash(ivec2 h) {
+	return computeHash(h.x, h.y);
+}
+
+int computeHash(vec2 pos) {
+	return computeHash(ivec2(floor(pos / smoothing_radius)));
+}
+
+float densitySmoothingKernel(float dist) {
+	float tmp = max(0.0, smoothing_radius - dist);
+	float ans = pow(tmp, 3.0);
+	ans /= density_smoothing_kernel_volume;
+	return ans;
+}
+	
+float nearDensitySmoothingKernel(float dist) {
+	float tmp = max(0.0, smoothing_radius - dist);
+	float ans = pow(tmp, 6.0);
+	ans /= near_density_smoothing_kernel_volume;
+	return ans;
+}
+	
+float viscositySmoothingKernel(float dist) {
+	float tmp = max(0.0, smoothing_radius * smoothing_radius - dist * dist);
+	float ans = pow(tmp, 3.0);
+	ans /= viscosity_smoothing_kernel_volume;
+	return ans;
+}
+
+const int dx[9] = int[9](-1, -1, -1, 0, 0, 0, 1, 1, 1);
+const int dy[9] = int[9](-1, 0, 1, -1, 0, 1, -1, 0, 1);
+
+float computeDensity(vec2 pos) {
+	float density = 0;
+	float near_density = 0;
+	int hash_x = int(pos.x / smoothing_radius);
+	int hash_y = int(pos.y / smoothing_radius);
+	for(int i = 0; i < 9; i++){
+		int nx = hash_x + dx[i];
+		int ny = hash_y + dy[i];
+		int nhash = computeHash(nx, ny);
+		int start_ind = hashLUT[nhash];
+		for(int j = start_ind; j < nr_particles; j++){
+			int chash = particleData[j].hash;
+			if(chash != nhash) {
+				break;
+			}
+			vec2 cpos = particleData[j].pos;
+			density += densitySmoothingKernel(distance(pos, cpos));
+			near_density += nearDensitySmoothingKernel(distance(pos, cpos));
+		}
+	}
+	return density + near_density;
+}
+
+vec2 computeWaterVel(vec2 pos) {
+	vec2 vel = vec2(0);
+	int hash_x = int(pos.x / smoothing_radius);
+	int hash_y = int(pos.y / smoothing_radius);
+	for(int i = 0; i < 9; i++){
+		int nx = hash_x + dx[i];
+		int ny = hash_y + dy[i];
+		int nhash = computeHash(nx, ny);
+		int start_ind = hashLUT[nhash];
+		for(int j = start_ind; j < nr_particles; j++){
+			int chash = particleData[j].hash;
+			if(chash != nhash) {
+				break;
+			}
+			vec2 cpos = particleData[j].pos;
+			vec2 cvel = particleData[j].vel;
+			float dist = distance(pos, cpos);
+			float influence = viscositySmoothingKernel(dist);
+			vel += (cvel - vel) * influence;
+		}
+	}
+	return vel;
+}
+
+vec2 rotate(vec2 v, float rad) {
+	float c = cos(rad);
+	float s = sin(rad);
+
+	float xp = v.x * c - v.y * s;
+	float yp = v.x * s + v.y * c;
+	
+	return vec2(xp, yp);
+}
+
+const float PI = 3.1415926535;
+
+void main() {
+	int fish_id = int(gl_GlobalInvocationID.x);
+	Fish f = fishData[fish_id];
+
+	float water_density = computeDensity(f.pos);
+	if(water_density < target_density && false) {
+		//mr fish doesn't feel too well
+		f.vel += gravity * dt;
+	}
+	else {
+		//fish behaviour (look at me, im a fish!)
+		f.vel = vec2(0);
+			
+		vec2 separation = vec2(0);
+		vec2 alignment = vec2(0);
+		vec2 cohesion = vec2(0);
+		int cnt = 0;
+			
+		float interaction_radius = 10;
+		for(int i = 0; i < nr_fish; i++){
+			if(i == fish_id) {
+				continue;
+			}
+			Fish next = fishData[i];
+			if(length(next.pos - f.pos) > interaction_radius) {
+				continue;
+			}
+			
+			cnt ++;
+			separation += normalize(f.pos - next.pos) / length(f.pos - next.pos);	//separation
+			alignment += normalize(next.vel);
+			cohesion += next.pos;
+		}
+		
+		if(cnt != 0) {
+			separation /= cnt;
+			alignment /= cnt;
+			cohesion /= cnt;
+			cohesion = cohesion - f.pos;
+			vec2 new_dir = normalize(separation + alignment + cohesion);
+			f.facing = atan(new_dir.y, new_dir.x);
+			if(f.facing < 0){
+				f.facing += PI * 2;
+			}
+		}		
+		
+		f.vel = rotate(vec2(1, 0), f.facing) * 10;
+	
+		//advect through water
+		//f.vel += computeWaterVel(f.pos);	
+	}
+	
+	//integrate
+	f.pos += f.vel * dt;
+	
+	//boundary collisions
+	{
+		if (f.pos.x < bounds_min.x + 0.001) {
+			f.pos.x = bounds_min.x + 0.001;
+			f.vel.x *= -0.1;
+		}
+		if (f.pos.x > bounds_max.x - 0.001) {
+			f.pos.x = bounds_max.x - 0.001;
+			f.vel.x *= -0.1;
+		}
+		if (f.pos.y < bounds_min.y + 0.001) {
+			f.pos.y = bounds_min.y + 0.001;
+			f.vel.y *= -0.1;
+		}
+		if (f.pos.y > bounds_max.y - 0.001) {
+			f.pos.y = bounds_max.y - 0.001;
+			f.vel.y *= -0.1;
+		}
+	}
+	
+	fishData[fish_id] = f;
+}

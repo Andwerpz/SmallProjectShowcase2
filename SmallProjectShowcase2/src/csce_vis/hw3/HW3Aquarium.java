@@ -45,8 +45,13 @@ public class HW3Aquarium extends Window {
 	//   - foam / bubbles : https://cg.informatik.uni-freiburg.de/publications/2012_CGI_sprayFoamBubbles.pdf
 	//   - don't really want to add diffuse particles, perhaps just fake it by giving each water particle a 'foam' attribute
 	//     and let the foam advect around that way. 
-	//   - bake in normals to edges of water? make the water 'pop out' more
 	// - add fish
+	//   - still have to add in flocking behaviour for fish. 
+
+	// perhaps just compute a buffer holding density, viscosity, etc information about every pixel. If we can compute this quickly, 
+	//then it'll trivialize rendering, and it might even speed up updates. 
+	// refer to ideas about speeding up density portion of rendering. 
+	// downside is that it'll make the simulation more unstable if we decide to use it for updates. 
 
 	//ideas to speed up density portion of rendering:
 	// - can use compute shader to group batches of pixels and do local memory trick. 
@@ -65,7 +70,7 @@ public class HW3Aquarium extends Window {
 	private Stack<Float> updateTimes = new Stack<>();
 	private Stack<Float> renderTimes = new Stack<>();
 
-	private static final int NR_PARTICLES_LOG2 = 12; //must be \geq 10 due to bitonic sort
+	private static final int NR_PARTICLES_LOG2 = 15; //must be \geq 10 due to bitonic sort
 	private static final int NR_PARTICLES = (1 << NR_PARTICLES_LOG2);
 
 	//used to sample properties from the point cloud
@@ -83,6 +88,8 @@ public class HW3Aquarium extends Window {
 	private Shader waterCompute21, waterCompute22;
 	private Shader waterCompute3;
 	private Shader waterCompute4;
+
+	private Shader fishCompute;
 
 	private static final int HASH_LUT_SIZE = (1 << 20);
 	private static final int HASH_MOD = (int) (1e6 + 7);
@@ -140,13 +147,49 @@ public class HW3Aquarium extends Window {
 
 	private ShaderStorageBuffer particleBuffer, particleInfoBuffer;
 
-	private float predictDeltaTime = 16.0f / 1000.0f;
+	private static final int NR_FISH_LOG2 = 7;
+	private static final int NR_FISH = (1 << NR_FISH_LOG2);
+
+	class Fish {
+		Vec2 pos, vel;
+		float facing; //in radians
+
+		public Fish(Vec2 _pos) {
+			this.pos = new Vec2(_pos);
+			this.vel = new Vec2(0);
+			this.facing = MathUtils.random(0, (float) Math.PI * 2);
+		}
+
+		public void writeToBuffer(int[] buffer, int offset) {
+			buffer[offset + 0] = Float.floatToIntBits(pos.x);
+			buffer[offset + 1] = Float.floatToIntBits(pos.y);
+
+			buffer[offset + 2] = Float.floatToIntBits(vel.x);
+			buffer[offset + 3] = Float.floatToIntBits(vel.y);
+
+			buffer[offset + 4] = Float.floatToIntBits(facing);
+		}
+	}
+
+	private static final int SIZEOF_FISH = 24;
+
+	/*
+	// 24 bytes
+	struct Fish {
+		vec2 pos;
+		vec2 vel;
+		float facing;
+	};
+	*/
+	private ShaderStorageBuffer fishBuffer;
 
 	private int renderScale = 5; //how many pixels on screen is one unit in particle space
 	private Vec2 bbPos, bbDimensions; //update this in update loop
 
 	private Shader particleShader, densityShader, waterColorShader;
 	private Shader shadowShader, gaussianShader, backgroundShader;
+
+	private Shader fishShader;
 
 	private float timeDebt = 0;
 
@@ -159,45 +202,65 @@ public class HW3Aquarium extends Window {
 
 	private Framebuffer gaussianBlurBuffer;
 	private Texture gaussianBlurMap;
-	
+
 	public SimulationSettings settings = new SimulationSettings();
-	
+
 	public class SimulationSettings {
 		public Vec2 gravity = new Vec2(0, -20);
 		public float viscosityStrength = 1f;
 		public float pressureMultiplier = 50f;
 		public float nearPressureMultiplier = 0.1f;
 		public float targetDensity = 2f;
-		
+		public boolean renderParticles = false;
+
+		private float predictDeltaTime = 16.0f / 1000.0f;
+
 		public Vec2 getGravity() {
 			return gravity;
 		}
+
 		public void setGravity(Vec2 gravity) {
 			this.gravity = gravity;
 		}
+
 		public float getViscosityStrength() {
 			return viscosityStrength;
 		}
+
 		public void setViscosityStrength(float viscosityStrength) {
 			this.viscosityStrength = viscosityStrength;
 		}
+
 		public float getPressureMultiplier() {
 			return pressureMultiplier;
 		}
+
 		public void setPressureMultiplier(float pressureMultiplier) {
 			this.pressureMultiplier = pressureMultiplier;
 		}
+
 		public float getNearPressureMultiplier() {
 			return nearPressureMultiplier;
 		}
+
 		public void setNearPressureMultiplier(float nearPressureMultiplier) {
 			this.nearPressureMultiplier = nearPressureMultiplier;
 		}
+
 		public float getTargetDensity() {
 			return targetDensity;
 		}
+
 		public void setTargetDensity(float targetDensity) {
 			this.targetDensity = targetDensity;
+		}
+
+		public boolean getRenderParticles() {
+			return this.renderParticles;
+		}
+
+		public void setRenderParticles(boolean b) {
+			this.renderParticles = b;
 		}
 	}
 
@@ -220,6 +283,10 @@ public class HW3Aquarium extends Window {
 		this.gaussianShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/gaussian.vert", "/csce_vis/hw3/aquarium/gaussian.frag");
 		this.backgroundShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/background.vert", "/csce_vis/hw3/aquarium/background.frag");
 
+		this.fishCompute = ShaderUtils.createShader("/csce_vis/hw3/aquarium/fish.compute", GL_COMPUTE_SHADER);
+
+		this.fishShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/fish_render.vert", "/csce_vis/hw3/aquarium/fish_render.frag");
+
 		this.gaussianShader.setUniform1i("color_map", 0);
 
 		this.shadowShader.setUniform1i("density_map", 0);
@@ -229,6 +296,9 @@ public class HW3Aquarium extends Window {
 
 		this.backgroundShader.setUniform1i("shadow_map", 0);
 
+		this.setBB();
+
+		// - particle buffers
 		this.particleBuffer = new ShaderStorageBuffer(NR_PARTICLES * SIZEOF_PARTICLE);
 		this.particleBuffer.setUsage(GL_DYNAMIC_DRAW);
 
@@ -237,7 +307,7 @@ public class HW3Aquarium extends Window {
 
 		this.hashLUTBuffer = new ShaderStorageBuffer(HASH_LUT_SIZE * 4);
 		this.hashLUTBuffer.setUsage(GL_DYNAMIC_DRAW);
-		
+
 		ObjectEditorWindow settings_window = new ObjectEditorWindow(this.settings);
 		this.addChildAdjWindow(settings_window);
 
@@ -247,8 +317,13 @@ public class HW3Aquarium extends Window {
 			this.hashLUTBuffer.setSubData(data, 0);
 		}
 
-		this.setBB();
 		this.resetParticles();
+
+		// - fish buffers
+		this.fishBuffer = new ShaderStorageBuffer(NR_FISH * SIZEOF_FISH);
+		this.fishBuffer.setUsage(GL_DYNAMIC_DRAW);
+
+		this.resetFish();
 
 		this._resize();
 	}
@@ -258,6 +333,8 @@ public class HW3Aquarium extends Window {
 		this.particleBuffer.kill();
 		this.particleInfoBuffer.kill();
 		this.hashLUTBuffer.kill();
+
+		this.fishBuffer.kill();
 
 		this.waterCompute1.kill();
 		this.waterCompute21.kill();
@@ -271,6 +348,10 @@ public class HW3Aquarium extends Window {
 		this.shadowShader.kill();
 		this.gaussianShader.kill();
 		this.backgroundShader.kill();
+
+		this.fishCompute.kill();
+
+		this.fishShader.kill();
 
 		this.densityBuffer.kill();
 		this.shadowBuffer.kill();
@@ -337,10 +418,23 @@ public class HW3Aquarium extends Window {
 		return Mat4.orthographic(left, right, bottom, top, near, far);
 	}
 
+	private void resetFish() {
+		int[] data = new int[NR_FISH * SIZEOF_FISH / 4];
+		for (int i = 0; i < NR_FISH; i++) {
+			Vec2 pos = MathUtils.random(new Vec2(0), this.bbDimensions);
+			pos.addi(this.bbPos);
+			Fish f = new Fish(pos);
+			f.writeToBuffer(data, i * SIZEOF_FISH / 4);
+		}
+		this.fishBuffer.setSubData(data, 0);
+	}
+
 	private void resetParticles() {
 		int[] data = new int[NR_PARTICLES * SIZEOF_PARTICLE / 4];
+		Vec2 bb = new Vec2(this.bbDimensions);
+		bb.y *= 0.5;
 		for (int i = 0; i < NR_PARTICLES; i++) {
-			Vec2 pos = MathUtils.random(new Vec2(0), this.bbDimensions);
+			Vec2 pos = MathUtils.random(new Vec2(0), bb);
 			pos.addi(this.bbPos);
 			Particle p = new Particle(pos);
 			p.writeToBuffer(data, i * SIZEOF_PARTICLE / 4);
@@ -363,7 +457,7 @@ public class HW3Aquarium extends Window {
 			this.waterCompute1.setUniform1i("LUT_P4", LUT_P4);
 			this.waterCompute1.setUniform1i("LUT_P5", LUT_P5);
 
-			this.waterCompute1.setUniform1f("predict_delta_time", this.predictDeltaTime);
+			this.waterCompute1.setUniform1f("predict_delta_time", settings.predictDeltaTime);
 
 			this.particleBuffer.bindToBase(0);
 
@@ -374,12 +468,9 @@ public class HW3Aquarium extends Window {
 		// -- PHASE 2.1 -- 
 		//sort particles according to their hashes using bitonic merge sort
 		//currently, have a mix of local and global sorting. Local sorting under 1024 elements, and global sorting past that. 
-		//shader invocations are bad, but global memory accesses are also bad. Can't increase local sorting due to 
+		//shader invocations are bad, but global memory accesses are very bad. Can't increase local sorting due to 
 		//constraints on workgroup shared memory. 
-		//TODO see if pure local sorting with global memory accesses is better than the current method.
-		// - could also sort hash along with pointer to original particle, then go back and rearrange all the particles. 
-		//   this could allow for more local sorting / less shader invocations, but more rearranging stuff in memory
-		// - however, the rearranging during sorting is greatly reduced, and that's where most of the operations are taking place. 
+		//TODO see if sorting an array consisting of hash and index is much better than sorting the actual array. 
 		// - 8 bytes per element means 4096 in local sorting stage. 4 bytes per element is not feasible, as that limits us to (2 << 16)
 		//   particles (if we split the bytes equally between hash and index). 
 		{
@@ -494,6 +585,40 @@ public class HW3Aquarium extends Window {
 		}
 	}
 
+	private void fishUpdate(float dt) {
+		this.fishCompute.enable();
+
+		this.particleBuffer.bindToBase(0);
+		this.hashLUTBuffer.bindToBase(1);
+		this.fishBuffer.bindToBase(2);
+
+		this.fishCompute.setUniform1f("dt", dt);
+		this.fishCompute.setUniform2f("gravity", settings.gravity);
+		this.fishCompute.setUniform1i("nr_particles", NR_PARTICLES);
+
+		this.fishCompute.setUniform2f("bounds_min", this.bbPos);
+		this.fishCompute.setUniform2f("bounds_max", this.bbPos.add(this.bbDimensions));
+
+		this.fishCompute.setUniform1f("smoothing_radius", smoothingRadius);
+		this.fishCompute.setUniform1i("hash_mod", HASH_MOD);
+		this.fishCompute.setUniform1i("LUT_P1", LUT_P1);
+		this.fishCompute.setUniform1i("LUT_P2", LUT_P2);
+		this.fishCompute.setUniform1i("LUT_P3", LUT_P3);
+		this.fishCompute.setUniform1i("LUT_P4", LUT_P4);
+		this.fishCompute.setUniform1i("LUT_P5", LUT_P5);
+
+		this.fishCompute.setUniform1f("density_smoothing_kernel_volume", densitySmoothingKernelVolume);
+		this.fishCompute.setUniform1f("near_density_smoothing_kernel_volume", nearDensitySmoothingKernelVolume);
+		this.fishCompute.setUniform1f("viscosity_smoothing_kernel_volume", viscositySmoothingKernelVolume);
+
+		this.fishCompute.setUniform1f("target_density", settings.targetDensity);
+
+		this.fishCompute.setUniform1i("nr_fish", NR_FISH);
+
+		glDispatchCompute(NR_PARTICLES / 32, 1, 1);
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+	}
+
 	@Override
 	protected void _update() {
 		this.setBB();
@@ -513,6 +638,7 @@ public class HW3Aquarium extends Window {
 			}
 
 			this.waterUpdate(dt);
+			this.fishUpdate(dt);
 
 			if (this.printUpdateTimes) {
 				glEndQuery(GL_TIME_ELAPSED);
@@ -560,6 +686,9 @@ public class HW3Aquarium extends Window {
 		//render water density
 		{
 			this.densityBuffer.bind();
+
+			this.particleBuffer.bindToBase(0);
+			this.hashLUTBuffer.bindToBase(1);
 
 			this.densityShader.enable();
 			this.densityShader.setUniform1i("nr_particles", NR_PARTICLES);
@@ -616,6 +745,9 @@ public class HW3Aquarium extends Window {
 			ScreenQuad.screenQuad.render();
 		}
 
+		//render fish
+		this.fishRenderPipeline(outputBuffer);
+
 		//render water color + attenuation due to water
 		{
 			outputBuffer.bind();
@@ -647,6 +779,24 @@ public class HW3Aquarium extends Window {
 		glPointSize(2f);
 		glViewport(0, 0, this.getWidth(), this.getHeight());
 		glDrawArrays(GL_POINTS, 0, NR_PARTICLES);
+
+		this.fishRenderPipeline(outputBuffer);
+	}
+
+	private void fishRenderPipeline(Framebuffer outputBuffer) {
+		Mat4 pr_matrix = this.getPrMatrix();
+
+		outputBuffer.bind();
+
+		this.fishShader.enable();
+		this.fishShader.setUniformMat4("pr_matrix", pr_matrix);
+
+		this.fishBuffer.bindToBase(0);
+
+		glDisable(GL_DEPTH_TEST);
+		glPointSize(5f);
+		glViewport(0, 0, this.getWidth(), this.getHeight());
+		glDrawArrays(GL_POINTS, 0, NR_FISH);
 	}
 
 	@Override
@@ -657,7 +807,12 @@ public class HW3Aquarium extends Window {
 			glBeginQuery(GL_TIME_ELAPSED, time_query);
 		}
 
-		this.waterRenderPipelineV0(outputBuffer);
+		if (settings.renderParticles) {
+			this.waterRenderPipelineV0(outputBuffer);
+		}
+		else {
+			this.waterRenderPipelineV1(outputBuffer);
+		}
 
 		if (this.printRenderTimes) {
 			glEndQuery(GL_TIME_ELAPSED);
@@ -729,6 +884,7 @@ public class HW3Aquarium extends Window {
 		switch (key) {
 		case GLFW.GLFW_KEY_R:
 			this.resetParticles();
+			this.resetFish();
 			break;
 		}
 	}

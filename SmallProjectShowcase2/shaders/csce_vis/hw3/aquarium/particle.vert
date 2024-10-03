@@ -29,7 +29,7 @@ void main() {
 	float fast_speed = 20;
 	
 	float vel = length(p.vel);
-	particle_color = lerp(slow_color, fast_color, slow_speed, fast_speed, clamp(slow_speed, fast_speed, vel));
+	particle_color = lerp(slow_color, fast_color, slow_speed, fast_speed, clamp(vel, slow_speed, fast_speed));
 	
    	gl_Position = pr_matrix * vec4(p.pos, 0, 1);
 }
