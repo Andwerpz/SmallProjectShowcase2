@@ -70,7 +70,7 @@ public class HW3Aquarium extends Window {
 	private Stack<Float> updateTimes = new Stack<>();
 	private Stack<Float> renderTimes = new Stack<>();
 
-	private static final int NR_PARTICLES_LOG2 = 15; //must be \geq 10 due to bitonic sort
+	private static final int NR_PARTICLES_LOG2 = 10; //must be \geq 10 due to bitonic sort
 	private static final int NR_PARTICLES = (1 << NR_PARTICLES_LOG2);
 
 	//used to sample properties from the point cloud

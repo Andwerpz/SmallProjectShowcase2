@@ -27,6 +27,8 @@ layout(binding = 2) buffer fishBuffer {
 	Fish[] fishData;
 };
 
+const float PI = 3.1415926535;
+
 uniform float dt;
 uniform vec2 gravity;
 uniform int nr_particles;
@@ -145,7 +147,10 @@ vec2 rotate(vec2 v, float rad) {
 	return vec2(xp, yp);
 }
 
-const float PI = 3.1415926535;
+//returns true if position is inside of the bounding box, and also in water
+bool isGood(vec2 pos) {
+	return false;
+}
 
 void main() {
 	int fish_id = int(gl_GlobalInvocationID.x);
@@ -158,8 +163,6 @@ void main() {
 	}
 	else {
 		//fish behaviour (look at me, im a fish!)
-		f.vel = vec2(0);
-			
 		vec2 separation = vec2(0);
 		vec2 alignment = vec2(0);
 		vec2 cohesion = vec2(0);
@@ -176,7 +179,13 @@ void main() {
 			}
 			
 			cnt ++;
-			separation += normalize(f.pos - next.pos) / length(f.pos - next.pos);	//separation
+			if(length(f.pos - next.pos) == 0){
+				separation += vec2(1, 0) * 100;
+			}
+			else {
+				separation += normalize(f.pos - next.pos) / length(f.pos - next.pos);	//separation
+			}
+			
 			alignment += normalize(next.vel);
 			cohesion += next.pos;
 		}
@@ -185,15 +194,28 @@ void main() {
 			separation /= cnt;
 			alignment /= cnt;
 			cohesion /= cnt;
-			cohesion = cohesion - f.pos;
-			vec2 new_dir = normalize(separation + alignment + cohesion);
-			f.facing = atan(new_dir.y, new_dir.x);
-			if(f.facing < 0){
-				f.facing += PI * 2;
+			cohesion = normalize(cohesion - f.pos);
+			
+			alignment *= 1;
+			separation *= 1;
+			cohesion *= 0.05;
+			
+			vec2 target_vel = alignment + separation + cohesion;
+			if(length(new_dir) != 0){
+				new_dir = normalize(new_dir);
+				f.facing = atan(new_dir.y, new_dir.x);
+				if(f.facing < 0){
+					f.facing += PI * 2;
+				}
 			}
-		}		
+		}	
+			
+		if(isinf(f.facing) || isnan(f.facing)) {
+			f.facing = 0;
+		}
+		f.vel += rotate(vec2(1, 0), f.facing) * 10 * dt;
 		
-		f.vel = rotate(vec2(1, 0), f.facing) * 10;
+		f.vel *= 0.9;	//water resistance
 	
 		//advect through water
 		//f.vel += computeWaterVel(f.pos);	
