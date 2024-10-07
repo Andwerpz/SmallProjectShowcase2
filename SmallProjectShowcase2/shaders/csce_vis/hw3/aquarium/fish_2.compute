@@ -1,0 +1,49 @@
+#version 430 core
+
+layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+struct Fish {
+	vec2 pos;
+	vec2 vel;
+	vec2 next_vel;
+};
+
+layout(binding = 0) buffer fishBuffer {
+	Fish[] fishData;
+};
+
+const float PI = 3.1415926535;
+
+uniform float dt;
+uniform vec2 gravity;
+
+uniform vec2 bounds_min;
+uniform vec2 bounds_max;
+
+uniform int nr_fish;
+
+vec2 rotate(vec2 v, float rad) {
+	float c = cos(rad);
+	float s = sin(rad);
+
+	float xp = v.x * c - v.y * s;
+	float yp = v.x * s + v.y * c;
+	
+	return vec2(xp, yp);
+}
+
+//returns true if position is inside of the bounding box, and also in water
+bool isGood(vec2 pos) {
+	return false;
+}
+
+const float turning_rate = PI / 4;
+
+void main() {
+	int fish_id = int(gl_GlobalInvocationID.x);
+	Fish f = fishData[fish_id];
+	
+	f.vel = f.next_vel;
+	
+	fishData[fish_id] = f;
+}

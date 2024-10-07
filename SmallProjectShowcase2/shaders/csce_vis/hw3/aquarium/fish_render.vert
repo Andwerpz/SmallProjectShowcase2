@@ -3,7 +3,7 @@
 struct Fish {
 	vec2 pos;
 	vec2 vel;
-	float facing;
+	vec2 next_vel;
 };
 
 layout(binding = 0) buffer fishBuffer {

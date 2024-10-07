@@ -70,7 +70,7 @@ public class HW3Aquarium extends Window {
 	private Stack<Float> updateTimes = new Stack<>();
 	private Stack<Float> renderTimes = new Stack<>();
 
-	private static final int NR_PARTICLES_LOG2 = 10; //must be \geq 10 due to bitonic sort
+	private static final int NR_PARTICLES_LOG2 = 15; //must be \geq 10 due to bitonic sort
 	private static final int NR_PARTICLES = (1 << NR_PARTICLES_LOG2);
 
 	//used to sample properties from the point cloud
@@ -89,7 +89,7 @@ public class HW3Aquarium extends Window {
 	private Shader waterCompute3;
 	private Shader waterCompute4;
 
-	private Shader fishCompute;
+	private Shader fishCompute1, fishCompute2;
 
 	private static final int HASH_LUT_SIZE = (1 << 20);
 	private static final int HASH_MOD = (int) (1e6 + 7);
@@ -151,13 +151,12 @@ public class HW3Aquarium extends Window {
 	private static final int NR_FISH = (1 << NR_FISH_LOG2);
 
 	class Fish {
-		Vec2 pos, vel;
-		float facing; //in radians
+		Vec2 pos, vel, next_vel;
 
 		public Fish(Vec2 _pos) {
 			this.pos = new Vec2(_pos);
-			this.vel = new Vec2(0);
-			this.facing = MathUtils.random(0, (float) Math.PI * 2);
+			this.vel = MathUtils.random(new Vec2(-5), new Vec2(5));
+			this.next_vel = new Vec2(0);
 		}
 
 		public void writeToBuffer(int[] buffer, int offset) {
@@ -167,7 +166,8 @@ public class HW3Aquarium extends Window {
 			buffer[offset + 2] = Float.floatToIntBits(vel.x);
 			buffer[offset + 3] = Float.floatToIntBits(vel.y);
 
-			buffer[offset + 4] = Float.floatToIntBits(facing);
+			buffer[offset + 4] = Float.floatToIntBits(next_vel.x);
+			buffer[offset + 5] = Float.floatToIntBits(next_vel.y);
 		}
 	}
 
@@ -178,7 +178,7 @@ public class HW3Aquarium extends Window {
 	struct Fish {
 		vec2 pos;
 		vec2 vel;
-		float facing;
+		vec2 next_vel;
 	};
 	*/
 	private ShaderStorageBuffer fishBuffer;
@@ -283,7 +283,8 @@ public class HW3Aquarium extends Window {
 		this.gaussianShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/gaussian.vert", "/csce_vis/hw3/aquarium/gaussian.frag");
 		this.backgroundShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/background.vert", "/csce_vis/hw3/aquarium/background.frag");
 
-		this.fishCompute = ShaderUtils.createShader("/csce_vis/hw3/aquarium/fish.compute", GL_COMPUTE_SHADER);
+		this.fishCompute1 = ShaderUtils.createShader("/csce_vis/hw3/aquarium/fish_1.compute", GL_COMPUTE_SHADER);
+		this.fishCompute2 = ShaderUtils.createShader("/csce_vis/hw3/aquarium/fish_2.compute", GL_COMPUTE_SHADER);
 
 		this.fishShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/fish_render.vert", "/csce_vis/hw3/aquarium/fish_render.frag");
 
@@ -349,7 +350,8 @@ public class HW3Aquarium extends Window {
 		this.gaussianShader.kill();
 		this.backgroundShader.kill();
 
-		this.fishCompute.kill();
+		this.fishCompute1.kill();
+		this.fishCompute2.kill();
 
 		this.fishShader.kill();
 
@@ -586,37 +588,61 @@ public class HW3Aquarium extends Window {
 	}
 
 	private void fishUpdate(float dt) {
-		this.fishCompute.enable();
+		//compute target velocities
+		{
+			this.fishCompute1.enable();
 
-		this.particleBuffer.bindToBase(0);
-		this.hashLUTBuffer.bindToBase(1);
-		this.fishBuffer.bindToBase(2);
+			this.particleBuffer.bindToBase(0);
+			this.hashLUTBuffer.bindToBase(1);
+			this.fishBuffer.bindToBase(2);
 
-		this.fishCompute.setUniform1f("dt", dt);
-		this.fishCompute.setUniform2f("gravity", settings.gravity);
-		this.fishCompute.setUniform1i("nr_particles", NR_PARTICLES);
+			this.fishCompute1.setUniform1f("dt", dt);
+			this.fishCompute1.setUniform2f("gravity", settings.gravity);
+			this.fishCompute1.setUniform1i("nr_particles", NR_PARTICLES);
 
-		this.fishCompute.setUniform2f("bounds_min", this.bbPos);
-		this.fishCompute.setUniform2f("bounds_max", this.bbPos.add(this.bbDimensions));
+			this.fishCompute1.setUniform2f("bounds_min", this.bbPos);
+			this.fishCompute1.setUniform2f("bounds_max", this.bbPos.add(this.bbDimensions));
 
-		this.fishCompute.setUniform1f("smoothing_radius", smoothingRadius);
-		this.fishCompute.setUniform1i("hash_mod", HASH_MOD);
-		this.fishCompute.setUniform1i("LUT_P1", LUT_P1);
-		this.fishCompute.setUniform1i("LUT_P2", LUT_P2);
-		this.fishCompute.setUniform1i("LUT_P3", LUT_P3);
-		this.fishCompute.setUniform1i("LUT_P4", LUT_P4);
-		this.fishCompute.setUniform1i("LUT_P5", LUT_P5);
+			this.fishCompute1.setUniform1f("smoothing_radius", smoothingRadius);
+			this.fishCompute1.setUniform1i("hash_mod", HASH_MOD);
+			this.fishCompute1.setUniform1i("LUT_P1", LUT_P1);
+			this.fishCompute1.setUniform1i("LUT_P2", LUT_P2);
+			this.fishCompute1.setUniform1i("LUT_P3", LUT_P3);
+			this.fishCompute1.setUniform1i("LUT_P4", LUT_P4);
+			this.fishCompute1.setUniform1i("LUT_P5", LUT_P5);
 
-		this.fishCompute.setUniform1f("density_smoothing_kernel_volume", densitySmoothingKernelVolume);
-		this.fishCompute.setUniform1f("near_density_smoothing_kernel_volume", nearDensitySmoothingKernelVolume);
-		this.fishCompute.setUniform1f("viscosity_smoothing_kernel_volume", viscositySmoothingKernelVolume);
+			this.fishCompute1.setUniform1f("density_smoothing_kernel_volume", densitySmoothingKernelVolume);
+			this.fishCompute1.setUniform1f("near_density_smoothing_kernel_volume", nearDensitySmoothingKernelVolume);
+			this.fishCompute1.setUniform1f("viscosity_smoothing_kernel_volume", viscositySmoothingKernelVolume);
 
-		this.fishCompute.setUniform1f("target_density", settings.targetDensity);
+			this.fishCompute1.setUniform1f("target_density", settings.targetDensity);
 
-		this.fishCompute.setUniform1i("nr_fish", NR_FISH);
+			this.fishCompute1.setUniform1i("nr_fish", NR_FISH);
 
-		glDispatchCompute(NR_PARTICLES / 32, 1, 1);
-		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+			glDispatchCompute(NR_PARTICLES / 32, 1, 1);
+			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		}
+
+		//apply target velocities
+		{
+			this.fishCompute2.enable();
+
+			this.fishBuffer.bindToBase(0);
+
+			this.fishCompute2.setUniform1f("dt", dt);
+			this.fishCompute2.setUniform2f("gravity", settings.gravity);
+
+			this.fishCompute2.setUniform2f("bounds_min", this.bbPos);
+			this.fishCompute2.setUniform2f("bounds_max", this.bbPos.add(this.bbDimensions));
+
+			this.fishCompute2.setUniform1f("target_density", settings.targetDensity);
+
+			this.fishCompute2.setUniform1i("nr_fish", NR_FISH);
+
+			glDispatchCompute(NR_PARTICLES / 32, 1, 1);
+			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		}
+
 	}
 
 	@Override
