@@ -156,11 +156,10 @@ const float interaction_radius = 8;
 
 const float water_resist_coeff = 1;
 
-const float turning_rate = PI / 4;
-const float accel_rate = 2;
-const float max_speed = 10;
+const float accel_rate = 4;
+const float max_speed = 20;
 
-const float lookahead_dist = 4;
+const float lookahead_dist = 10;
 
 void main() {
 	int fish_id = int(gl_GlobalInvocationID.x);
@@ -168,7 +167,7 @@ void main() {
 	f.next_vel = vec2(0);
 
 	float water_density = computeDensity(f.pos);
-	if(water_density < target_density) {
+	if(water_density < target_density && false) {
 		//mr fish doesn't feel too well
 		f.next_vel = f.vel + gravity * dt;
 	}
@@ -183,6 +182,30 @@ void main() {
 		if(length(f.vel) != 0){
 			float facing = atan(f.vel.y, f.vel.x);
 			
+			vec2 front = normalize(f.vel) * lookahead_dist;
+			vec2 left = rotate(front, PI / 2);
+			vec2 right = rotate(front, -PI / 2);
+			
+			bool front_good = isGood(front);
+			bool left_good = isGood(left);
+			bool right_good = isGood(right);
+			
+			if(!front_good) {
+				if(left_good) {
+					avoidance_vel = normalize(left);
+				}
+				else if(right_good) {
+					avoidance_vel = normalize(right);
+				}
+				else {
+					avoidance_vel = normalize(-front);
+				}
+			}
+			else {
+				avoidance_vel = normalize(front);
+			}
+			
+			avoidance_vel *= 20;
 		}
 		
 		//flocking behaviour
@@ -238,12 +261,12 @@ void main() {
 				
 				flocking_vel = alignment + cohesion + separation;
 				if(length(flocking_vel) != 0){
-					flocking_vel = normalize(target_vel) * max_speed;
+					flocking_vel = normalize(flocking_vel) * max_speed;
 				}
 			}
 		}
 		
-		vec2 target_vel = flocking_vel + avoidance_vel;
+		vec2 target_vel = avoidance_vel;
 		
 		vec2 accel = target_vel - f.vel;
 		if(length(accel) > accel_rate * dt) {
