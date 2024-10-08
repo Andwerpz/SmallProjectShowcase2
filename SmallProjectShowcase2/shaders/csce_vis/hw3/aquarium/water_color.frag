@@ -55,7 +55,7 @@ vec4 calcWaterColor(vec2 pos) {
 	vec3 result = water_color;
 	while(transmittance > 0.01) {
 		pos += light_dir * step_size;
-		float density = sampleDensity(pos);
+		float density = max(sampleDensity(pos), sampleObstacle(pos));
 		if(density < 1){
 			break;
 		}
