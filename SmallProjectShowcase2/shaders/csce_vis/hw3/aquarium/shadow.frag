@@ -7,6 +7,7 @@ uniform float window_width;
 uniform float window_height;
 
 uniform sampler2D density_map;
+uniform sampler2D obstacle_map;
 
 const vec2 light_dir = normalize(vec2(0.5, 1));
 const float step_size = 2;
@@ -20,7 +21,9 @@ float sampleDensity(vec2 pos) {
 	if(pos.x < 0 || pos.y < 0 || pos.x > window_width || pos.y > window_height) {
 		return 0;
 	}
-	return texture(density_map, vec2(pos.x / window_width, pos.y / window_height)).x;
+	float water_density = texture(density_map, vec2(pos.x / window_width, pos.y / window_height)).x;
+	float obstacle_density = texture(obstacle_map, vec2(pos.x / window_width, pos.y / window_height)).x;
+	return max(water_density, obstacle_density);
 }
 
 void main() {

@@ -27,6 +27,15 @@ layout(binding = 2) buffer particleInfoBuffer {
 	ParticleInfo[] particleInfoData;
 };
 
+struct Obstacle {
+	vec2 offset;
+	vec2 dimensions;
+};
+
+layout(binding = 3) buffer obstacleBuffer {
+	Obstacle[] obstacleData;
+};
+
 shared Particle local_particle_data[gl_WorkGroupSize.x];
 shared ParticleInfo local_particle_info_data[gl_WorkGroupSize.x];
 
@@ -52,6 +61,8 @@ uniform float viscosity_smoothing_kernel_volume;
 uniform float target_density;
 uniform float pressure_multiplier;
 uniform float near_pressure_multiplier;
+
+uniform int nr_obstacles;
 
 int computeHash(int x, int y) {
 	x += LUT_P1;
@@ -218,7 +229,43 @@ void main() {
 		}
 	}
 	
-	vec2 force = pressure_force + viscosity_force + gravity_force + boundary_force;
+	//do obstacle collisions
+	for(int i = 0; i < nr_obstacles; i++){
+		Obstacle o = obstacleData[i];
+		vec2 o_min = o.offset + bounds_min;
+		vec2 o_max = o_min + o.dimensions;
+		
+		//if we're inside, clamp to nearest outside side
+		if(o_min.x < p.pos.x && p.pos.x < o_max.x && o_min.y < p.pos.y && p.pos.y < o_max.y) {
+			float d_xmin = p.pos.x - o_min.x;
+			float d_xmax = o_max.x - p.pos.x;
+			float d_ymin = p.pos.y - o_min.y;
+			float d_ymax = o_max.y - p.pos.y;
+			if(min(d_xmin, d_xmax) < min(d_ymin, d_ymax)) {
+				p.vel.x *= -0.1;
+				if(d_xmin < d_xmax) {
+					p.pos.x = o_min.x - 0.001;
+				}
+				else {
+					p.pos.x = o_max.x + 0.001;
+				}
+			}
+			else {
+				p.vel.y *= -0.1;
+				if(d_ymin < d_ymax) {
+					p.pos.y = o_min.y - 0.001;
+				}
+				else {
+					p.pos.y = o_max.y + 0.001;
+				}
+			}
+		}
+		
+		//apply a small boundary force 
+		
+	}
+	
+	vec2 force = pressure_force + viscosity_force + gravity_force + boundary_force * 0.1;
 	p.vel += force * dt;
 	
 	particleData[global_id] = p;

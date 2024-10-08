@@ -19,17 +19,25 @@ import static org.lwjgl.opengl.GL44.*;
 import static org.lwjgl.opengl.GL45.*;
 import static org.lwjgl.opengl.GL46.*;
 
+import java.awt.Color;
+import java.util.ArrayList;
 import java.util.Stack;
 
 import org.lwjgl.glfw.GLFW;
 
 import lwjglengine.graphics.Framebuffer;
+import lwjglengine.graphics.Material;
 import lwjglengine.graphics.Shader;
 import lwjglengine.graphics.ShaderStorageBuffer;
 import lwjglengine.graphics.Texture;
 import lwjglengine.main.Main;
+import lwjglengine.model.ModelInstance;
+import lwjglengine.model.VertexArray;
 import lwjglengine.player.Camera;
+import lwjglengine.scene.Scene;
 import lwjglengine.screen.ScreenQuad;
+import lwjglengine.screen.UIScreen;
+import lwjglengine.ui.UIFilledRectangle;
 import lwjglengine.util.ShaderUtils;
 import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.Window;
@@ -68,7 +76,7 @@ public class HW3Aquarium extends Window {
 	private Stack<Float> updateTimes = new Stack<>();
 	private Stack<Float> renderTimes = new Stack<>();
 
-	private static final int NR_PARTICLES_LOG2 = 15; //must be \geq 10 due to bitonic sort
+	private static final int NR_PARTICLES_LOG2 = 10; //must be \geq 10 due to bitonic sort
 	private static final int NR_PARTICLES = (1 << NR_PARTICLES_LOG2);
 
 	//used to sample properties from the point cloud
@@ -142,18 +150,76 @@ public class HW3Aquarium extends Window {
 	}
 
 	private ShaderStorageBuffer particleBuffer, particleInfoBuffer;
+	
+	private static final int SIZEOF_OBSTACLE = 16;
+	
+	/*
+	// 16 bytes
+	struct Obstacle {
+		vec2 offset;
+		vec2 dimensions;
+	};
+	*/
+	class Obstacle {
+		Vec2 offset, dimensions;
+		UIFilledRectangle rect;
+		
+		public Obstacle(Vec2 _offset, Vec2 _dimensions) {
+			this.offset = new Vec2(_offset);
+			this.dimensions = new Vec2(_dimensions);
+			this.rect = new UIFilledRectangle(offset.x * renderScale, offset.y * renderScale, 0, dimensions.x * renderScale, dimensions.y * renderScale, OBSTACLE_RENDER_SCENE);
+			this.rect.setMaterial(new Material(Color.WHITE));
+		}
+		
+		public void setOffset(Vec2 _offset) {
+			this.offset = new Vec2(_offset);
+			this.rect.setFrameAlignmentOffset(this.offset.x * renderScale, this.offset.y * renderScale);
+		}
+		
+		public void setDimensions(Vec2 _dimensions) {
+			this.dimensions = new Vec2(_dimensions);
+			this.rect.setDimensions(this.dimensions.x * renderScale, this.dimensions.y * renderScale);
+		}
+		
+		public void writeToBuffer(int[] buffer, int offset) {
+			buffer[offset + 0] = Float.floatToIntBits(this.offset.x);
+			buffer[offset + 1] = Float.floatToIntBits(this.offset.y);
+			
+			buffer[offset + 2] = Float.floatToIntBits(this.dimensions.x);
+			buffer[offset + 3] = Float.floatToIntBits(this.dimensions.y);
+		}
+		
+		public void kill() {
+			this.rect.kill();
+		}
+	}
+	
+	private ShaderStorageBuffer obstacleBuffer;
+	private ArrayList<Obstacle> obstacles;
+	
+	private final int OBSTACLE_RENDER_SCENE = Scene.generateScene();
+	private final int UI_SCENE = Scene.generateScene();
+	private UIScreen uiScreen;
 
 	private int renderScale = 5; //how many pixels on screen is one unit in particle space
 	private Vec2 bbPos, bbDimensions; //update this in update loop
 
 	private Shader particleShader, densityShader, waterColorShader;
 	private Shader shadowShader, gaussianShader, backgroundShader;
+	
+	private Shader obstacleNormalShader;
 
 	private float timeDebt = 0;
 
 	private Framebuffer densityBuffer;
 	private Texture densityMap;
 	private Texture normalMap;
+	
+	private Framebuffer obstacleRenderBuffer;
+	private Texture obstacleMap;
+	
+	private Framebuffer obstacleNormalBuffer;
+	private Texture obstacleNormalMap;
 
 	private Framebuffer shadowBuffer;
 	private Texture shadowMap; //higher value is more shadows
@@ -240,13 +306,19 @@ public class HW3Aquarium extends Window {
 		this.shadowShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/shadow.vert", "/csce_vis/hw3/aquarium/shadow.frag");
 		this.gaussianShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/gaussian.vert", "/csce_vis/hw3/aquarium/gaussian.frag");
 		this.backgroundShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/background.vert", "/csce_vis/hw3/aquarium/background.frag");
-
+		this.obstacleNormalShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/obstacle_normal.vert", "/csce_vis/hw3/aquarium/obstacle_normal.frag");
+		
 		this.gaussianShader.setUniform1i("color_map", 0);
+		
+		this.obstacleNormalShader.setUniform1i("obstacle_map", 0);
 
 		this.shadowShader.setUniform1i("density_map", 0);
+		this.shadowShader.setUniform1i("obstacle_map", 1);
 
 		this.waterColorShader.setUniform1i("density_map", 0);
 		this.waterColorShader.setUniform1i("normal_map", 1);
+		this.waterColorShader.setUniform1i("obstacle_map", 2);
+		this.waterColorShader.setUniform1i("obstacle_normal_map", 3);
 
 		this.backgroundShader.setUniform1i("shadow_map", 0);
 
@@ -272,6 +344,16 @@ public class HW3Aquarium extends Window {
 		}
 
 		this.resetParticles();
+		
+		// - obstacle buffers
+		this.obstacleBuffer = new ShaderStorageBuffer(0);
+		this.obstacleBuffer.setUsage(GL_STATIC_DRAW);
+		
+		this.obstacles = new ArrayList<>();
+		
+		this.uiScreen = new UIScreen();
+		
+		this.addObstacle(new Obstacle(new Vec2(10, 10), new Vec2(50, 50)));
 
 		this._resize();
 	}
@@ -281,6 +363,8 @@ public class HW3Aquarium extends Window {
 		this.particleBuffer.kill();
 		this.particleInfoBuffer.kill();
 		this.hashLUTBuffer.kill();
+		
+		this.obstacleBuffer.kill();
 
 		this.waterCompute1.kill();
 		this.waterCompute21.kill();
@@ -294,10 +378,20 @@ public class HW3Aquarium extends Window {
 		this.shadowShader.kill();
 		this.gaussianShader.kill();
 		this.backgroundShader.kill();
+		this.obstacleNormalShader.kill();
 
 		this.densityBuffer.kill();
+		this.obstacleRenderBuffer.kill();
 		this.shadowBuffer.kill();
 		this.gaussianBlurBuffer.kill();
+		
+		for(Obstacle o : this.obstacles) {
+			o.kill();
+		}
+		
+		this.uiScreen.kill();
+		Scene.removeScene(OBSTACLE_RENDER_SCENE);
+		Scene.removeScene(UI_SCENE);
 	}
 
 	@Override
@@ -305,6 +399,11 @@ public class HW3Aquarium extends Window {
 		if (this.densityBuffer != null) {
 			this.densityBuffer.kill();
 			this.densityBuffer = null;
+		}
+		
+		if(this.obstacleRenderBuffer != null) {
+			this.obstacleRenderBuffer.kill();
+			this.obstacleRenderBuffer = null;
 		}
 
 		if (this.shadowBuffer != null) {
@@ -325,6 +424,18 @@ public class HW3Aquarium extends Window {
 			this.densityBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, this.normalMap.getID());
 			this.densityBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 });
 			this.densityBuffer.isComplete();
+			
+			this.obstacleRenderBuffer = new Framebuffer(this.getWidth(), this.getHeight());
+			this.obstacleMap = new Texture(this.getWidth(), this.getHeight(), GL_RGBA32F, GL_RGBA, GL_FLOAT);
+			this.obstacleRenderBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.obstacleMap.getID());
+			this.obstacleRenderBuffer.setDrawBuffers(new int[] {GL_COLOR_ATTACHMENT0});
+			this.obstacleRenderBuffer.isComplete();
+			
+			this.obstacleNormalBuffer = new Framebuffer(this.getWidth(), this.getHeight());
+			this.obstacleNormalMap = new Texture(this.getWidth(), this.getHeight(), GL_RGBA32F, GL_RGBA, GL_FLOAT);
+			this.obstacleNormalBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.obstacleNormalMap.getID());
+			this.obstacleNormalBuffer.setDrawBuffers(new int[] {GL_COLOR_ATTACHMENT0});
+			this.obstacleNormalBuffer.isComplete();
 
 			this.shadowBuffer = new Framebuffer(this.getWidth(), this.getHeight());
 			this.shadowMap = new Texture(this.getWidth(), this.getHeight(), GL_RGBA32F, GL_RGBA, GL_FLOAT);
@@ -338,6 +449,8 @@ public class HW3Aquarium extends Window {
 			this.gaussianBlurBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
 			this.gaussianBlurBuffer.isComplete();
 		}
+		
+		this.uiScreen.setScreenDimensions(this.getWidth(), this.getHeight());
 	}
 
 	@Override
@@ -371,6 +484,20 @@ public class HW3Aquarium extends Window {
 			p.writeToBuffer(data, i * SIZEOF_PARTICLE / 4);
 		}
 		this.particleBuffer.setSubData(data, 0);
+	}
+	
+	private void addObstacle(Obstacle o) {
+		this.obstacles.add(o);
+		this.updateObstacleBuffers();
+	}
+	
+	private void updateObstacleBuffers() {
+		int nr_obstacles = this.obstacles.size();
+		int[] data = new int[nr_obstacles * SIZEOF_OBSTACLE / 4];
+		for(int i = 0; i < nr_obstacles; i++) {
+			this.obstacles.get(i).writeToBuffer(data, i * SIZEOF_OBSTACLE / 4);
+		}
+		this.obstacleBuffer.setData(data);
 	}
 
 	private void waterUpdate(float dt) {
@@ -487,6 +614,7 @@ public class HW3Aquarium extends Window {
 			this.particleBuffer.bindToBase(0);
 			this.hashLUTBuffer.bindToBase(1);
 			this.particleInfoBuffer.bindToBase(2);
+			this.obstacleBuffer.bindToBase(3);
 
 			this.waterCompute4.setUniform1f("dt", dt);
 			this.waterCompute4.setUniform2f("gravity", settings.gravity);
@@ -510,6 +638,8 @@ public class HW3Aquarium extends Window {
 			this.waterCompute4.setUniform1f("target_density", settings.targetDensity);
 			this.waterCompute4.setUniform1f("pressure_multiplier", settings.pressureMultiplier);
 			this.waterCompute4.setUniform1f("near_pressure_multiplier", settings.nearPressureMultiplier);
+			
+			this.waterCompute4.setUniform1i("nr_obstacles", this.obstacles.size());
 
 			glDispatchCompute(NR_PARTICLES / spatialWorkgroupSz, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -569,16 +699,39 @@ public class HW3Aquarium extends Window {
 	}
 
 	private void waterRenderPipelineV1(Framebuffer outputBuffer) {
-
 		//clear buffer
 		{
 			this.densityBuffer.bind();
 			glClear(GL_COLOR_BUFFER_BIT);
 
+			this.obstacleRenderBuffer.bind();
+			glClear(GL_COLOR_BUFFER_BIT);
+			
 			this.shadowBuffer.bind();
 			glClear(GL_COLOR_BUFFER_BIT);
 		}
-
+		
+		//render obstacles
+		{
+			//render base map
+			this.uiScreen.setUIScene(OBSTACLE_RENDER_SCENE);
+			this.uiScreen.render(this.obstacleRenderBuffer);
+			
+			//render normals
+			this.obstacleNormalBuffer.bind();
+			
+			this.obstacleNormalShader.enable();
+			
+			this.obstacleNormalShader.setUniform1f("window_width", this.getWidth());
+			this.obstacleNormalShader.setUniform1f("window_height", this.getHeight());
+			
+			this.obstacleMap.bind(GL_TEXTURE0);
+			
+			glViewport(0, 0, this.getWidth(), this.getHeight());
+			ScreenQuad.screenQuad.render();
+		}
+		
+		
 		//render water density
 		{
 			this.densityBuffer.bind();
@@ -619,6 +772,7 @@ public class HW3Aquarium extends Window {
 			this.shadowShader.setUniform1f("window_height", this.getHeight());
 
 			this.densityMap.bind(GL_TEXTURE0);
+			this.obstacleMap.bind(GL_TEXTURE1);
 
 			glViewport(0, 0, this.getWidth(), this.getHeight());
 			ScreenQuad.screenQuad.render();
@@ -651,12 +805,14 @@ public class HW3Aquarium extends Window {
 
 			this.densityMap.bind(GL_TEXTURE0);
 			this.normalMap.bind(GL_TEXTURE1);
+			this.obstacleMap.bind(GL_TEXTURE2);
+			this.obstacleNormalMap.bind(GL_TEXTURE3);
 
 			glViewport(0, 0, this.getWidth(), this.getHeight());
 			ScreenQuad.screenQuad.render();
 		}
-
-	}
+		
+	}	
 
 	private void waterRenderPipelineV0(Framebuffer outputBuffer) {
 		Mat4 pr_matrix = this.getPrMatrix();
