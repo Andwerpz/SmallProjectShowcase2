@@ -59,6 +59,10 @@ public class ProceduralTreesWindow extends Window {
 	}
 
 	private void init() {
+		this.setLockCursorOnSelect(true);
+		this.setDeselectOnEscPressed(true);
+		this.setUnlockCursorOnEscPressed(true);
+
 		this.perspectiveScreen = new PerspectiveScreen();
 		this.perspectiveScreen.renderSkybox(true);
 

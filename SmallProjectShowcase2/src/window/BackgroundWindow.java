@@ -7,6 +7,7 @@ import csce_vis.hw1.HW1Window;
 import csce_vis.hw2.HW2Window;
 import csce_vis.hw3.HW3Aquarium;
 import csce_vis.hw3.HW3Window;
+import csce_vis.hw4.HW4Window;
 import genetic_image_builder.GeneticImageBuilder;
 import hydraulic_terrain.HydraulicTerrainWindow;
 import logic_simulator.CircuitEditorWindow;
@@ -163,6 +164,7 @@ public class BackgroundWindow extends Window {
 			proj_window.addToList("Homework 2");
 			proj_window.addToList("Homework 3");
 			proj_window.addToList("Homework 3 3D");
+			proj_window.addToList("Homework 4");
 			break;
 		}
 
@@ -371,6 +373,11 @@ public class BackgroundWindow extends Window {
 
 			case "Homework 3 3D": {
 				AdjustableWindow window = new AdjustableWindow(new HW3Window(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "Homework 4": {
+				AdjustableWindow window = new AdjustableWindow(new HW4Window(x, y, width, height, null), BackgroundWindow.this);
 				break;
 			}
 			}
