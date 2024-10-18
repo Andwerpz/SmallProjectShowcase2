@@ -27,6 +27,8 @@ public class HW4Window extends Window {
 	private PerspectiveScreen perspectiveScreen;
 
 	private PlayerInputController pic;
+	
+	private State state;
 
 	public HW4Window(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
@@ -98,6 +100,31 @@ public class HW4Window extends Window {
 				}
 			}
 		}
+		
+		Shape cube = null;
+		{
+			ArrayList<Node> nodes = new ArrayList<>();
+			ArrayList<Spring> springs = new ArrayList<>();
+			ArrayList<Face> faces = new ArrayList<>();
+			
+			Node n0 = new Node(new Vec3(-5, -5, -5), 1);
+			Node n1 = new Node(new Vec3(-5, -5, -5), 1);
+			Node n2 = new Node(new Vec3(-5, -5, -5), 1);
+			Node n3 = new Node(new Vec3(-5, -5, -5), 1);
+			Node n4 = new Node(new Vec3(-5, -5, -5), 1);
+			Node n5 = new Node(new Vec3(-5, -5, -5), 1);
+			Node n6 = new Node(new Vec3(-5, -5, -5), 1);
+			Node n7 = new Node(new Vec3(-5, -5, -5), 1);
+			
+			//suspend cube by corner
+		}
+		
+		//build state
+		{
+			
+			
+			
+		}
 
 		this._resize();
 	}
@@ -122,6 +149,8 @@ public class HW4Window extends Window {
 	@Override
 	protected void _update() {
 		this.pic.update();
+		
+		this.state.step(1.0f / 60.0f);
 	}
 
 	@Override
@@ -196,67 +225,193 @@ public class HW4Window extends Window {
 	}
 
 	class Node {
-		Vec3 pos;
-		float mass = 1;
+		Vec3 pos, vel;
+		float inv_mass;
 
 		public Node(Vec3 _pos, float _mass) {
 			this.pos = new Vec3(_pos);
-			this.mass = _mass;
+			this.vel = new Vec3(0);
+			this.inv_mass = 1.0f / _mass;
 		}
 
 		public Node(Node n) {
 			this.pos = new Vec3(n.pos);
-			this.mass = n.mass;
+			this.vel = new Vec3(n.vel);
+			this.inv_mass = n.inv_mass;
 		}
 	}
 
 	class Spring {
-		Node a, b;
+		int a, b;
 		float k, rest_len;
-
-		public Spring(Node _a, Node _b, float _k, float _rest_len) {
+		
+		public Spring(int _a, int _b, float _k, float _rest_len) {
 			this.a = _a;
 			this.b = _b;
 			this.k = _k;
 			this.rest_len = _rest_len;
 		}
+		
+		public Spring(Spring s) {
+			this.a = s.a;
+			this.b = s.b;
+			this.k = s.k;
+			this.rest_len = s.rest_len;
+		}
+	}
+	
+	class Face {
+		int a, b, c;
+		
+		public Face(int _a, int _b, int _c) {
+			this.a = _a;
+			this.b = _b;
+			this.c = _c;
+		}
+		
+		public Face(Face f) {
+			this.a = f.a;
+			this.b = f.b;
+			this.c = f.c;
+		}
+	}
+	
+	class Shape {
+		//a collection of nodes, springs, and faces
+		//ideally, should be closed. 
+		Node[] nodes;
+		Spring[] springs;
+		Face[] faces;
+		
+		ModelInstance[] model_instances;
+		boolean is_rendering = false;
+		
+		public Shape(ArrayList<Node> _nodes, ArrayList<Spring> _springs, ArrayList<Face> _faces) {
+			this.nodes = new Node[_nodes.size()];
+			this.springs = new Spring[_springs.size()];
+			this.faces = new Face[_faces.size()];
+			
+			for (int i = 0; i < _nodes.size(); i++) {
+				this.nodes[i] = new Node(_nodes.get(i));
+			}
+			for (int i = 0; i < _springs.size(); i++) {
+				this.springs[i] = new Spring(_springs.get(i));
+			}
+			for (int i = 0; i < _faces.size(); i++) {
+				this.faces[i] = new Face(_faces.get(i));
+			}
+		}
+		
+		public Shape(Shape _s) {
+			this.nodes = new Node[_s.nodes.length];
+			this.springs = new Spring[_s.springs.length];
+			this.faces = new Face[_s.faces.length];
+			
+			for (int i = 0; i < this.nodes.length; i++) {
+				this.nodes[i] = new Node(_s.nodes[i]);
+			}
+			for (int i = 0; i < this.springs.length; i++) {
+				this.springs[i] = new Spring(_s.springs[i]);
+			}
+			for (int i = 0; i < this.faces.length; i++) {
+				this.faces[i] = new Face(_s.faces[i]);
+			}
+		}
+		
+		public void step(float dt) {
+			//forces are pretty much accel * mass
+			Vec3[] force = new Vec3[this.nodes.length];	
+			for(int i = 0; i < this.nodes.length; i++) {
+				force[i] = new Vec3(0);
+			}
+			
+			//springs
+			for(int i = 0; i < this.springs.length; i++) {
+				Spring s = this.springs[i];
+				Node na = this.nodes[s.a];
+				Node nb = this.nodes[s.b];
+				
+				Vec3 ab = new Vec3(na.pos, nb.pos);
+				float len = ab.length();
+				float diff = s.rest_len - len;
+				
+				force[s.a].addi(ab.mul(diff * s.k * dt));
+				force[s.b].addi(ab.mul(-diff * s.k * dt));
+			}
+			
+			//integrate
+			for(int i = 0; i < this.nodes.length; i++) {
+				Node n = this.nodes[i];
+				
+				Vec3 n_pos = n.pos.add(n.vel.mul(n.inv_mass * dt));
+				Vec3 n_vel = n.vel.add(force[i].mul(n.inv_mass));
+				
+				n.pos.set(n_pos);
+				n.vel.set(n_vel);
+			}
+			
+			this.updateModelInstances();
+		}
+		
+		public void updateModelInstances() {
+			//TODO
+		}
+		
+		public void setIsRendering(boolean b) {
+			if(this.is_rendering == b) {
+				return;
+			}
+			this.is_rendering = b;
+			
+			if(this.is_rendering) {
+				this.model_instances = new ModelInstance[this.faces.length];
+				for(int i = 0; i < this.faces.length; i++) {
+					Face f = this.faces[i];
+					Node n0 = this.nodes[f.a];
+					Node n1 = this.nodes[f.b];
+					Node n2 = this.nodes[f.c];
+					this.model_instances[i] = Triangle.addTriangle(n0.pos, n1.pos, n2.pos, WORLD_SCENE);
+				}
+			}
+			else {
+				for(ModelInstance m : this.model_instances) {
+					m.kill();
+				}
+				this.model_instances = null;
+			}
+		}
 	}
 
 	class State {
-		Node[] nodes;
-		Spring[] springs;
-		Node[][] faces;
+		//a collection of shapes
+		ArrayList<Shape> shapes;
+		
+		boolean is_rendering = false;
 
-		public State(ArrayList<Node> _nodes, ArrayList<Spring> _springs, ArrayList<Node[]> _faces) {
-			this.nodes = new Node[_nodes.size()];
-			this.springs = new Spring[_springs.size()];
-			this.faces = new Node[_faces.size()][3];
-
-			HashMap<Node, Node> node_map = new HashMap<>(); //map old to new nodes
-			for (int i = 0; i < _nodes.size(); i++) {
-				this.nodes[i] = new Node(_nodes.get(i));
-				node_map.put(_nodes.get(i), this.nodes[i]);
-			}
-
-			for (int i = 0; i < _springs.size(); i++) {
-				Spring s = _springs.get(i);
-				this.springs[i] = new Spring(node_map.get(s.a), node_map.get(s.b), s.k, s.rest_len);
-			}
-
-			for (int i = 0; i < _faces.size(); i++) {
-				Node a = _faces.get(i)[0];
-				Node b = _faces.get(i)[1];
-				Node c = _faces.get(i)[2];
-				this.faces[i] = new Node[] { node_map.get(a), node_map.get(b), node_map.get(c) };
+		public State() {
+			this.shapes = new ArrayList<>();
+		}
+		
+		public State(State _s) {
+			this.shapes = new ArrayList<>();
+			for(Shape s : _s.shapes) {
+				this.shapes.add(new Shape(s));
 			}
 		}
-
-		public State(State s) {
-
+		
+		public void setIsRendering(boolean b) {
+			this.is_rendering = b;
+			for(Shape s : this.shapes) {
+				s.setIsRendering(b);
+			}
 		}
 
 		public void step(float dt) {
-
+			for(Shape s : this.shapes) {
+				s.step(dt);
+			}
+			
+			//do shape collisions
 		}
 	}
 
