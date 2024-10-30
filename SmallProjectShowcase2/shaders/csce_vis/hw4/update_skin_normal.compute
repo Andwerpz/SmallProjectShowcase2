@@ -1,0 +1,92 @@
+#version 430 core
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 0) buffer posBuffer {
+	float[] posData;
+};
+
+//where does my entry in the face list start, and how many faces am i a part of?
+layout(binding = 1) buffer faceListPtrBuffer {
+	int[] faceListPtrData;
+};
+
+//for this vertex, what faces am i a part of?
+layout(binding = 2) buffer faceListBuffer {
+	int[] faceListData;
+};
+
+//for each face, what nodes are a part of that face?
+layout(binding = 3) buffer faceBuffer {
+	int[] faceData;
+};
+
+layout(binding = 4) buffer outNormalBuffer {
+	float[] outNormal;
+};
+
+layout(binding = 5) buffer outTangentBuffer {
+	float[] outTangent;
+};
+
+layout(binding = 6) buffer outBitangentBuffer {
+	float[] outBitangent;
+};
+
+vec3 getPos(int ind) {
+	return vec3(posData[ind * 3 + 0], posData[ind * 3 + 1], posData[ind * 3 + 2]);
+}
+
+void main() {
+	int vertex_id = int(gl_GlobalInvocationID.x);
+	int face_list_offset = faceListPtrData[vertex_id * 2 + 0];
+	int face_list_amt = faceListPtrData[vertex_id * 2 + 1];
+	
+	vec3 normal = vec3(0);
+	for(int i = face_list_offset; i < face_list_offset + face_list_amt; i++){
+		int ia = faceData[faceListData[i] + 0];
+		int ib = faceData[faceListData[i] + 1];
+		int ic = faceData[faceListData[i] + 2];
+		vec3 a = getPos(ia); 
+		vec3 b = getPos(ib); 
+		vec3 c = getPos(ic); 
+		
+		vec3 face_normal = normalize(cross(b - a, c - a));
+		
+		if(vertex_id == ia) {
+			normal += face_normal * acos(dot(normalize(b - a), normalize(c - a)));
+		}
+		else if(vertex_id == ib){
+			normal += face_normal * acos(dot(normalize(a - b), normalize(c - b)));
+		}
+		else {	//vertex_id == ic
+			normal += face_normal * acos(dot(normalize(a - c), normalize(b - c)));
+		}	
+	}
+	normal = normalize(normal);
+	
+	//compute tangent and bitangent
+	vec3 tangent = vec3(0);
+	if(abs(dot(vec3(1, 0, 0), normal)) < 0.707) {
+		tangent = cross(vec3(1, 0, 0), normal);
+	}
+	else {
+		tangent = cross(vec3(0, 1, 0), normal);
+	}
+	tangent = normalize(tangent);
+	vec3 bitangent = normalize(cross(normal, tangent));
+	
+	outNormal[vertex_id * 3 + 0] = normal.x;
+	outNormal[vertex_id * 3 + 1] = normal.y;
+	outNormal[vertex_id * 3 + 2] = normal.z;
+	outTangent[vertex_id * 3 + 0] = tangent.x;
+	outTangent[vertex_id * 3 + 1] = tangent.y;
+	outTangent[vertex_id * 3 + 2] = tangent.z;
+	outBitangent[vertex_id * 3 + 0] = bitangent.x;
+	outBitangent[vertex_id * 3 + 1] = bitangent.y;
+	outBitangent[vertex_id * 3 + 2] = bitangent.z;
+}
+
+
+
+
+

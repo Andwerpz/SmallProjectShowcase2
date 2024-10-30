@@ -1,0 +1,1830 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<sprite_list>
+<sprites>
+    <fileName>action hero.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>aircraft hunter.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>all clear.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>alpha lockdown.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>an-94 qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>annihilation victory.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>anti-swatter.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1562</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>arch nemesis.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1822</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>armchair.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2082</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>assault shield qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2342</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>assisted homicide.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2602</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>asterisk full.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2862</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>avenger.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3122</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>axe.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3382</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>b23r qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3642</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>backdraft.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3902</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>ballista qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>4162</x>
+    <y>2</y>
+</sprites>
+<sprites>
+    <fileName>ballistic knife qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>big game hunter.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>bike ramp.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>biohazard.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>bomb protector .png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>bomb protector.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>bone.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1562</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>bravo hot.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1822</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>bravo lockdown.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2082</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>brigadier general.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2342</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>broken column.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2602</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>brutal killer.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2862</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>cancelled out.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3122</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>captain.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3382</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>charlie lockdown.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3642</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>chicom cqb qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3902</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>circle 02.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>4162</x>
+    <y>262</y>
+</sprites>
+<sprites>
+    <fileName>circus act.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>clean house.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>clean sweep.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>close call.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>close quarters expert.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>colonel.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>commander.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1562</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>commando.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1822</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>cone.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2082</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>corporal.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2342</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>counter hacker.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2602</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>counter trapper.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2862</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>crossbow qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3122</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>crushing victory     .png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3382</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>crushing victory    .png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3642</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>crushing victory   .png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3902</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>crushing victory  .png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>4162</x>
+    <y>522</y>
+</sprites>
+<sprites>
+    <fileName>crushing victory .png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>crushing victory.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>curved line.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>danger close.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>default emblem.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>diamond.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>dog pound.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1562</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>double denied.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1822</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>down dog.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2082</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>drones eliminated.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2342</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>dsr 50 qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2602</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>eight.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2862</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>elite founder.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3122</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>elite member.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3382</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>executioner qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3642</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>fal osw qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3902</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>far sighted.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>4162</x>
+    <y>782</y>
+</sprites>
+<sprites>
+    <fileName>fedora.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>fhj-18 aa qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>five-seven qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>five.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>flag breeze.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>flag no wind.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>flashlight.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1562</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>focus fire.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1822</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>follow through.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2082</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>found kills.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2342</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>four.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2602</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>frenzy killer.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2862</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>full circle.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3122</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>fury killer.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3382</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>general.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3642</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>golf flag.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3902</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>got your back.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>4162</x>
+    <y>1042</y>
+</sprites>
+<sprites>
+    <fileName>grab n go.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>guerilla warfare.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>guide dogs.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>gunfighter.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>gunnery sergeant.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>hail mary.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>half circle.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1562</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>half column.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1822</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>half heart.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2082</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>half long hair.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2342</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>half mustache.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2602</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>half short hair.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2862</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>half shuriken.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3122</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>half star.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3382</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>half tube.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3642</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>hamr qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3902</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>hard counter.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>4162</x>
+    <y>1302</y>
+</sprites>
+<sprites>
+    <fileName>hard to kill.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>headhunter.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>heart.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>heavy cover.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>high voltage.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>ice star.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>igloo.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1562</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>interruption .png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1822</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>interruption.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2082</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>invincible.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2342</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>kap-40 qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2602</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>killjoy.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2862</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>kiss.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3122</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>ksg qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3382</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>lamp shade.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3642</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>lance corporal.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3902</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>last man standing.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>4162</x>
+    <y>1562</y>
+</sprites>
+<sprites>
+    <fileName>letter a.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter b.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter c.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter d.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter e.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter f.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter g.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1562</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter h.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1822</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter i.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2082</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter j.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2342</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter k.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2602</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter l.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2862</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter m.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3122</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter n.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3382</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter o.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3642</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter p.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3902</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter q.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>4162</x>
+    <y>1822</y>
+</sprites>
+<sprites>
+    <fileName>letter r.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>letter s.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>letter t.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>letter u.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>letter v.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>letter w.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>letter x.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1562</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>letter y.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1822</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>letter z.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2082</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>lieutenant.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2342</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>lsat qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2602</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>lt. colonel.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2862</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>lt. general.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3122</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>m1216 qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3382</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>m27 qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3642</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>m8a1 qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3902</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>major general.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>4162</x>
+    <y>2082</y>
+</sprites>
+<sprites>
+    <fileName>major.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>make it rain.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>mane.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>master gunnery sergeant.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>master sergeant.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>maximum payload.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>merciless.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1562</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>mk 48 qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1822</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>monolith.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2082</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>mp7 qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2342</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>msmc qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2602</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>mtar qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2862</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>nine.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3122</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>ninja star.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3382</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>ninja.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3642</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>one.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3902</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>opportunistic.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>4162</x>
+    <y>2342</y>
+</sprites>
+<sprites>
+    <fileName>oven mitt.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>overcooked.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>overkill.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>paint splash.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>pdw-57 qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>peacekeeper qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>perk greed.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1562</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>pest control.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1822</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>pie slice.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2082</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>pillow.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2342</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>pistoleer.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2602</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>podium.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2862</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>point man.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3122</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>private 1st class.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3382</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>protected kill.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3642</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>pyramid.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3902</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>qbb lsw qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>4162</x>
+    <y>2602</y>
+</sprites>
+<sprites>
+    <fileName>quarter circle.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>r870 mcs qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>rc multi bomber.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>rectangle medium.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>relentless.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>rock shadow.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>rock.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1562</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>round square.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1822</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>rpg qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2082</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>ruthless.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2342</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>s12 qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2602</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>savior.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2862</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>say hello.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3122</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>scar-h qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3382</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>scoop.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3642</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>scribble.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3902</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>second lieutenant.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>4162</x>
+    <y>2862</y>
+</sprites>
+<sprites>
+    <fileName>sergeant.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>seven.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>sharpshooter.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>shield.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>short fuse.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>shredder.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>shuriken.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1562</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>shutout .png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1822</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>shutout round.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2082</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>shutout.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2342</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>situation critical.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2602</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>six.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2862</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>skorpion evo qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3122</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>slice 'n dice.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3382</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>small game hunter.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3642</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>smaw qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3902</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>smile outline.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>4162</x>
+    <y>3122</y>
+</sprites>
+<sprites>
+    <fileName>smr qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>special delivery.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>square full.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>staff sergeant.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>stick around.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>super killer.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>super star.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1562</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>surprise package.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1822</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>svu-as qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2082</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>swat-556 qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2342</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>swoop.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2602</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>synchronized attack.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2862</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>tac-45 qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3122</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>tent.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3382</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>the finisher.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3642</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>thief.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3902</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>thimble.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>4162</x>
+    <y>3382</y>
+</sprites>
+<sprites>
+    <fileName>threat neutralized.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>three.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>thumper.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>tick tick boom.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>tongue.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>top hat.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>tracker.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1562</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>treyarch.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1822</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>triangle wide.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2082</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>trick shot.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2342</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>triple kill.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2602</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>tube.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2862</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>two.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3122</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>type 25 qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3382</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>unstoppable.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3642</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>vandalism.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>3902</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>vector k10 qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>4162</x>
+    <y>3642</y>
+</sprites>
+<sprites>
+    <fileName>visor.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>2</x>
+    <y>3902</y>
+</sprites>
+<sprites>
+    <fileName>wet work.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>262</x>
+    <y>3902</y>
+</sprites>
+<sprites>
+    <fileName>wind sock.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>522</x>
+    <y>3902</y>
+</sprites>
+<sprites>
+    <fileName>xpr-50 qualified.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>782</x>
+    <y>3902</y>
+</sprites>
+<sprites>
+    <fileName>zero.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1042</x>
+    <y>3902</y>
+</sprites>
+<sprites>
+    <fileName>zone sweep.png</fileName>
+    <width>256</width>
+    <height>256</height>
+    <x>1302</x>
+    <y>3902</y>
+</sprites>
+</sprite_list>

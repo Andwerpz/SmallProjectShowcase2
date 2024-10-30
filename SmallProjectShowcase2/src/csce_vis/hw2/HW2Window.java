@@ -659,7 +659,7 @@ public class HW2Window extends Window {
 			Vec3 center = this.pic.getTop().add(this.pic.getFacing().mul(1));
 
 			for (int i = 0; i < 30000; i++) {
-				Vec3 dir = MathUtils.randomUnitDir();
+				Vec3 dir = MathUtils.randomUnitDir3D();
 				float vel = 6f;
 
 				Particle p = new Particle(center, dir.mul(vel));

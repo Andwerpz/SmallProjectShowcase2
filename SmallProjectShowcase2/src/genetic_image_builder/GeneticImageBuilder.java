@@ -92,6 +92,61 @@ public class GeneticImageBuilder extends Window implements FileSelectorCallback 
 	private static final int INSTANCED_HUE_LOC = 5;
 	private static final int INSTANCED_UV_LOC = 6;
 
+	private void loadBO2Sprites() {
+		this.spriteTexture = new Texture("/res/bo2_emblems/sprite_sheet.png");
+
+		XMLNode root = null;
+		{
+			String xmlString = FileUtils.loadStringRelative("/res/bo2_emblems/data.xml");
+			root = XMLReader.parseStringAsXML(xmlString);
+
+			File test_file = FileUtils.loadFileRelative("/res/test_xml.txt");
+			try {
+				root.saveToFile(test_file);
+			}
+			catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+
+		ArrayList<XMLNode> sprite_nodes = root.getChildren().get(1).getChildren();
+		System.out.println("Sprite Amount : " + sprite_nodes.size());
+		this.sprites = new Sprite[sprite_nodes.size()];
+		for (int i = 0; i < sprite_nodes.size(); i++) {
+			XMLNode sprite_node = sprite_nodes.get(i);
+			String name = sprite_node.getChildren().get(0).getContent().get(0);
+			System.out.println(name);
+
+			//size
+			int sx = Integer.parseInt(sprite_node.getChildren().get(1).getContent().get(0));
+			int sy = Integer.parseInt(sprite_node.getChildren().get(2).getContent().get(0));
+
+			//offset from top left
+			int ox = Integer.parseInt(sprite_node.getChildren().get(3).getContent().get(0));
+			int oy = Integer.parseInt(sprite_node.getChildren().get(4).getContent().get(0));
+
+			//convert to offset from bottom left
+			oy = this.spriteTexture.getHeight() - 1 - oy;
+
+			//now it refers to bottom left corner of sprite
+			oy -= sy;
+
+			IVec2 size = new IVec2(sx, sy);
+			Vec2 uv_00 = new Vec2(ox, oy);
+			Vec2 uv_11 = new Vec2(ox + sx, oy + sy);
+			uv_00.x /= this.spriteTexture.getWidth();
+			uv_00.y /= this.spriteTexture.getHeight();
+			uv_11.x /= this.spriteTexture.getWidth();
+			uv_11.y /= this.spriteTexture.getHeight();
+
+			Sprite s = new Sprite(size, uv_00, uv_11);
+			this.sprites[i] = s;
+
+			System.out.println(uv_00 + " " + uv_11);
+		}
+	}
+
 	public GeneticImageBuilder(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
 
@@ -102,6 +157,83 @@ public class GeneticImageBuilder extends Window implements FileSelectorCallback 
 			AdjustableWindow adj = new AdjustableWindow("Rendering Options", new ObjectEditorWindow(this.renderOptions), this);
 		}
 
+		//		this.loadGDashSprites();
+		this.loadBO2Sprites();
+
+		//choose target
+		this.target = new Texture("/res/astolfo 11.jpg", 0, GL_RGBA32F, GL_NEAREST, GL_NEAREST, 1);
+		this.canvasWidth = this.target.getWidth();
+		this.canvasHeight = this.target.getHeight();
+		this.canvas = new Texture(this.canvasWidth, this.canvasHeight, GL_RGBA32F, 0, 0, 0, 255);
+
+		this.canvasFramebuffer = new Framebuffer(this.canvasWidth, this.canvasHeight);
+		this.canvasFramebuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.canvas.getID());
+		this.canvasFramebuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
+		this.canvasFramebuffer.isComplete();
+
+		//display target and canvas to user
+		{
+			this.targetW = new AdjustableWindow("Target", new TextureViewerWindow(this.target), this);
+			this.canvasW = new AdjustableWindow("Canvas", new TextureViewerWindow(this.canvas), this);
+		}
+
+		//set up shader buffers
+		this.invMat4Buffer = new ShaderStorageBuffer();
+		this.materialBuffer = new ShaderStorageBuffer();
+		this.uvBuffer = new ShaderStorageBuffer();
+		this.scoreBuffer = new ShaderStorageBuffer();
+
+		this.invMat4Buffer.setUsage(GL_DYNAMIC_READ);
+		this.materialBuffer.setUsage(GL_DYNAMIC_READ);
+		this.uvBuffer.setUsage(GL_DYNAMIC_READ);
+		this.scoreBuffer.setUsage(GL_DYNAMIC_READ);
+
+		this.invMat4Buffer.setSize(GENERATION_POPULATION * 16 * 4); //mat4 for each sprite
+		this.materialBuffer.setSize(GENERATION_POPULATION * 4 * 4); //vec4 for each sprite
+		this.uvBuffer.setSize(GENERATION_POPULATION * 4 * 4);
+		this.scoreBuffer.setSize(GENERATION_POPULATION * 4);//float for each sprite
+
+		//init shaders
+		this.scoreShader = ShaderUtils.createShader("/genetic_image_builder/calc_score.vert", "/genetic_image_builder/calc_score.frag");
+		this.scoreShader.setUniform1i("tex_spritesheet", 0);
+		this.drawShader = ShaderUtils.createShader("/genetic_image_builder/draw_sprite.vert", "/genetic_image_builder/draw_sprite.frag");
+		this.drawShader.setUniform1i("tex_spritesheet", 0);
+
+		//set up vertex array buffers
+		float[] vertices = new float[] { 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, };
+		int[] indices = new int[] { 0, 1, 2, 0, 2, 3, };
+
+		this.vao = glGenVertexArrays();
+		glBindVertexArray(this.vao);
+
+		this.vbo = glGenBuffers(); //vertices
+		glBindBuffer(GL_ARRAY_BUFFER, this.vbo);
+		glBufferData(GL_ARRAY_BUFFER, BufferUtils.createFloatBuffer(vertices), GL_STATIC_DRAW);
+		glVertexAttribPointer(VERTEX_LOC, 3, GL_FLOAT, false, 0, 0);
+		glEnableVertexAttribArray(VERTEX_LOC);
+
+		this.ibo = glGenBuffers(); //indices
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, BufferUtils.createIntBuffer(indices), GL_STATIC_DRAW);
+
+		this.mat4bo = glGenBuffers(); //model mat4s
+		glBindBuffer(GL_ARRAY_BUFFER, this.mat4bo);
+		glBufferData(GL_ARRAY_BUFFER, GENERATION_POPULATION * 16 * 4, GL_DYNAMIC_DRAW);
+
+		this.huebo = glGenBuffers(); //hue
+		glBindBuffer(GL_ARRAY_BUFFER, this.huebo);
+		glBufferData(GL_ARRAY_BUFFER, GENERATION_POPULATION * 4 * 4, GL_DYNAMIC_DRAW);
+
+		this.uvbo = glGenBuffers(); //uvs
+		glBindBuffer(GL_ARRAY_BUFFER, this.uvbo);
+		glBufferData(GL_ARRAY_BUFFER, GENERATION_POPULATION * 4 * 4, GL_DYNAMIC_DRAW);
+
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
+	}
+
+	public void loadGDashSprites() {
 		//load spritesheet
 		this.spriteTexture = new Texture("/res/GD_decor/GJ_GameSheet-hd.png");
 
@@ -180,78 +312,6 @@ public class GeneticImageBuilder extends Window implements FileSelectorCallback 
 			Sprite s = new Sprite(size, uv_00, uv_11);
 			this.sprites[i] = s;
 		}
-
-		//choose target
-		this.target = new Texture("/res/astolfo 11.jpg", 0, GL_RGBA32F, GL_NEAREST, GL_NEAREST, 1);
-		this.canvasWidth = this.target.getWidth();
-		this.canvasHeight = this.target.getHeight();
-		this.canvas = new Texture(this.canvasWidth, this.canvasHeight, GL_RGBA32F, 0, 0, 0, 255);
-
-		this.canvasFramebuffer = new Framebuffer(this.canvasWidth, this.canvasHeight);
-		this.canvasFramebuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.canvas.getID());
-		this.canvasFramebuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
-		this.canvasFramebuffer.isComplete();
-
-		//display target and canvas to user
-		{
-			this.targetW = new AdjustableWindow("Target", new TextureViewerWindow(this.target), this);
-			this.canvasW = new AdjustableWindow("Canvas", new TextureViewerWindow(this.canvas), this);
-		}
-
-		//set up shader buffers
-		this.invMat4Buffer = new ShaderStorageBuffer();
-		this.materialBuffer = new ShaderStorageBuffer();
-		this.uvBuffer = new ShaderStorageBuffer();
-		this.scoreBuffer = new ShaderStorageBuffer();
-
-		this.invMat4Buffer.setUsage(GL_DYNAMIC_READ);
-		this.materialBuffer.setUsage(GL_DYNAMIC_READ);
-		this.uvBuffer.setUsage(GL_DYNAMIC_READ);
-		this.scoreBuffer.setUsage(GL_DYNAMIC_READ);
-
-		this.invMat4Buffer.setSize(GENERATION_POPULATION * 16 * 4); //mat4 for each sprite
-		this.materialBuffer.setSize(GENERATION_POPULATION * 4 * 4); //vec4 for each sprite
-		this.uvBuffer.setSize(GENERATION_POPULATION * 4 * 4);
-		this.scoreBuffer.setSize(GENERATION_POPULATION * 4);//float for each sprite
-
-		//init shaders
-		this.scoreShader = ShaderUtils.createShader("/genetic_image_builder/calc_score.vert", "/genetic_image_builder/calc_score.frag");
-		this.scoreShader.setUniform1i("tex_spritesheet", 0);
-		this.drawShader = ShaderUtils.createShader("/genetic_image_builder/draw_sprite.vert", "/genetic_image_builder/draw_sprite.frag");
-		this.drawShader.setUniform1i("tex_spritesheet", 0);
-
-		//set up vertex array buffers
-		float[] vertices = new float[] { 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, };
-		int[] indices = new int[] { 0, 1, 2, 0, 2, 3, };
-
-		this.vao = glGenVertexArrays();
-		glBindVertexArray(this.vao);
-
-		this.vbo = glGenBuffers(); //vertices
-		glBindBuffer(GL_ARRAY_BUFFER, this.vbo);
-		glBufferData(GL_ARRAY_BUFFER, BufferUtils.createFloatBuffer(vertices), GL_STATIC_DRAW);
-		glVertexAttribPointer(VERTEX_LOC, 3, GL_FLOAT, false, 0, 0);
-		glEnableVertexAttribArray(VERTEX_LOC);
-
-		this.ibo = glGenBuffers(); //indices
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, BufferUtils.createIntBuffer(indices), GL_STATIC_DRAW);
-
-		this.mat4bo = glGenBuffers(); //model mat4s
-		glBindBuffer(GL_ARRAY_BUFFER, this.mat4bo);
-		glBufferData(GL_ARRAY_BUFFER, GENERATION_POPULATION * 16 * 4, GL_DYNAMIC_DRAW);
-
-		this.huebo = glGenBuffers(); //hue
-		glBindBuffer(GL_ARRAY_BUFFER, this.huebo);
-		glBufferData(GL_ARRAY_BUFFER, GENERATION_POPULATION * 4 * 4, GL_DYNAMIC_DRAW);
-
-		this.uvbo = glGenBuffers(); //uvs
-		glBindBuffer(GL_ARRAY_BUFFER, this.uvbo);
-		glBufferData(GL_ARRAY_BUFFER, GENERATION_POPULATION * 4 * 4, GL_DYNAMIC_DRAW);
-
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindVertexArray(0);
 	}
 
 	private void resetCanvas() {
