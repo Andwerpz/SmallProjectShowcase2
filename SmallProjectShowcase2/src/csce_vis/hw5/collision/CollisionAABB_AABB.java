@@ -65,8 +65,6 @@ public class CollisionAABB_AABB implements CollisionCallback {
 		m.penetration = least_pen;
 		m.separating_axis = new Vec3(least_axis);
 
-		System.out.println("COLLISION : " + m.separating_axis);
-
 		//TODO : depending on the axis, would need to do different things. 
 		//  for example, if the separating axis is along a face, then we'd want to try to make collisions with that face only. 
 		//  perhaps force collision normals to be in the direction of the separating axis?
@@ -157,31 +155,27 @@ public class CollisionAABB_AABB implements CollisionCallback {
 
 				//see if halfway between them is inside both a and b
 				Vec3 coll_pt = MathUtils.lerp(cpts.first, 0, cpts.second, 1, 0.5f);
-				System.out.println("COLL_PT : " + coll_pt);
+				if(Float.isNaN(cpts.first.x)) {
+					System.exit(0);
+				}
+				
 				boolean inside = true;
 				for (int j = 0; j < 3; j++) {
 					if (Math.abs(MathUtils.dot(new Vec3(this.ba.pos, coll_pt), this.axes_a[j])) > dim_a[j] + 0.0001) {
-						System.out.println("NOT INSIDE AXIS : " + new Vec3(this.ba.pos, coll_pt) + " " + this.axes_a[j] + " " + dim_a[j]);
 						inside = false;
 						break;
 					}
 					if (Math.abs(MathUtils.dot(new Vec3(this.bb.pos, coll_pt), this.axes_b[j])) > dim_b[j] + 0.0001) {
-						System.out.println("NOT INSIDE AXIS : " + new Vec3(this.bb.pos, coll_pt) + " " + this.axes_b[j] + " " + dim_b[j]);
 						inside = false;
 						break;
 					}
 				}
 				if (!inside) {
-					System.out.println("NOT INSIDE");
 					continue;
 				}
 
 				//ok, we can take this one as a collision point
 				Vec3 coll_norm = MathUtils.cross(new Vec3(a0, a1), new Vec3(b0, b1));
-				if (coll_norm.length() < 0.0001) {
-					//edges are roughly parallel, no collision. 
-					continue;
-				}
 				coll_norm.normalize();
 
 				//ensure that collision normal is pointing from b -> a
@@ -192,7 +186,7 @@ public class CollisionAABB_AABB implements CollisionCallback {
 				if (Float.isNaN(coll_pt.x)) {
 					continue;
 				}
-
+				
 				Contact c = new Contact(coll_pt, coll_norm, MathUtils.dist(cpts.first, cpts.second));
 				all_contacts.add(c);
 			}
@@ -201,7 +195,7 @@ public class CollisionAABB_AABB implements CollisionCallback {
 		//prune out any contacts that are not roughly facing in the correct direction
 		ArrayList<Contact> pruned_contacts = new ArrayList<>();
 		for (Contact c : all_contacts) {
-			if (MathUtils.dot(c.norm, least_axis) < 0.75) {
+			if (MathUtils.dot(c.norm, least_axis) < 0.5) {
 				continue;
 			}
 			pruned_contacts.add(c);

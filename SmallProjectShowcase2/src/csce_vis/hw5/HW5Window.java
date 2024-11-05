@@ -84,7 +84,7 @@ public class HW5Window extends Window {
 		this.perspectiveScreen.renderPlayermodel(false);
 		this.perspectiveScreen.renderParticles(false);
 
-		DirLight sun = new DirLight(new Vec3(-1, -1, -1), new Vec3(1), 0.4f);
+		DirLight sun = new DirLight(new Vec3(-2, -1.5, -1), new Vec3(1), 0.4f);
 		Light.addLight(WORLD_SCENE, sun);
 
 		BufferedImage[] skyboxSides = new BufferedImage[6];
@@ -168,8 +168,8 @@ public class HW5Window extends Window {
 		//long box
 		if (true) {
 			Shape s = new AABB(new Vec3(20, 5, 5));
-			Body b = new Body(s, new Vec3(0, 20, 0));
-			//			b.angvel = new Vec3(0, 0, 0.2f);
+			Body b = new Body(s, new Vec3(3, 20, 0));
+//						b.angvel = new Vec3(0, 0, 0.2f);
 			this.addBody(b);
 		}
 
