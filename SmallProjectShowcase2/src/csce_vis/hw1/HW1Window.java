@@ -197,7 +197,7 @@ public class HW1Window extends Window {
 		accel[ind].addi(impulse.div(s.mass));
 
 		//torque
-		ang_accel[ind].addi((contact_vec.cross(impulse)).div(s.moment));
+		ang_accel[ind].addi((contact_vec.cross(impulse)).div(s.moment * (float) Math.PI * 2.0f));
 	}
 
 	private void handleCollision(Vec3[] accel, Vec3[] ang_accel, int ind, Sphere s, Vec3 coll_pt, Vec3 relative_vel, float inv_mass_b) {

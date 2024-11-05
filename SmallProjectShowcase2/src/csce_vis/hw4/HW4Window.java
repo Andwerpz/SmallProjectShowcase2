@@ -1567,6 +1567,7 @@ public class HW4Window extends Window {
 
 		ShaderStorageBuffer tetBuffer, baryBuffer;
 		ShaderStorageBuffer faceListPtrBuffer, faceListBuffer, faceBuffer;
+		Model model;
 		VertexArray va;
 		ModelInstance instance;
 
@@ -1582,6 +1583,7 @@ public class HW4Window extends Window {
 			Material m = new Material(Color.CYAN);
 			m.setSpecular(new Vec3(0.5));
 			this.instance.setMaterial(m);
+			this.model = model;
 			this.va = model.getMeshes().get(0);
 
 		}
@@ -1695,7 +1697,7 @@ public class HW4Window extends Window {
 			this.faceListPtrBuffer.kill();
 			this.faceListBuffer.kill();
 			this.faceBuffer.kill();
-			this.va.kill();
+			this.model.kill();
 		}
 	}
 
