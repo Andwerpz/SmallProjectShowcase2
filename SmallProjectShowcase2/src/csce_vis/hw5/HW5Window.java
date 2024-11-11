@@ -1,5 +1,24 @@
 package csce_vis.hw5;
 
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.*;
+import static org.lwjgl.opengl.GL13.*;
+import static org.lwjgl.opengl.GL14.*;
+import static org.lwjgl.opengl.GL15.*;
+import static org.lwjgl.opengl.GL20.*;
+import static org.lwjgl.opengl.GL21.*;
+import static org.lwjgl.opengl.GL30.*;
+import static org.lwjgl.opengl.GL31.*;
+import static org.lwjgl.opengl.GL32.*;
+import static org.lwjgl.opengl.GL33.*;
+import static org.lwjgl.opengl.GL40.*;
+import static org.lwjgl.opengl.GL41.*;
+import static org.lwjgl.opengl.GL42.*;
+import static org.lwjgl.opengl.GL43.*;
+import static org.lwjgl.opengl.GL44.*;
+import static org.lwjgl.opengl.GL45.*;
+import static org.lwjgl.opengl.GL46.*;
+
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -10,10 +29,12 @@ import org.lwjgl.glfw.GLFW;
 import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
+import lwjglengine.model.Line;
 import lwjglengine.model.Model;
 import lwjglengine.model.ModelInstance;
 import lwjglengine.model.ModelTransform;
 import lwjglengine.model.Triangle;
+import lwjglengine.model.VertexArray;
 import lwjglengine.player.Camera;
 import lwjglengine.player.PlayerInputController;
 import lwjglengine.scene.DirLight;
@@ -31,27 +52,28 @@ import myutils.math.Vec3;
 public class HW5Window extends Window {
 
 	//finally, rigidbodies!!
-
-	//ok, start experimenting with colliding AABBs, just have to do separating axis test. 
-	//question: collision normal is given by separating axis, but how do i find collision position?
-	// if some vertices are intersecting, then hopefully they're all on one face. 
-	// In that case, take the centroid of the face of the participating vertices
-	// if they are not all on one face, then we got some weird stuff going on, prolly just average all the vertices. 
-	// if no vertices are intersecting, then it's purely an edge-edge collision. There must be exactly 1 offending edge from both sides. 
-
 	//look here: https://box2d.org/files/ErinCatto_IterativeDynamics_GDC2005.pdf
 
+	//TODO
+	// - speed up broadphase
+	// - figure out tetrahedron moment of inertia
+	// - properly solve for friction in Manifold. 
+
 	private ImpulseScene impulse;
-	private ArrayList<ModelInstance> mi_arr;
+	private ArrayList<DisplayBody> displayBodies;
 	private Model cubeModel = null;
+	private Model suzanne = null, suzanne_wireframe = null;
+	private Model burrito = null, burrito_wireframe = null;
 
 	private final int WORLD_SCENE = Scene.generateScene();
+	private final int WIREFRAME_SCENE = Scene.generateScene();
 
 	private PerspectiveScreen perspectiveScreen;
 	private PlayerInputController pic;
 
 	private boolean pausePhysics = false;
 	private boolean pauseOnCollide = false;
+	private boolean generateKDOPWireframes = false;
 
 	public HW5Window(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
@@ -64,14 +86,19 @@ public class HW5Window extends Window {
 		this.setUnlockCursorOnEscPressed(true);
 
 		this.impulse = new ImpulseScene();
-		this.mi_arr = new ArrayList<>();
+		this.displayBodies = new ArrayList<>();
 
 		try {
 			this.cubeModel = Model.loadModelFileRelative("/res/cube/cube.obj");
+			this.suzanne = Model.loadModelFileRelative("/res/suzanne/suzanne.obj");
+			this.burrito = Model.loadModelFileRelative("/res/burrito/burrito.obj");
 		}
 		catch (IOException e) {
 			e.printStackTrace();
 		}
+
+		this.suzanne_wireframe = this.generateKDOPWireframe(this.suzanne);
+		this.burrito_wireframe = this.generateKDOPWireframe(this.burrito);
 
 		this.pic = new PlayerInputController(new Vec3(0, 30, 100));
 		this.pic.setAcceptPlayerInputs(false);
@@ -140,72 +167,140 @@ public class HW5Window extends Window {
 	}
 
 	private void resetImpulseScene() {
-		for (ModelInstance m : this.mi_arr) {
-			m.kill();
+		for (DisplayBody d : this.displayBodies) {
+			d.kill();
 		}
-		this.mi_arr.clear();
-
+		this.displayBodies.clear();
 		this.impulse.clearScene();
-
 		this.pausePhysics = false;
 
 		//ground
 		{
-			Shape s = new AABB(new Vec3(420));
-			Body b = new Body(s, new Vec3(0, -210 - 0.1, 0));
+			Body b = this.addAABB(new Vec3(0, -210 - 0.1, 0), new Vec3(420));
 			b.setStatic();
-			this.addBody(b);
 		}
 
 		//short wide box
-		if (true) {
-			Shape s = new AABB(new Vec3(20, 10, 20));
-			Body b = new Body(s, new Vec3(10, 5, 0));
-			b.setStatic();
-			this.addBody(b);
-		}
-
-		//long box
-		if (true) {
-			Shape s = new AABB(new Vec3(20, 5, 5));
-			Body b = new Body(s, new Vec3(3, 20, 0));
-//						b.angvel = new Vec3(0, 0, 0.2f);
-			this.addBody(b);
-		}
-
-		//random box
 		if (false) {
-			Shape s = new AABB(MathUtils.random(new Vec3(3), new Vec3(10)));
-			Body b = new Body(s, new Vec3(10));
-			b.vel = MathUtils.randomUnitDir3D().mul(10);
-			b.angvel = MathUtils.randomUnitDir3D();
-			this.addBody(b);
+			Body b = this.addAABB(new Vec3(0, 5, 0), new Vec3(50, 10, 50));
+			b.setStatic();
+		}
+
+		//short wide box resting on short wide box
+		if (false) {
+			{
+				Body b = this.addAABB(new Vec3(0, 5, 0), new Vec3(50, 10, 50));
+				b.setStatic();
+			}
+			{
+				Body b = this.addAABB(new Vec3(3, 17.5, 0), new Vec3(20, 5, 20));
+			}
+
+		}
+
+		//suzanne
+		if (false) {
+			Body b = this.addKDOP(new Vec3(0, 20, 0), this.suzanne, Mat4.scale(5));
+			b.angvel = new Vec3(3, 0, 0);
+		}
+
+		//burrito
+		if (true) {
+			Body b = this.addKDOP(new Vec3(0, 20, 0), this.burrito, Mat4.scale(10));
 		}
 	}
 
-	private void addBody(Body b) {
-		this.impulse.addBody(b);
+	private Model generateKDOPWireframe(Model m) {
+		KDOP kdop = this.generateKDOP(m, Mat4.identity());
+		return this.generateKDOPWireframe(kdop);
+	}
 
-		Shape s = b.shape;
-		ModelInstance m = null;
-		switch (s.type) {
-		case AABB:
-			m = new ModelInstance(this.cubeModel, WORLD_SCENE);
-			break;
+	private Model generateKDOPWireframe(KDOP kdop) {
+		ArrayList<Vec3> vertex_list = new ArrayList<>();
+		ArrayList<Integer> index_list = new ArrayList<>();
+		Vec3[][] faces = kdop.getFaces();
+		for (Vec3[] f : faces) {
+			int face_start = vertex_list.size();
+			for (Vec3 v : f) {
+				vertex_list.add(v);
+			}
+			for (int i = 0; i < f.length; i++) {
+				index_list.add(i + face_start);
+				index_list.add((i + 1) % f.length + face_start);
+			}
 		}
 
-		this.mi_arr.add(m);
+		float[] vertices = new float[vertex_list.size() * 3];
+		int[] indices = new int[index_list.size()];
+		for (int i = 0; i < vertex_list.size(); i++) {
+			vertices[i * 3 + 0] = vertex_list.get(i).x;
+			vertices[i * 3 + 1] = vertex_list.get(i).y;
+			vertices[i * 3 + 2] = vertex_list.get(i).z;
+		}
+		for (int i = 0; i < index_list.size(); i++) {
+			indices[i] = index_list.get(i);
+		}
+
+		VertexArray wire_va = new VertexArray(vertices, indices, GL_LINES);
+		return new Model(wire_va);
+	}
+
+	private KDOP generateKDOP(Model m, Mat4 transform) {
+		ArrayList<Vec3> pts_list = new ArrayList<>();
+		for (VertexArray va : m.getMeshes()) {
+			for (int i = 0; i < va.getVertices().length / 3; i++) {
+				pts_list.add(new Vec3(va.getVertices()[i * 3 + 0], va.getVertices()[i * 3 + 1], va.getVertices()[i * 3 + 2]));
+			}
+		}
+		Vec3[] pts = new Vec3[pts_list.size()];
+		for (int i = 0; i < pts.length; i++) {
+			pts[i] = transform.mul(pts_list.get(i), 1);
+		}
+		KDOP kdop = new KDOP(pts);
+		return kdop;
+	}
+
+	private void addBody(Body b, DisplayBody d) {
+		this.impulse.addBody(b);
+		this.displayBodies.add(d);
+	}
+
+	private Body addAABB(Vec3 pos, Vec3 dim) {
+		ModelInstance mi = new ModelInstance(this.cubeModel, WORLD_SCENE);
+		mi.setModelTransform(new ModelTransform(Mat4.scale(dim.mul(0.5f))));
+
+		Shape s = new AABB(dim);
+		Body b = new Body(s, pos);
+		DisplayBody d = new DisplayBody(b, mi);
+		this.addBody(b, d);
+		return b;
+	}
+
+	private Body addKDOP(Vec3 pos, Model m, Mat4 base_transform) {
+		Shape s = this.generateKDOP(m, base_transform);
+		Body b = new Body(s, pos);
+
+		Mat4 transform = new Mat4(base_transform);
+		transform.muli(Mat4.translate(((KDOP) s).getCOMCorrection().mul(-1)));
+		ModelInstance mi = new ModelInstance(m, new ModelTransform(transform), WORLD_SCENE);
+
+		DisplayBody d = new DisplayBody(b, mi);
+		this.addBody(b, d);
+		return b;
+	}
+
+	private Body addKDOP(Vec3 pos, Model m) {
+		return this.addKDOP(pos, m, Mat4.identity());
 	}
 
 	@Override
 	protected void _kill() {
-		for (ModelInstance m : this.mi_arr) {
-			m.kill();
+		for (DisplayBody d : this.displayBodies) {
+			d.kill();
 		}
 
-		this.cubeModel.kill();
-
 		Scene.removeScene(WORLD_SCENE);
+		Scene.removeScene(WIREFRAME_SCENE);
 
 		this.perspectiveScreen.kill();
 	}
@@ -223,8 +318,9 @@ public class HW5Window extends Window {
 	@Override
 	protected void _update() {
 		if (!this.pausePhysics) {
-			for (int i = 0; i < 10; i++) {
-				this.impulse.update(1.0f / 600.0f);
+			int itercnt = 5;
+			for (int i = 0; i < itercnt; i++) {
+				this.impulse.update(1.0f / (60.0f * itercnt));
 				if (this.impulse.getCollisionOccurred() && this.pauseOnCollide) {
 					this.pausePhysics = true;
 				}
@@ -232,26 +328,8 @@ public class HW5Window extends Window {
 		}
 
 		//update physics model transforms
-		for (int i = 0; i < this.mi_arr.size(); i++) {
-			Mat4 transform = Mat4.identity();
-
-			//apply per shape scaling stuff
-			Body b = this.impulse.getBodies().get(i);
-			Shape s = b.shape;
-			switch (s.type) {
-			case AABB:
-				AABB a = (AABB) s;
-				transform.muli(Mat4.scale(a.half_dim));
-				break;
-			}
-
-			//apply general orientation and translation transforms
-			Mat4 rot_transform = MathUtils.quaternionToRotationMat4(b.orient);
-			transform.muli(rot_transform);
-
-			transform.muli(Mat4.translate(b.pos));
-
-			this.mi_arr.get(i).setModelTransform(new ModelTransform(transform));
+		for (DisplayBody d : this.displayBodies) {
+			d.updateModelInstance();
 		}
 
 		this.pic.update();
@@ -318,6 +396,26 @@ public class HW5Window extends Window {
 		case GLFW.GLFW_KEY_R:
 			this.resetImpulseScene();
 			break;
+
+		case GLFW.GLFW_KEY_Q: {
+			Body b = this.addAABB(new Vec3(0, 20, 0), MathUtils.random(new Vec3(3), new Vec3(10)));
+			b.angvel = MathUtils.randomUnitDir3D();
+			break;
+		}
+
+		case GLFW.GLFW_KEY_E: {
+			Body b = this.addAABB(this.pic.getPos().add(this.pic.getFacing().mul(5)), new Vec3(3));
+			b.angvel = MathUtils.randomUnitDir3D().mul(10);
+			b.vel = this.pic.getFacing().mul(50);
+			break;
+		}
+
+		case GLFW.GLFW_KEY_B: {
+			Body b = this.addKDOP(this.pic.getPos().add(this.pic.getFacing().mul(5)), this.burrito, Mat4.scale(10));
+			b.angvel = MathUtils.randomUnitDir3D().mul(10);
+			b.vel = this.pic.getFacing().mul(50);
+			break;
+		}
 		}
 	}
 
@@ -325,6 +423,49 @@ public class HW5Window extends Window {
 	protected void _keyReleased(int key) {
 		// TODO Auto-generated method stub
 
+	}
+
+	class DisplayBody {
+		Model kdop_wireframe = null;
+		ModelInstance wmi = null;
+
+		Body body;
+		ModelInstance mi;
+		Mat4 baseTransform;
+
+		public DisplayBody(Body _body, ModelInstance _mi) {
+			this.body = _body;
+			this.mi = _mi;
+			this.baseTransform = new Mat4(this.mi.getModelTransform().getModelMatrix());
+
+			if (this.body.shape instanceof KDOP && generateKDOPWireframes) {
+				this.kdop_wireframe = generateKDOPWireframe((KDOP) this.body.shape);
+				this.wmi = new ModelInstance(this.kdop_wireframe, WORLD_SCENE);
+			}
+		}
+
+		public void updateModelInstance() {
+			Mat4 transform = new Mat4(this.baseTransform);
+
+			//apply general orientation and translation transforms
+			Mat4 rot_transform = MathUtils.quaternionToRotationMat4(this.body.orient);
+			transform.muli(rot_transform);
+			transform.muli(Mat4.translate(this.body.pos));
+
+			this.mi.setModelTransform(new ModelTransform(transform));
+
+			if (this.kdop_wireframe != null) {
+				this.wmi.setModelTransform(new ModelTransform(rot_transform.mul(Mat4.translate(this.body.pos))));
+			}
+		}
+
+		public void kill() {
+			this.mi.kill();
+
+			if (this.kdop_wireframe != null) {
+				this.kdop_wireframe.kill();
+			}
+		}
 	}
 
 }

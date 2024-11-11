@@ -4,48 +4,47 @@ import java.util.ArrayList;
 
 import csce_vis.hw5.AABB;
 import csce_vis.hw5.Body;
+import csce_vis.hw5.KDOP;
 import myutils.math.MathUtils;
 import myutils.math.Vec3;
 import myutils.misc.Pair;
 
-public class CollisionAABB_AABB implements CollisionCallback {
-
-	public static final CollisionAABB_AABB instance = new CollisionAABB_AABB();
+public class CollisionKDOP_KDOP implements CollisionCallback {
+	public static final CollisionKDOP_KDOP instance = new CollisionKDOP_KDOP();
 
 	private Body ba, bb;
-	private AABB sa, sb;
+	private KDOP sa, sb;
 
-	private Vec3[] axes_a, axes_b; //rotated primary axes
-	private Vec3[] pts_a, pts_b; //rotated, translated vertices
+	private Vec3[] axes_a, axes_b;
+	private Vec3[] pts_a, pts_b;
 
 	@Override
 	public void handleCollision(Manifold m) {
-		m.contacts = new ArrayList<>();
-
 		this.ba = m.a;
 		this.bb = m.b;
 
-		this.sa = (AABB) ba.shape;
-		this.sb = (AABB) bb.shape;
+		this.sa = (KDOP) ba.shape;
+		this.sb = (KDOP) bb.shape;
 
-		//generate primary axes of both AABBs
-		Vec3 bax = MathUtils.quaternionRotateVec3(ba.orient, new Vec3(1, 0, 0));
-		Vec3 bay = MathUtils.quaternionRotateVec3(ba.orient, new Vec3(0, 1, 0));
-		Vec3 baz = MathUtils.quaternionRotateVec3(ba.orient, new Vec3(0, 0, 1));
-		Vec3 bbx = MathUtils.quaternionRotateVec3(bb.orient, new Vec3(1, 0, 0));
-		Vec3 bby = MathUtils.quaternionRotateVec3(bb.orient, new Vec3(0, 1, 0));
-		Vec3 bbz = MathUtils.quaternionRotateVec3(bb.orient, new Vec3(0, 0, 1));
-		this.axes_a = new Vec3[] { bax, bay, baz };
-		this.axes_b = new Vec3[] { bbx, bby, bbz };
+		//generate primary axes rotated to world space
+		this.axes_a = new Vec3[this.sa.getAxes().length];
+		this.axes_b = new Vec3[this.sb.getAxes().length];
+		for (int i = 0; i < this.sa.getAxes().length; i++) {
+			this.axes_a[i] = MathUtils.quaternionRotateVec3(ba.orient, this.sa.getAxes()[i]);
+		}
+		for (int i = 0; i < this.sb.getAxes().length; i++) {
+			this.axes_b[i] = MathUtils.quaternionRotateVec3(bb.orient, this.sb.getAxes()[i]);
+		}
 
-		//generate vertices in world space of both AABBs
-		this.pts_a = sa.getVertexList();
-		this.pts_b = sb.getVertexList();
-		for (int i = 0; i < 8; i++) {
-			this.pts_a[i] = MathUtils.quaternionRotateVec3(ba.orient, this.pts_a[i]);
+		//generate vertices in world space
+		this.pts_a = new Vec3[sa.getVertices().length];
+		this.pts_b = new Vec3[sb.getVertices().length];
+		for (int i = 0; i < this.sa.getVertices().length; i++) {
+			this.pts_a[i] = MathUtils.quaternionRotateVec3(ba.orient, this.sa.getVertices()[i]);
 			this.pts_a[i].addi(ba.pos);
-
-			this.pts_b[i] = MathUtils.quaternionRotateVec3(bb.orient, this.pts_b[i]);
+		}
+		for (int i = 0; i < this.sb.getVertices().length; i++) {
+			this.pts_b[i] = MathUtils.quaternionRotateVec3(bb.orient, this.sb.getVertices()[i]);
 			this.pts_b[i].addi(bb.pos);
 		}
 
@@ -53,7 +52,6 @@ public class CollisionAABB_AABB implements CollisionCallback {
 		Vec3 least_axis = new Vec3(0);
 		float least_pen = findLeastPenetration(least_axis);
 		if (least_pen < 0) {
-			//no collision
 			return;
 		}
 
@@ -62,27 +60,26 @@ public class CollisionAABB_AABB implements CollisionCallback {
 			least_axis.muli(-1);
 		}
 
+		m.didCollide = true;
 		m.penetration = least_pen;
 		m.separating_axis = new Vec3(least_axis);
+		m.contacts = new ArrayList<>();
 
-		//TODO : depending on the axis, would need to do different things. 
-		//  for example, if the separating axis is along a face, then we'd want to try to make collisions with that face only. 
-		//  perhaps force collision normals to be in the direction of the separating axis?
-
-		//ok, collision. Generate all possible contacts. We'll prune bad ones out later
-		float[] dim_a = new float[] { this.sa.half_dim.x, this.sa.half_dim.y, this.sa.half_dim.z };
-		float[] dim_b = new float[] { this.sb.half_dim.x, this.sb.half_dim.y, this.sb.half_dim.z };
+		float[] elow_a = sa.getELow();
+		float[] ehigh_a = sa.getEHigh();
+		float[] elow_b = sb.getELow();
+		float[] ehigh_b = sb.getEHigh();
 
 		//for each point, check if its colliding with the point in the other shape. 
 		ArrayList<Contact> all_contacts = new ArrayList<>();
-		for (int i = 0; i < 8; i++) { //compare points in a to b
+		for (int i = 0; i < this.pts_a.length; i++) { //compare points in a to b
 			Vec3 pt = new Vec3(this.bb.pos, this.pts_a[i]);
 
 			//see if the point is actually inside the other box
 			boolean inside = true;
-			for (int j = 0; j < 3; j++) {
+			for (int j = 0; j < this.axes_b.length; j++) {
 				float dot = MathUtils.dot(pt, this.axes_b[j]);
-				if (Math.abs(dot) > dim_b[j]) {
+				if (dot < elow_b[j] || ehigh_b[j] < dot) {
 					inside = false;
 					break;
 				}
@@ -92,24 +89,30 @@ public class CollisionAABB_AABB implements CollisionCallback {
 			}
 
 			//for each face, generate a contact. 
-			for (int j = 0; j < 3; j++) {
+			for (int j = 0; j < this.axes_b.length; j++) {
 				float dot = MathUtils.dot(pt, this.axes_b[j]);
 				Vec3 normal = new Vec3(this.axes_b[j]);
+				float pen = 0;
 				if (dot < 0) {
 					normal.muli(-1);
+					pen = dot - elow_b[j];
 				}
-				Contact c = new Contact(this.pts_a[i], normal, dim_b[j] - Math.abs(dot));
+				else {
+					pen = ehigh_b[j] - dot;
+				}
+
+				Contact c = new Contact(this.pts_a[i], normal, pen);
 				all_contacts.add(c);
 			}
 		}
-		for (int i = 0; i < 8; i++) { //compare points in b to a
+		for (int i = 0; i < this.pts_b.length; i++) { //compare points in b to a
 			Vec3 pt = new Vec3(this.ba.pos, this.pts_b[i]);
 
 			//see if the point is actually inside the other box
 			boolean inside = true;
-			for (int j = 0; j < 3; j++) {
+			for (int j = 0; j < this.axes_a.length; j++) {
 				float dot = MathUtils.dot(pt, this.axes_a[j]);
-				if (Math.abs(dot) > dim_a[j]) {
+				if (dot < elow_a[j] || ehigh_a[j] < dot) {
 					inside = false;
 					break;
 				}
@@ -119,24 +122,29 @@ public class CollisionAABB_AABB implements CollisionCallback {
 			}
 
 			//for each face, generate a contact. 
-			for (int j = 0; j < 3; j++) {
+			for (int j = 0; j < this.axes_a.length; j++) {
 				float dot = MathUtils.dot(pt, this.axes_a[j]);
 				Vec3 normal = new Vec3(this.axes_a[j]);
+				float pen = 0;
 				if (dot < 0) {
 					normal.muli(-1);
+					pen = dot - elow_a[j];
+				}
+				else {
+					pen = ehigh_a[j] - dot;
 				}
 
 				//force normal to be oriented from A's perspective
 				normal.muli(-1);
 
-				Contact c = new Contact(this.pts_b[i], normal, dim_b[j] - Math.abs(dot));
+				Contact c = new Contact(this.pts_b[i], normal, pen);
 				all_contacts.add(c);
 			}
 		}
 
-		//for each edge, find the edge on the other shape that is closest to it, 
-		int[][] edges_a = this.sa.getEdgeList();
-		int[][] edges_b = this.sb.getEdgeList();
+		//edge vs. edge collisions
+		int[][] edges_a = this.sa.getEdges();
+		int[][] edges_b = this.sb.getEdges();
 		for (int eia = 0; eia < edges_a.length; eia++) {
 			for (int eib = 0; eib < edges_b.length; eib++) {
 				Vec3 a0 = new Vec3(this.pts_a[edges_a[eia][0]]);
@@ -155,17 +163,21 @@ public class CollisionAABB_AABB implements CollisionCallback {
 
 				//see if halfway between them is inside both a and b
 				Vec3 coll_pt = MathUtils.lerp(cpts.first, 0, cpts.second, 1, 0.5f);
-				if(Float.isNaN(cpts.first.x)) {
+				if (Float.isNaN(cpts.first.x)) {
 					System.exit(0);
 				}
-				
+
 				boolean inside = true;
-				for (int j = 0; j < 3; j++) {
-					if (Math.abs(MathUtils.dot(new Vec3(this.ba.pos, coll_pt), this.axes_a[j])) > dim_a[j] + 0.0001) {
+				for (int j = 0; j < this.axes_a.length; j++) {
+					float dot = MathUtils.dot(new Vec3(this.ba.pos, coll_pt), this.axes_a[j]);
+					if (dot < elow_a[j] || ehigh_a[j] < dot) {
 						inside = false;
 						break;
 					}
-					if (Math.abs(MathUtils.dot(new Vec3(this.bb.pos, coll_pt), this.axes_b[j])) > dim_b[j] + 0.0001) {
+				}
+				for (int j = 0; j < this.axes_b.length; j++) {
+					float dot = MathUtils.dot(new Vec3(this.bb.pos, coll_pt), this.axes_b[j]);
+					if (dot < elow_b[j] || ehigh_b[j] < dot) {
 						inside = false;
 						break;
 					}
@@ -186,7 +198,7 @@ public class CollisionAABB_AABB implements CollisionCallback {
 				if (Float.isNaN(coll_pt.x)) {
 					continue;
 				}
-				
+
 				Contact c = new Contact(coll_pt, coll_norm, MathUtils.dist(cpts.first, cpts.second));
 				all_contacts.add(c);
 			}
@@ -195,38 +207,34 @@ public class CollisionAABB_AABB implements CollisionCallback {
 		//prune out any contacts that are not roughly facing in the correct direction
 		ArrayList<Contact> pruned_contacts = new ArrayList<>();
 		for (Contact c : all_contacts) {
-			if (MathUtils.dot(c.norm, least_axis) < 0.5) {
+			if (MathUtils.dot(c.norm, least_axis) < 0.25) {
 				continue;
 			}
 			pruned_contacts.add(c);
 		}
 
 		//at this point, accept any contact. 
-		//TODO 
-		// - see if only accepting a few greatest penetration contacts is better. 
-		// - see if setting all collision normals to axis of least separation is better
 		for (Contact c : pruned_contacts) {
 			m.contacts.add(c);
 		}
 	}
 
 	private float findLeastPenetration(Vec3 out_axis) {
-		Vec3[] sat_axes = new Vec3[15];
-		sat_axes[0] = this.axes_a[0];
-		sat_axes[1] = this.axes_a[1];
-		sat_axes[2] = this.axes_a[2];
-		sat_axes[3] = this.axes_b[0];
-		sat_axes[4] = this.axes_b[1];
-		sat_axes[5] = this.axes_b[2];
-		sat_axes[6] = MathUtils.cross(this.axes_a[0], this.axes_b[0]);
-		sat_axes[7] = MathUtils.cross(this.axes_a[0], this.axes_b[1]);
-		sat_axes[8] = MathUtils.cross(this.axes_a[0], this.axes_b[2]);
-		sat_axes[9] = MathUtils.cross(this.axes_a[1], this.axes_b[0]);
-		sat_axes[10] = MathUtils.cross(this.axes_a[1], this.axes_b[1]);
-		sat_axes[11] = MathUtils.cross(this.axes_a[1], this.axes_b[2]);
-		sat_axes[12] = MathUtils.cross(this.axes_a[2], this.axes_b[0]);
-		sat_axes[13] = MathUtils.cross(this.axes_a[2], this.axes_b[1]);
-		sat_axes[14] = MathUtils.cross(this.axes_a[2], this.axes_b[2]);
+		Vec3[] sat_axes = new Vec3[axes_a.length + axes_b.length + axes_a.length * axes_b.length];
+		{
+			int ptr = 0;
+			for (int i = 0; i < axes_a.length; i++) {
+				sat_axes[ptr++] = new Vec3(axes_a[i]);
+			}
+			for (int i = 0; i < axes_b.length; i++) {
+				sat_axes[ptr++] = new Vec3(axes_b[i]);
+			}
+			for (int i = 0; i < axes_a.length; i++) {
+				for (int j = 0; j < axes_b.length; j++) {
+					sat_axes[ptr++] = MathUtils.cross(axes_a[i], axes_b[j]);
+				}
+			}
+		}
 
 		Vec3 origin = ba.pos.add(bb.pos).mul(0.5f);
 
@@ -239,17 +247,17 @@ public class CollisionAABB_AABB implements CollisionCallback {
 			}
 			axis.normalize();
 
-			//project all points onto axis
+			//project points onto axis
 			float mina = 1e18f;
 			float maxa = -1e18f;
 			float minb = 1e18f;
 			float maxb = -1e18f;
-			for (int j = 0; j < 8; j++) {
+			for (int j = 0; j < this.pts_a.length; j++) {
 				float cur = MathUtils.dot(axis, this.pts_a[j].sub(origin));
 				mina = Math.min(mina, cur);
 				maxa = Math.max(maxa, cur);
 			}
-			for (int j = 0; j < 8; j++) {
+			for (int j = 0; j < this.pts_b.length; j++) {
 				float cur = MathUtils.dot(axis, this.pts_b[j].sub(origin));
 				minb = Math.min(minb, cur);
 				maxb = Math.max(maxb, cur);

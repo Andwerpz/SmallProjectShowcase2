@@ -30,6 +30,7 @@ public class ImpulseScene {
 		this.bodies.clear();
 	}
 
+	//TODO implement better broad phase
 	private void handleCollisions() {
 		this.collisionOccurred = false;
 		for (int i = 0; i < bodies.size(); i++) {

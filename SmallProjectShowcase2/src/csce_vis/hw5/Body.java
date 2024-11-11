@@ -33,9 +33,9 @@ public class Body {
 		this.inv_mass = 1.0f / shape.mass;
 		this.inv_moment = shape.moment.inverse();
 
-		this.static_friction = 0.3f;
-		this.dynamic_friction = 0.2f;
-		this.restitution = 0.2f;
+		this.static_friction = 0.5f;
+		this.dynamic_friction = 0.4f;
+		this.restitution = 0.1f;
 	}
 
 	public void setStatic() {
