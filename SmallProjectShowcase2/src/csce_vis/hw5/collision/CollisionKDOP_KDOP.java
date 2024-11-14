@@ -2,9 +2,9 @@ package csce_vis.hw5.collision;
 
 import java.util.ArrayList;
 
-import csce_vis.hw5.AABB;
 import csce_vis.hw5.Body;
-import csce_vis.hw5.KDOP;
+import csce_vis.hw5.shape.AABB;
+import csce_vis.hw5.shape.KDOP;
 import myutils.math.MathUtils;
 import myutils.math.Vec3;
 import myutils.misc.Pair;

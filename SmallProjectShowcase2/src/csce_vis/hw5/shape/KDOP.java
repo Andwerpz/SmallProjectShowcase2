@@ -1,9 +1,10 @@
-package csce_vis.hw5;
+package csce_vis.hw5.shape;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 
+import csce_vis.hw5.bvh.AABB;
 import myutils.math.Mat3;
 import myutils.math.MathUtils;
 import myutils.math.Vec2;
@@ -350,6 +351,12 @@ public class KDOP extends Shape {
 
 	public Vec3 getCOMCorrection() {
 		return this.com_correction;
+	}
+
+	@Override
+	public AABB calcBoundingBox() {
+		// TODO Auto-generated method stub
+		return null;
 	}
 
 }

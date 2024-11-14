@@ -1,4 +1,4 @@
-package csce_vis.hw5;
+package csce_vis.hw5.shape;
 
 import myutils.math.Mat3;
 import myutils.math.MathUtils;

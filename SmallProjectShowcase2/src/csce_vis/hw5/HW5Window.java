@@ -26,6 +26,9 @@ import java.util.ArrayList;
 
 import org.lwjgl.glfw.GLFW;
 
+import csce_vis.hw5.shape.AABB;
+import csce_vis.hw5.shape.KDOP;
+import csce_vis.hw5.shape.Shape;
 import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
@@ -58,6 +61,7 @@ public class HW5Window extends Window {
 	// - speed up broadphase
 	// - figure out tetrahedron moment of inertia
 	// - properly solve for friction in Manifold. 
+	// - still some weird stuff going on with moment of inertia of thin objects
 
 	private ImpulseScene impulse;
 	private ArrayList<DisplayBody> displayBodies;
@@ -86,6 +90,7 @@ public class HW5Window extends Window {
 		this.setUnlockCursorOnEscPressed(true);
 
 		this.impulse = new ImpulseScene();
+		this.impulse.setGravity(new Vec3(0, -50, 0));
 		this.displayBodies = new ArrayList<>();
 
 		try {
@@ -205,8 +210,35 @@ public class HW5Window extends Window {
 		}
 
 		//burrito
-		if (true) {
+		if (false) {
 			Body b = this.addKDOP(new Vec3(0, 20, 0), this.burrito, Mat4.scale(10));
+		}
+
+		//table
+		if (false) {
+			Body bl = this.addAABB(new Vec3(-10, 10, -10), new Vec3(2, 20, 2));
+			Body br = this.addAABB(new Vec3(10, 10, -10), new Vec3(2, 20, 2));
+			Body tl = this.addAABB(new Vec3(-10, 10, 10), new Vec3(2, 20, 2));
+			Body tr = this.addAABB(new Vec3(10, 10, 10), new Vec3(2, 20, 2));
+
+			Body top = this.addAABB(new Vec3(0, 22, 0), new Vec3(25, 2, 25));
+			Body burrito = this.addKDOP(new Vec3(0, 30, 0), this.burrito, Mat4.scale(10));
+		}
+
+		//cube triangle
+		if (true) {
+			int layer_amt = 10;
+			float cube_sz = 3;
+			float yptr = cube_sz / 2;
+			for (int i = layer_amt; i >= 1; i--) {
+				float xptr = -(cube_sz * i) / 2;
+				xptr += cube_sz / 2;
+				for (int j = 0; j < i; j++) {
+					Body b = this.addAABB(new Vec3(xptr, yptr, 0), new Vec3(cube_sz));
+					xptr += cube_sz;
+				}
+				yptr += cube_sz;
+			}
 		}
 	}
 
@@ -318,7 +350,7 @@ public class HW5Window extends Window {
 	@Override
 	protected void _update() {
 		if (!this.pausePhysics) {
-			int itercnt = 5;
+			int itercnt = 10;
 			for (int i = 0; i < itercnt; i++) {
 				this.impulse.update(1.0f / (60.0f * itercnt));
 				if (this.impulse.getCollisionOccurred() && this.pauseOnCollide) {

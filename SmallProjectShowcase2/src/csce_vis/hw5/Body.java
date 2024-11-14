@@ -1,5 +1,7 @@
 package csce_vis.hw5;
 
+import csce_vis.hw5.bvh.AABB;
+import csce_vis.hw5.shape.Shape;
 import myutils.math.Mat3;
 import myutils.math.Quaternion;
 import myutils.math.Vec3;
@@ -41,5 +43,9 @@ public class Body {
 	public void setStatic() {
 		this.is_static = true;
 		this.inv_mass = 0;
+	}
+
+	public AABB calcBoundingBox() {
+		return null; //TODO
 	}
 }

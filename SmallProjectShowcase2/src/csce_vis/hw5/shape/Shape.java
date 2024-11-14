@@ -1,4 +1,4 @@
-package csce_vis.hw5;
+package csce_vis.hw5.shape;
 
 import myutils.math.Mat3;
 
@@ -12,4 +12,6 @@ public abstract class Shape {
 	public Type type;
 	public float mass;
 	public Mat3 moment;
+
+	public abstract csce_vis.hw5.bvh.AABB calcBoundingBox();
 }
