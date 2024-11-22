@@ -27,11 +27,13 @@ import java.util.ArrayList;
 import org.lwjgl.glfw.GLFW;
 
 import csce_vis.hw5.shape.AABB;
+import csce_vis.hw5.shape.Capsule;
 import csce_vis.hw5.shape.KDOP;
 import csce_vis.hw5.shape.Shape;
 import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
+import lwjglengine.model.CubeSphere;
 import lwjglengine.model.Line;
 import lwjglengine.model.Model;
 import lwjglengine.model.ModelInstance;
@@ -44,12 +46,14 @@ import lwjglengine.scene.DirLight;
 import lwjglengine.scene.Light;
 import lwjglengine.scene.Scene;
 import lwjglengine.screen.PerspectiveScreen;
+import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.Window;
 import myutils.file.FileUtils;
 import myutils.math.Mat3;
 import myutils.math.Mat4;
 import myutils.math.MathUtils;
 import myutils.math.Quaternion;
+import myutils.math.Vec2;
 import myutils.math.Vec3;
 
 public class HW5Window extends Window {
@@ -58,16 +62,17 @@ public class HW5Window extends Window {
 	//look here: https://box2d.org/files/ErinCatto_IterativeDynamics_GDC2005.pdf
 
 	//TODO
-	// - speed up broadphase
 	// - figure out tetrahedron moment of inertia
 	// - properly solve for friction in Manifold. 
 	// - still some weird stuff going on with moment of inertia of thin objects
+	// - optimize kdop-kdop collision narrow phase
 
 	private ImpulseScene impulse;
 	private ArrayList<DisplayBody> displayBodies;
 	private Model cubeModel = null;
 	private Model suzanne = null, suzanne_wireframe = null;
 	private Model burrito = null, burrito_wireframe = null;
+	private Model sphere, cylinder;
 
 	private final int WORLD_SCENE = Scene.generateScene();
 	private final int WIREFRAME_SCENE = Scene.generateScene();
@@ -75,9 +80,46 @@ public class HW5Window extends Window {
 	private PerspectiveScreen perspectiveScreen;
 	private PlayerInputController pic;
 
-	private boolean pausePhysics = false;
-	private boolean pauseOnCollide = false;
-	private boolean generateKDOPWireframes = false;
+	private SimulationOptions options = new SimulationOptions();
+
+	public class SimulationOptions {
+		private boolean pausePhysics = false;
+		private boolean pauseOnCollide = false;
+		private boolean generateWireframes = false;
+		private int demosceneNumber = 7;
+
+		public int getDemosceneNumber() {
+			return demosceneNumber;
+		}
+
+		public void setDemosceneNumber(int demosceneNumber) {
+			this.demosceneNumber = demosceneNumber;
+		}
+
+		public boolean getPausePhysics() {
+			return pausePhysics;
+		}
+
+		public void setPausePhysics(boolean pausePhysics) {
+			this.pausePhysics = pausePhysics;
+		}
+
+		public boolean getPauseOnCollide() {
+			return pauseOnCollide;
+		}
+
+		public void setPauseOnCollide(boolean pauseOnCollide) {
+			this.pauseOnCollide = pauseOnCollide;
+		}
+
+		public boolean getGenerateWireframes() {
+			return generateWireframes;
+		}
+
+		public void setGenerateWireframes(boolean generateWireframes) {
+			this.generateWireframes = generateWireframes;
+		}
+	}
 
 	public HW5Window(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
@@ -166,6 +208,15 @@ public class HW5Window extends Window {
 			}
 		}
 
+		CubeSphere.addDefaultSphere(new Vec3(20, 20, 0), 10, WORLD_SCENE);
+
+		//generate cylinder model
+		{
+
+		}
+
+		this.addChildAdjWindow(new ObjectEditorWindow(this.options));
+
 		this.resetImpulseScene();
 
 		this._resize();
@@ -177,7 +228,7 @@ public class HW5Window extends Window {
 		}
 		this.displayBodies.clear();
 		this.impulse.clearScene();
-		this.pausePhysics = false;
+		options.pausePhysics = false;
 
 		//ground
 		{
@@ -185,14 +236,16 @@ public class HW5Window extends Window {
 			b.setStatic();
 		}
 
+		switch (options.demosceneNumber) {
 		//short wide box
-		if (false) {
+		case 0: {
 			Body b = this.addAABB(new Vec3(0, 5, 0), new Vec3(50, 10, 50));
 			b.setStatic();
+			break;
 		}
 
 		//short wide box resting on short wide box
-		if (false) {
+		case 1: {
 			{
 				Body b = this.addAABB(new Vec3(0, 5, 0), new Vec3(50, 10, 50));
 				b.setStatic();
@@ -200,22 +253,24 @@ public class HW5Window extends Window {
 			{
 				Body b = this.addAABB(new Vec3(3, 17.5, 0), new Vec3(20, 5, 20));
 			}
-
+			break;
 		}
 
 		//suzanne
-		if (false) {
+		case 2: {
 			Body b = this.addKDOP(new Vec3(0, 20, 0), this.suzanne, Mat4.scale(5));
 			b.angvel = new Vec3(3, 0, 0);
+			break;
 		}
 
 		//burrito
-		if (false) {
+		case 3: {
 			Body b = this.addKDOP(new Vec3(0, 20, 0), this.burrito, Mat4.scale(10));
+			break;
 		}
 
 		//table
-		if (false) {
+		case 4: {
 			Body bl = this.addAABB(new Vec3(-10, 10, -10), new Vec3(2, 20, 2));
 			Body br = this.addAABB(new Vec3(10, 10, -10), new Vec3(2, 20, 2));
 			Body tl = this.addAABB(new Vec3(-10, 10, 10), new Vec3(2, 20, 2));
@@ -223,11 +278,12 @@ public class HW5Window extends Window {
 
 			Body top = this.addAABB(new Vec3(0, 22, 0), new Vec3(25, 2, 25));
 			Body burrito = this.addKDOP(new Vec3(0, 30, 0), this.burrito, Mat4.scale(10));
+			break;
 		}
 
 		//cube triangle
-		if (true) {
-			int layer_amt = 10;
+		case 5: {
+			int layer_amt = 12;
 			float cube_sz = 3;
 			float yptr = cube_sz / 2;
 			for (int i = layer_amt; i >= 1; i--) {
@@ -239,7 +295,32 @@ public class HW5Window extends Window {
 				}
 				yptr += cube_sz;
 			}
+			break;
 		}
+
+		//cube tower
+		case 6: {
+			int cube_amt = 3;
+			float cube_sz = 3;
+			float yptr = cube_sz / 2;
+			for (int i = cube_amt; i >= 1; i--) {
+				Body b = this.addAABB(new Vec3(0, yptr, 0), new Vec3(cube_sz));
+				yptr += cube_sz;
+			}
+			break;
+		}
+
+		//static capsule
+		case 7: {
+			//			Body c1 = this.addCapsule(new Vec3(0, 10, 0), 3, 10);
+			//			c1.setStatic();
+
+			Body c2 = this.addCapsule(new Vec3(0, 30, 0), 3, 10);
+			c2.angvel.set(new Vec3(0, 2, 0));
+			break;
+		}
+		}
+
 	}
 
 	private Model generateKDOPWireframe(Model m) {
@@ -259,6 +340,52 @@ public class HW5Window extends Window {
 			for (int i = 0; i < f.length; i++) {
 				index_list.add(i + face_start);
 				index_list.add((i + 1) % f.length + face_start);
+			}
+		}
+
+		float[] vertices = new float[vertex_list.size() * 3];
+		int[] indices = new int[index_list.size()];
+		for (int i = 0; i < vertex_list.size(); i++) {
+			vertices[i * 3 + 0] = vertex_list.get(i).x;
+			vertices[i * 3 + 1] = vertex_list.get(i).y;
+			vertices[i * 3 + 2] = vertex_list.get(i).z;
+		}
+		for (int i = 0; i < index_list.size(); i++) {
+			indices[i] = index_list.get(i);
+		}
+
+		VertexArray wire_va = new VertexArray(vertices, indices, GL_LINES);
+		return new Model(wire_va);
+	}
+
+	private Model generateCapsuleWireframe(Capsule capsule) {
+		int endcap_resolution = 20;
+		Vec3[] cap2d = new Vec3[(endcap_resolution + 1) * 2];
+		for (int i = 0; i <= endcap_resolution; i++) {
+			float ang = (float) (Math.PI / 2.0 - Math.PI * ((float) i / (float) endcap_resolution));
+			Vec2 dir = new Vec2(1, 0);
+			dir.rotate(ang);
+			cap2d[i] = new Vec3(0, dir.y * capsule.radius, dir.x * capsule.radius + capsule.length / 2.0f);
+		}
+		for (int i = 0; i <= endcap_resolution; i++) {
+			float ang = (float) (-Math.PI / 2.0 - Math.PI * ((float) i / (float) endcap_resolution));
+			Vec2 dir = new Vec2(1, 0);
+			dir.rotate(ang);
+			cap2d[i + (endcap_resolution + 1)] = new Vec3(0, dir.y * capsule.radius, dir.x * capsule.radius - capsule.length / 2.0f);
+		}
+
+		int nr_cap2d = 6;
+		ArrayList<Vec3> vertex_list = new ArrayList<>();
+		ArrayList<Integer> index_list = new ArrayList<>();
+		for (int i = 0; i < nr_cap2d; i++) {
+			float ang = (float) Math.PI * ((float) i / (float) nr_cap2d);
+			for (int j = 0; j < cap2d.length; j++) {
+				Vec3 v = new Vec3(cap2d[j]);
+				v.rotateZ(ang);
+				vertex_list.add(v);
+
+				index_list.add(j + cap2d.length * i);
+				index_list.add((j + 1) % cap2d.length + cap2d.length * i);
 			}
 		}
 
@@ -325,6 +452,17 @@ public class HW5Window extends Window {
 		return this.addKDOP(pos, m, Mat4.identity());
 	}
 
+	private Body addCapsule(Vec3 pos, float radius, float length) {
+		Capsule s = new Capsule(radius, length);
+		Body b = new Body(s, pos);
+
+		Model wireframe = this.generateCapsuleWireframe(s);
+		ModelInstance winst = new ModelInstance(wireframe, WORLD_SCENE);
+		DisplayBody d = new DisplayBody(b, winst);
+		this.addBody(b, d);
+		return b;
+	}
+
 	@Override
 	protected void _kill() {
 		for (DisplayBody d : this.displayBodies) {
@@ -349,12 +487,12 @@ public class HW5Window extends Window {
 
 	@Override
 	protected void _update() {
-		if (!this.pausePhysics) {
-			int itercnt = 10;
+		if (!options.pausePhysics) {
+			int itercnt = 4;
 			for (int i = 0; i < itercnt; i++) {
 				this.impulse.update(1.0f / (60.0f * itercnt));
-				if (this.impulse.getCollisionOccurred() && this.pauseOnCollide) {
-					this.pausePhysics = true;
+				if (this.impulse.getCollisionOccurred() && options.pauseOnCollide) {
+					options.pausePhysics = true;
 				}
 			}
 		}
@@ -448,6 +586,13 @@ public class HW5Window extends Window {
 			b.vel = this.pic.getFacing().mul(50);
 			break;
 		}
+
+		case GLFW.GLFW_KEY_C: {
+			Body b = this.addCapsule(this.pic.getPos().add(this.pic.getFacing().mul(5)), 3, 6);
+			b.angvel = MathUtils.randomUnitDir3D().mul(10);
+			b.vel = this.pic.getFacing().mul(50);
+			break;
+		}
 		}
 	}
 
@@ -459,7 +604,7 @@ public class HW5Window extends Window {
 
 	class DisplayBody {
 		Model kdop_wireframe = null;
-		ModelInstance wmi = null;
+		ModelInstance wmi = null; //wireframe model instance
 
 		Body body;
 		ModelInstance mi;
@@ -470,9 +615,16 @@ public class HW5Window extends Window {
 			this.mi = _mi;
 			this.baseTransform = new Mat4(this.mi.getModelTransform().getModelMatrix());
 
-			if (this.body.shape instanceof KDOP && generateKDOPWireframes) {
-				this.kdop_wireframe = generateKDOPWireframe((KDOP) this.body.shape);
-				this.wmi = new ModelInstance(this.kdop_wireframe, WORLD_SCENE);
+			if (options.generateWireframes) {
+				switch (this.body.shape.type) {
+				case KDOP:
+					this.kdop_wireframe = generateKDOPWireframe((KDOP) this.body.shape);
+					this.wmi = new ModelInstance(this.kdop_wireframe, WORLD_SCENE);
+					break;
+
+				case CAPSULE:
+					break;
+				}
 			}
 		}
 

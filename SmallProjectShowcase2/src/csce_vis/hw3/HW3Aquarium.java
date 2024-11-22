@@ -151,9 +151,9 @@ public class HW3Aquarium extends Window {
 	}
 
 	private ShaderStorageBuffer particleBuffer, particleInfoBuffer;
-	
+
 	private static final int SIZEOF_OBSTACLE = 16;
-	
+
 	/*
 	// 16 bytes
 	struct Obstacle {
@@ -164,40 +164,40 @@ public class HW3Aquarium extends Window {
 	class Obstacle {
 		Vec2 offset, dimensions;
 		UIFilledRectangle rect;
-		
+
 		public Obstacle(Vec2 _offset, Vec2 _dimensions) {
 			this.offset = new Vec2(_offset);
 			this.dimensions = new Vec2(_dimensions);
 			this.rect = new UIFilledRectangle(offset.x, offset.y, 0, dimensions.x, dimensions.y, OBSTACLE_RENDER_SCENE);
 			this.rect.setMaterial(new Material(Color.WHITE));
 		}
-		
+
 		public void setOffset(Vec2 _offset) {
 			this.offset = new Vec2(_offset);
 			this.rect.setFrameAlignmentOffset(this.offset.x, this.offset.y);
 		}
-		
+
 		public void setDimensions(Vec2 _dimensions) {
 			this.dimensions = new Vec2(_dimensions);
 			this.rect.setDimensions(this.dimensions.x, this.dimensions.y);
 		}
-		
+
 		public void writeToBuffer(int[] buffer, int offset) {
 			buffer[offset + 0] = Float.floatToIntBits(this.offset.x / renderScale);
 			buffer[offset + 1] = Float.floatToIntBits(this.offset.y / renderScale);
-			
+
 			buffer[offset + 2] = Float.floatToIntBits(this.dimensions.x / renderScale);
 			buffer[offset + 3] = Float.floatToIntBits(this.dimensions.y / renderScale);
 		}
-		
+
 		public void kill() {
 			this.rect.kill();
 		}
 	}
-	
+
 	private ShaderStorageBuffer obstacleBuffer;
 	private ArrayList<Obstacle> obstacles;
-	
+
 	private final int OBSTACLE_RENDER_SCENE = Scene.generateScene();
 	private final int UI_SCENE = Scene.generateScene();
 	private UIScreen uiScreen;
@@ -207,7 +207,7 @@ public class HW3Aquarium extends Window {
 
 	private Shader particleShader, densityShader, waterColorShader;
 	private Shader shadowShader, gaussianShader, backgroundShader;
-	
+
 	private Shader obstacleNormalShader;
 
 	private float timeDebt = 0;
@@ -215,10 +215,10 @@ public class HW3Aquarium extends Window {
 	private Framebuffer densityBuffer;
 	private Texture densityMap;
 	private Texture normalMap;
-	
+
 	private Framebuffer obstacleRenderBuffer;
 	private Texture obstacleMap;
-	
+
 	private Framebuffer obstacleNormalBuffer;
 	private Texture obstacleNormalMap;
 
@@ -288,17 +288,17 @@ public class HW3Aquarium extends Window {
 			this.renderParticles = b;
 		}
 	}
-	
+
 	private boolean isDrawingObstacle = false;
 	private Vec2 drawObstacleStart;
 	private ModelInstance[] drawObstacleLines = new ModelInstance[4];
-	
-	private boolean isDraggingObstacle = false;	//can only be dragging selected obstacle
-	
+
+	private boolean isDraggingObstacle = false; //can only be dragging selected obstacle
+
 	private boolean obstacleSelected = false;
 	private Obstacle selectedObstacle = null;
 	private ModelInstance[] selectedObstacleLines = new ModelInstance[4];
-	
+
 	private Vec2 prev_mouse = new Vec2(0, 0);
 
 	public HW3Aquarium(int xOffset, int yOffset, int width, int height, Window parentWindow) {
@@ -320,9 +320,9 @@ public class HW3Aquarium extends Window {
 		this.gaussianShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/gaussian.vert", "/csce_vis/hw3/aquarium/gaussian.frag");
 		this.backgroundShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/background.vert", "/csce_vis/hw3/aquarium/background.frag");
 		this.obstacleNormalShader = ShaderUtils.createShader("/csce_vis/hw3/aquarium/obstacle_normal.vert", "/csce_vis/hw3/aquarium/obstacle_normal.frag");
-		
+
 		this.gaussianShader.setUniform1i("color_map", 0);
-		
+
 		this.obstacleNormalShader.setUniform1i("obstacle_map", 0);
 
 		this.shadowShader.setUniform1i("density_map", 0);
@@ -357,13 +357,13 @@ public class HW3Aquarium extends Window {
 		}
 
 		this.resetParticles();
-		
+
 		// - obstacle buffers
 		this.obstacleBuffer = new ShaderStorageBuffer(0);
 		this.obstacleBuffer.setUsage(GL_STATIC_DRAW);
-		
+
 		this.obstacles = new ArrayList<>();
-		
+
 		this.uiScreen = new UIScreen();
 
 		this._resize();
@@ -374,7 +374,7 @@ public class HW3Aquarium extends Window {
 		this.particleBuffer.kill();
 		this.particleInfoBuffer.kill();
 		this.hashLUTBuffer.kill();
-		
+
 		this.obstacleBuffer.kill();
 
 		this.waterCompute1.kill();
@@ -395,11 +395,11 @@ public class HW3Aquarium extends Window {
 		this.obstacleRenderBuffer.kill();
 		this.shadowBuffer.kill();
 		this.gaussianBlurBuffer.kill();
-		
-		for(Obstacle o : this.obstacles) {
+
+		for (Obstacle o : this.obstacles) {
 			o.kill();
 		}
-		
+
 		this.uiScreen.kill();
 		Scene.removeScene(OBSTACLE_RENDER_SCENE);
 		Scene.removeScene(UI_SCENE);
@@ -411,8 +411,8 @@ public class HW3Aquarium extends Window {
 			this.densityBuffer.kill();
 			this.densityBuffer = null;
 		}
-		
-		if(this.obstacleRenderBuffer != null) {
+
+		if (this.obstacleRenderBuffer != null) {
 			this.obstacleRenderBuffer.kill();
 			this.obstacleRenderBuffer = null;
 		}
@@ -435,17 +435,17 @@ public class HW3Aquarium extends Window {
 			this.densityBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, this.normalMap.getID());
 			this.densityBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 });
 			this.densityBuffer.isComplete();
-			
+
 			this.obstacleRenderBuffer = new Framebuffer(this.getWidth(), this.getHeight());
 			this.obstacleMap = new Texture(this.getWidth(), this.getHeight(), GL_RGBA32F, GL_RGBA, GL_FLOAT);
 			this.obstacleRenderBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.obstacleMap.getID());
-			this.obstacleRenderBuffer.setDrawBuffers(new int[] {GL_COLOR_ATTACHMENT0});
+			this.obstacleRenderBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
 			this.obstacleRenderBuffer.isComplete();
-			
+
 			this.obstacleNormalBuffer = new Framebuffer(this.getWidth(), this.getHeight());
 			this.obstacleNormalMap = new Texture(this.getWidth(), this.getHeight(), GL_RGBA32F, GL_RGBA, GL_FLOAT);
 			this.obstacleNormalBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.obstacleNormalMap.getID());
-			this.obstacleNormalBuffer.setDrawBuffers(new int[] {GL_COLOR_ATTACHMENT0});
+			this.obstacleNormalBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
 			this.obstacleNormalBuffer.isComplete();
 
 			this.shadowBuffer = new Framebuffer(this.getWidth(), this.getHeight());
@@ -460,7 +460,7 @@ public class HW3Aquarium extends Window {
 			this.gaussianBlurBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
 			this.gaussianBlurBuffer.isComplete();
 		}
-		
+
 		this.uiScreen.setScreenDimensions(this.getWidth(), this.getHeight());
 	}
 
@@ -496,22 +496,22 @@ public class HW3Aquarium extends Window {
 		}
 		this.particleBuffer.setSubData(data, 0);
 	}
-	
+
 	private void addObstacle(Obstacle o) {
 		this.obstacles.add(o);
 		this.updateObstacleBuffers();
 	}
-	
+
 	private void removeObstacle(Obstacle o) {
 		this.obstacles.remove(o);
 		o.kill();
 		this.updateObstacleBuffers();
 	}
-	
+
 	private void updateObstacleBuffers() {
 		int nr_obstacles = this.obstacles.size();
 		int[] data = new int[nr_obstacles * SIZEOF_OBSTACLE / 4];
-		for(int i = 0; i < nr_obstacles; i++) {
+		for (int i = 0; i < nr_obstacles; i++) {
 			this.obstacles.get(i).writeToBuffer(data, i * SIZEOF_OBSTACLE / 4);
 		}
 		this.obstacleBuffer.setData(data);
@@ -655,7 +655,7 @@ public class HW3Aquarium extends Window {
 			this.waterCompute4.setUniform1f("target_density", settings.targetDensity);
 			this.waterCompute4.setUniform1f("pressure_multiplier", settings.pressureMultiplier);
 			this.waterCompute4.setUniform1f("near_pressure_multiplier", settings.nearPressureMultiplier);
-			
+
 			this.waterCompute4.setUniform1i("nr_obstacles", this.obstacles.size());
 
 			glDispatchCompute(NR_PARTICLES / spatialWorkgroupSz, 1, 1);
@@ -699,16 +699,16 @@ public class HW3Aquarium extends Window {
 				}
 			}
 		}
-		
+
 		Vec2 next_mouse = this.getWindowMousePos();
 		Vec2 mouse_diff = next_mouse.sub(this.prev_mouse);
 		this.prev_mouse.set(next_mouse);
-		
-		if(this.isDrawingObstacle) {
+
+		if (this.isDrawingObstacle) {
 			this.setDrawObstacleLines();
 		}
-		
-		if(this.isDraggingObstacle) {
+
+		if (this.isDraggingObstacle) {
 			this.selectedObstacle.setOffset(this.selectedObstacle.offset.add(mouse_diff));
 			this.setSelectedObstacleLines();
 			this.updateObstacleBuffers();
@@ -737,32 +737,31 @@ public class HW3Aquarium extends Window {
 
 			this.obstacleRenderBuffer.bind();
 			glClear(GL_COLOR_BUFFER_BIT);
-			
+
 			this.shadowBuffer.bind();
 			glClear(GL_COLOR_BUFFER_BIT);
 		}
-		
+
 		//render obstacles
 		{
 			//render base map
 			this.uiScreen.setUIScene(OBSTACLE_RENDER_SCENE);
 			this.uiScreen.render(this.obstacleRenderBuffer);
-			
+
 			//render normals
 			this.obstacleNormalBuffer.bind();
-			
+
 			this.obstacleNormalShader.enable();
-			
+
 			this.obstacleNormalShader.setUniform1f("window_width", this.getWidth());
 			this.obstacleNormalShader.setUniform1f("window_height", this.getHeight());
-			
+
 			this.obstacleMap.bind(GL_TEXTURE0);
-			
+
 			glViewport(0, 0, this.getWidth(), this.getHeight());
 			ScreenQuad.screenQuad.render();
 		}
-		
-		
+
 		//render water density
 		{
 			this.densityBuffer.bind();
@@ -842,8 +841,8 @@ public class HW3Aquarium extends Window {
 			glViewport(0, 0, this.getWidth(), this.getHeight());
 			ScreenQuad.screenQuad.render();
 		}
-		
-	}	
+
+	}
 
 	private void waterRenderPipelineV0(Framebuffer outputBuffer) {
 		Mat4 pr_matrix = this.getPrMatrix();
@@ -859,7 +858,7 @@ public class HW3Aquarium extends Window {
 		glPointSize(2f);
 		glViewport(0, 0, this.getWidth(), this.getHeight());
 		glDrawArrays(GL_POINTS, 0, NR_PARTICLES);
-		
+
 		this.uiScreen.setUIScene(OBSTACLE_RENDER_SCENE);
 		this.uiScreen.render(outputBuffer);
 	}
@@ -894,7 +893,7 @@ public class HW3Aquarium extends Window {
 				System.out.println("Average last " + this.timeAvgAmt + " render times : " + avg);
 			}
 		}
-		
+
 		this.uiScreen.setUIScene(UI_SCENE);
 		this.uiScreen.render(outputBuffer);
 	}
@@ -928,166 +927,166 @@ public class HW3Aquarium extends Window {
 		// TODO Auto-generated method stub
 
 	}
-	
+
 	private void killBBLines(ModelInstance[] a) {
-		for(int i = 0; i < 4; i++) {
-			if(a[i] != null) {
+		for (int i = 0; i < 4; i++) {
+			if (a[i] != null) {
 				a[i].kill();
 				a[i] = null;
 			}
 		}
 	}
-	
+
 	private void setBBLines(ModelInstance[] a, Vec2 offset, Vec2 dimensions, Material material) {
 		killBBLines(a);
-		
+
 		Vec2 v0 = new Vec2(offset.x, offset.y);
 		Vec2 v1 = new Vec2(offset.x + dimensions.x, offset.y);
 		Vec2 v2 = new Vec2(offset.x + dimensions.x, offset.y + dimensions.y);
 		Vec2 v3 = new Vec2(offset.x, offset.y + dimensions.y);
-		
+
 		a[0] = Line.addDefaultLine(v0, v1, UI_SCENE);
 		a[1] = Line.addDefaultLine(v1, v2, UI_SCENE);
 		a[2] = Line.addDefaultLine(v2, v3, UI_SCENE);
 		a[3] = Line.addDefaultLine(v3, v0, UI_SCENE);
-		
-		for(int i = 0; i < 4; i++) {
+
+		for (int i = 0; i < 4; i++) {
 			a[i].setMaterial(material);
 		}
 	}
-	
+
 	private void killDrawObstacleLines() {
 		this.killBBLines(this.drawObstacleLines);
 	}
-	
+
 	private void setDrawObstacleLines() {
-		if(!this.isDrawingObstacle) {
+		if (!this.isDrawingObstacle) {
 			return;
 		}
-		
+
 		Vec2 start = new Vec2(this.drawObstacleStart);
 		Vec2 end = this.getWindowMousePos();
-		
+
 		Vec2 bmin = MathUtils.min(start, end);
 		Vec2 bmax = MathUtils.max(start, end);
-		
+
 		Vec2 dimensions = bmax.sub(bmin);
-		
+
 		this.setBBLines(this.drawObstacleLines, bmin, dimensions, new Material(Color.GREEN));
 	}
 
 	private void initDrawingObstacle() {
-		if(this.isDrawingObstacle) {
+		if (this.isDrawingObstacle) {
 			this.finishDrawingObstacle();
 		}
-		
+
 		this.isDrawingObstacle = true;
 		this.drawObstacleStart = this.getWindowMousePos();
 	}
-	
+
 	private void finishDrawingObstacle() {
 		this.isDrawingObstacle = false;
-		
+
 		this.killDrawObstacleLines();
-		
+
 		Vec2 start = new Vec2(this.drawObstacleStart);
 		Vec2 end = new Vec2(this.getWindowMousePos());
-		
+
 		Vec2 bmin = MathUtils.min(start, end);
 		Vec2 bmax = MathUtils.max(start, end);
-		
+
 		//don't allow very thin obstacles to be drawn. 
-		if(bmax.x - bmin.x < 10 || bmax.y - bmin.y < 10) {
+		if (bmax.x - bmin.x < 10 || bmax.y - bmin.y < 10) {
 			return;
 		}
-		
+
 		Vec2 dimensions = bmax.sub(bmin);
 		Obstacle o = new Obstacle(bmin, dimensions);
-		
+
 		this.addObstacle(o);
 	}
-	
+
 	private void killSelectedObstacleLines() {
 		this.killBBLines(this.selectedObstacleLines);
 	}
-	
+
 	private void setSelectedObstacleLines() {
-		if(!this.obstacleSelected) {
+		if (!this.obstacleSelected) {
 			return;
 		}
 		this.setBBLines(this.selectedObstacleLines, this.selectedObstacle.offset, this.selectedObstacle.dimensions, new Material(Color.BLUE));
 	}
-	
+
 	private void selectObstacle(Obstacle o) {
-		if(this.obstacleSelected) {
+		if (this.obstacleSelected) {
 			this.deselectObstacle();
 		}
-		
+
 		this.obstacleSelected = true;
 		this.selectedObstacle = o;
-		
+
 		this.setSelectedObstacleLines();
 	}
-	
+
 	private void deselectObstacle() {
 		this.obstacleSelected = false;
 		this.selectedObstacle = null;
-		
-		if(this.isDraggingObstacle) {
+
+		if (this.isDraggingObstacle) {
 			this.finishDragObstacle();
 		}
-		
+
 		this.killSelectedObstacleLines();
 	}
-	
+
 	private void deleteSelectedObstacle() {
-		if(!this.obstacleSelected) {
+		if (!this.obstacleSelected) {
 			return;
 		}
-		
+
 		Obstacle o = this.selectedObstacle;
 		this.deselectObstacle();
 		this.removeObstacle(o);
 	}
-	
+
 	private void initDragObstacle() {
-		if(!this.obstacleSelected) {
+		if (!this.obstacleSelected) {
 			return;
 		}
-		
+
 		this.isDraggingObstacle = true;
 	}
-	
+
 	private void finishDragObstacle() {
 		this.isDraggingObstacle = false;
 	}
-	
+
 	private boolean mouseInsideObstacle(Obstacle o) {
-		return MathUtils.pointInsideBoundingBox(this.getWindowMousePos(), o.offset, o.offset.add(o.dimensions));
+		return MathUtils.pointInsideAABB(this.getWindowMousePos(), o.offset, o.offset.add(o.dimensions));
 	}
-	
+
 	@Override
 	protected void _mousePressed(int button) {
 		//see if we clicked on an obstacle
 		this.deselectObstacle();
-		for(Obstacle o : this.obstacles) {
-			if(this.mouseInsideObstacle(o)) {
+		for (Obstacle o : this.obstacles) {
+			if (this.mouseInsideObstacle(o)) {
 				this.selectObstacle(o);
 				this.initDragObstacle();
 				return;
 			}
 		}
-		
+
 		//otherwise, we're drawing a new one. 
 		this.initDrawingObstacle();
 	}
 
 	@Override
 	protected void _mouseReleased(int button) {
-		if(this.isDrawingObstacle) {
+		if (this.isDrawingObstacle) {
 			this.finishDrawingObstacle();
 		}
-		if(this.isDraggingObstacle) {
+		if (this.isDraggingObstacle) {
 			this.finishDragObstacle();
 		}
 	}
@@ -1104,9 +1103,9 @@ public class HW3Aquarium extends Window {
 		case GLFW.GLFW_KEY_R:
 			this.resetParticles();
 			break;
-			
+
 		case GLFW.GLFW_KEY_BACKSPACE:
-			if(this.obstacleSelected) {
+			if (this.obstacleSelected) {
 				this.deleteSelectedObstacle();
 			}
 			break;

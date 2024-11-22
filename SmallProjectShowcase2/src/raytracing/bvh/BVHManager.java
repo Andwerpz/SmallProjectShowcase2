@@ -112,7 +112,7 @@ public class BVHManager {
 		Pair<Vec3, Material> ans = null;
 
 		//see if this ray collides with the bounding box
-		boolean coll_bb = MathUtils.ray_boundingBoxIntersect(origin, dir, cur.boundingBox.bMin, cur.boundingBox.bMax) != null;
+		boolean coll_bb = MathUtils.ray_AABBIntersect(origin, dir, cur.boundingBox.bMin, cur.boundingBox.bMax) != null;
 		if (!coll_bb) {
 			//can skip entire subtree
 			return null;

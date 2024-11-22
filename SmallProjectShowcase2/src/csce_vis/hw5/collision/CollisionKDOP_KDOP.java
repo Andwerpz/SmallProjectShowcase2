@@ -153,6 +153,20 @@ public class CollisionKDOP_KDOP implements CollisionCallback {
 				Vec3 b0 = new Vec3(this.pts_b[edges_b[eib][0]]);
 				Vec3 b1 = new Vec3(this.pts_b[edges_b[eib][1]]);
 
+				//compute coll normal
+				Vec3 coll_norm = MathUtils.cross(new Vec3(a0, a1), new Vec3(b0, b1));
+				coll_norm.normalize();
+
+				//ensure that collision normal is pointing from b -> a
+				if (MathUtils.dot(coll_norm, new Vec3(bb.pos, ba.pos)) < 0) {
+					coll_norm.muli(-1);
+				}
+
+				//prune out if collision normal isn't facing roughly in direction of SAT normal
+				if (MathUtils.dot(coll_norm, least_axis) < 0.25) {
+					continue;
+				}
+
 				//check if they are parallel
 				float parl_dot = Math.abs(MathUtils.dot(new Vec3(a0, a1).normalize(), new Vec3(b0, b1).normalize()));
 				if (Math.abs(parl_dot - 1.0) < 0.001) {
@@ -187,18 +201,6 @@ public class CollisionKDOP_KDOP implements CollisionCallback {
 				}
 
 				//ok, we can take this one as a collision point
-				Vec3 coll_norm = MathUtils.cross(new Vec3(a0, a1), new Vec3(b0, b1));
-				coll_norm.normalize();
-
-				//ensure that collision normal is pointing from b -> a
-				if (MathUtils.dot(coll_norm, new Vec3(bb.pos, ba.pos)) < 0) {
-					coll_norm.muli(-1);
-				}
-
-				if (Float.isNaN(coll_pt.x)) {
-					continue;
-				}
-
 				Contact c = new Contact(coll_pt, coll_norm, MathUtils.dist(cpts.first, cpts.second));
 				all_contacts.add(c);
 			}

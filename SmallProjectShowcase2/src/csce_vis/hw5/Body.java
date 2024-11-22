@@ -1,6 +1,6 @@
 package csce_vis.hw5;
 
-import csce_vis.hw5.bvh.AABB;
+import csce_vis.hw5.bvh.KDOP;
 import csce_vis.hw5.shape.Shape;
 import myutils.math.Mat3;
 import myutils.math.Quaternion;
@@ -45,7 +45,9 @@ public class Body {
 		this.inv_mass = 0;
 	}
 
-	public AABB calcBoundingBox() {
-		return null; //TODO
+	//returns a bounding box in world space
+	public KDOP calcBoundingBox() {
+		KDOP box = this.shape.calcBoundingBox(this.orient, this.pos);
+		return box;
 	}
 }

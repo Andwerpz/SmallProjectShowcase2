@@ -2,6 +2,8 @@ package csce_vis.hw5;
 
 import java.util.ArrayList;
 
+import csce_vis.hw5.bvh.KDOP;
+import csce_vis.hw5.bvh.BVH;
 import csce_vis.hw5.collision.Manifold;
 import myutils.math.MathUtils;
 import myutils.math.Quaternion;
@@ -30,20 +32,35 @@ public class ImpulseScene {
 		this.bodies.clear();
 	}
 
-	//TODO implement better broad phase
 	private void handleCollisions() {
 		this.collisionOccurred = false;
-		for (int i = 0; i < bodies.size(); i++) {
-			for (int j = i + 1; j < bodies.size(); j++) {
-				Body a = this.bodies.get(i);
-				Body b = this.bodies.get(j);
-				Manifold m = new Manifold(a, b);
+
+		ArrayList<KDOP> aabb_list = new ArrayList<>();
+		for (int i = 0; i < this.bodies.size(); i++) {
+			aabb_list.add(this.bodies.get(i).calcBoundingBox());
+		}
+
+		BVH bvh = new BVH(aabb_list);
+
+		int coll_cnt = 0;
+		for (int i = 0; i < this.bodies.size(); i++) {
+			ArrayList<Integer> isect = bvh.getIntersections(aabb_list.get(i));
+			for (int j = 0; j < isect.size(); j++) {
+				int next = isect.get(j);
+				if (next >= i) { //already should've considered this collision
+					continue;
+				}
+				coll_cnt++;
+				Manifold m = new Manifold(this.bodies.get(i), this.bodies.get(next));
 				m.apply();
 				if (m.didCollide) {
 					this.collisionOccurred = true;
 				}
 			}
 		}
+
+		int naive_cnt = (this.bodies.size() * (this.bodies.size() - 1)) / 2;
+		//		System.out.println("COLL CNT : " + coll_cnt + " NAIVE CNT : " + naive_cnt);
 	}
 
 	public void update(float dt) {

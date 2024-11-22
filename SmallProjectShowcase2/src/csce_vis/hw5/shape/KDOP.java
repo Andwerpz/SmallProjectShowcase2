@@ -4,9 +4,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 
-import csce_vis.hw5.bvh.AABB;
 import myutils.math.Mat3;
 import myutils.math.MathUtils;
+import myutils.math.Quaternion;
 import myutils.math.Vec2;
 import myutils.math.Vec3;
 
@@ -40,6 +40,7 @@ public class KDOP extends Shape {
 	protected Vec3[] vertices;
 	protected int[][] edges;
 
+	//faces are wound facing outwards
 	private Vec3[][] faces;
 	private Vec3[] face_normals;
 
@@ -190,15 +191,10 @@ public class KDOP extends Shape {
 				Vec3 a = f[0];
 				Vec3 b = f[1];
 				Vec3 c = f[i];
-				float cvol = MathUtils.signedTetrahedronVolume(a, b, c, new Vec3(0));
+				float cvol = Math.abs(MathUtils.signedTetrahedronVolume(a, b, c, new Vec3(0)));
 				Vec3 ccom = (a.add(b).add(c)).div(4.0f);
 
-				//				System.out.println("CVOL : " + cvol + " " + MathUtils.signedTetrahedronVolume(a, b, c, new Vec3(0)));
-				//				Vec3 tmp = MathUtils.cross(new Vec3(a, b), new Vec3(a, c));
-				//				System.out.println(MathUtils.cross(new Vec3(a, b), new Vec3(a, c)));
-				//				System.out.println(a + " " + b + " " + c);
-
-				volume += cvol;
+				volume -= cvol;
 				com.addi(ccom.mul(cvol));
 			}
 		}
@@ -224,14 +220,13 @@ public class KDOP extends Shape {
 			}
 			if (fmin.size() >= 3) {
 				face_list.add(fmin);
-				face_normal_list.add(new Vec3(this.axes[i]));
+				face_normal_list.add(new Vec3(this.axes[i]).mul(-1));
 			}
 			if (fmax.size() >= 3) {
 				face_list.add(fmax);
-				face_normal_list.add(new Vec3(this.axes[i]).mul(-1));
+				face_normal_list.add(new Vec3(this.axes[i]).mul(1));
 			}
 		}
-		//		System.out.println("COMPUTE FACES : " + face_list.size());
 
 		//for each face, give it a CCW winding order with respect to the face normal. 
 		this.faces = new Vec3[face_list.size()][];
@@ -258,7 +253,6 @@ public class KDOP extends Shape {
 				v.normalize();
 			}
 			float dist = MathUtils.dot(norm, f.get(0));
-			//			System.out.println("COORD : " + u + " " + v + " " + norm);
 
 			//transform face into local coordinate system
 			Vec2[] ft = new Vec2[f.size()];
@@ -302,7 +296,7 @@ public class KDOP extends Shape {
 				Vec3 a = f[0];
 				Vec3 b = f[1];
 				Vec3 c = f[i];
-				float cvol = MathUtils.signedTetrahedronVolume(a, b, c, new Vec3(0));
+				float cvol = Math.abs(MathUtils.signedTetrahedronVolume(a, b, c, new Vec3(0)));
 				volume += cvol;
 
 				Vec3 centroid = (a.add(b).add(c)).div(4.0f);
@@ -349,14 +343,22 @@ public class KDOP extends Shape {
 		return this.faces;
 	}
 
+	public Vec3[] getFaceNormals() {
+		return this.face_normals;
+	}
+
 	public Vec3 getCOMCorrection() {
 		return this.com_correction;
 	}
 
 	@Override
-	public AABB calcBoundingBox() {
-		// TODO Auto-generated method stub
-		return null;
+	public csce_vis.hw5.bvh.KDOP calcBoundingBox(Quaternion orient, Vec3 pos) {
+		//just run through all the vertices 
+		Vec3[] vlist = new Vec3[this.vertices.length];
+		for (int i = 0; i < this.vertices.length; i++) {
+			vlist[i] = MathUtils.quaternionRotateVec3(orient, this.vertices[i]).add(pos);
+		}
+		return new csce_vis.hw5.bvh.KDOP(vlist);
 	}
 
 }
