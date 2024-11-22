@@ -34,6 +34,7 @@ import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
 import lwjglengine.model.CubeSphere;
+import lwjglengine.model.Cylinder;
 import lwjglengine.model.Line;
 import lwjglengine.model.Model;
 import lwjglengine.model.ModelInstance;
@@ -72,7 +73,6 @@ public class HW5Window extends Window {
 	private Model cubeModel = null;
 	private Model suzanne = null, suzanne_wireframe = null;
 	private Model burrito = null, burrito_wireframe = null;
-	private Model sphere, cylinder;
 
 	private final int WORLD_SCENE = Scene.generateScene();
 	private final int WIREFRAME_SCENE = Scene.generateScene();
@@ -206,13 +206,6 @@ public class HW5Window extends Window {
 					}
 				}
 			}
-		}
-
-		CubeSphere.addDefaultSphere(new Vec3(20, 20, 0), 10, WORLD_SCENE);
-
-		//generate cylinder model
-		{
-
 		}
 
 		this.addChildAdjWindow(new ObjectEditorWindow(this.options));
@@ -455,10 +448,12 @@ public class HW5Window extends Window {
 	private Body addCapsule(Vec3 pos, float radius, float length) {
 		Capsule s = new Capsule(radius, length);
 		Body b = new Body(s, pos);
-
-		Model wireframe = this.generateCapsuleWireframe(s);
-		ModelInstance winst = new ModelInstance(wireframe, WORLD_SCENE);
-		DisplayBody d = new DisplayBody(b, winst);
+		
+		ModelInstance e1 = CubeSphere.addDefaultSphere(new Vec3(0, 0, length / 2), radius, WORLD_SCENE);
+		ModelInstance e2 = CubeSphere.addDefaultSphere(new Vec3(0, 0, -length / 2), radius, WORLD_SCENE);
+		ModelInstance mid = Cylinder.addDefaultCylinder(length, radius, new Vec3(0), Quaternion.identity(), WORLD_SCENE);
+		
+		DisplayBody d = new DisplayBody(b, e1, e2, mid);
 		this.addBody(b, d);
 		return b;
 	}
@@ -603,51 +598,58 @@ public class HW5Window extends Window {
 	}
 
 	class DisplayBody {
-		Model kdop_wireframe = null;
+		Model wireframe = null;
 		ModelInstance wmi = null; //wireframe model instance
 
 		Body body;
-		ModelInstance mi;
-		Mat4 baseTransform;
+		ModelInstance[] mi;
+		Mat4[] baseTransform;
 
-		public DisplayBody(Body _body, ModelInstance _mi) {
+		public DisplayBody(Body _body, ModelInstance... _mi) {
 			this.body = _body;
 			this.mi = _mi;
-			this.baseTransform = new Mat4(this.mi.getModelTransform().getModelMatrix());
+			this.baseTransform = new Mat4[_mi.length];
+			for(int i = 0; i < this.mi.length; i++) {
+				this.baseTransform[i] = new Mat4(this.mi[i].getModelTransform().getModelMatrix());
+			}
 
 			if (options.generateWireframes) {
 				switch (this.body.shape.type) {
 				case KDOP:
-					this.kdop_wireframe = generateKDOPWireframe((KDOP) this.body.shape);
-					this.wmi = new ModelInstance(this.kdop_wireframe, WORLD_SCENE);
+					this.wireframe = generateKDOPWireframe((KDOP) this.body.shape);
+					this.wmi = new ModelInstance(this.wireframe, WORLD_SCENE);
 					break;
 
 				case CAPSULE:
+					this.wireframe = generateCapsuleWireframe((Capsule) this.body.shape);
+					this.wmi = new ModelInstance(this.wireframe, WORLD_SCENE);
 					break;
 				}
 			}
 		}
-
+		
 		public void updateModelInstance() {
-			Mat4 transform = new Mat4(this.baseTransform);
+			Mat4 body_transform = MathUtils.quaternionToRotationMat4(this.body.orient);
+			body_transform.muli(Mat4.translate(this.body.pos));
+			
+			for(int i = 0; i < this.mi.length; i++) {
+				Mat4 transform = new Mat4(this.baseTransform[i]);
+				transform.muli(body_transform);
+				this.mi[i].setModelTransform(new ModelTransform(transform));
+			}
 
-			//apply general orientation and translation transforms
-			Mat4 rot_transform = MathUtils.quaternionToRotationMat4(this.body.orient);
-			transform.muli(rot_transform);
-			transform.muli(Mat4.translate(this.body.pos));
-
-			this.mi.setModelTransform(new ModelTransform(transform));
-
-			if (this.kdop_wireframe != null) {
-				this.wmi.setModelTransform(new ModelTransform(rot_transform.mul(Mat4.translate(this.body.pos))));
+			if (this.wireframe != null) {
+				this.wmi.setModelTransform(new ModelTransform(body_transform));
 			}
 		}
 
 		public void kill() {
-			this.mi.kill();
+			for(ModelInstance m : mi) {
+				m.kill();
+			}
 
-			if (this.kdop_wireframe != null) {
-				this.kdop_wireframe.kill();
+			if (this.wireframe != null) {
+				this.wireframe.kill();
 			}
 		}
 	}
