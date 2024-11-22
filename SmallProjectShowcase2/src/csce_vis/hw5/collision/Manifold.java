@@ -106,9 +106,6 @@ public class Manifold {
 		Mat3 itensorworld_a = rotmat_a.mul(a.moment).mul(rotmat_at);
 		Mat3 itensorworld_b = rotmat_b.mul(b.moment).mul(rotmat_bt);
 
-		//		System.out.println("ITENSORWORLD_B : ");
-		//		System.out.println(itensorworld_b);
-
 		//look at contacts, and apply them to bodies. 
 		Vec3 accel_a = new Vec3(0);
 		Vec3 accel_b = new Vec3(0);

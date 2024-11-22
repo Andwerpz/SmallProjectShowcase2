@@ -71,8 +71,8 @@ public class HW5Window extends Window {
 	private ImpulseScene impulse;
 	private ArrayList<DisplayBody> displayBodies;
 	private Model cubeModel = null;
-	private Model suzanne = null, suzanne_wireframe = null;
-	private Model burrito = null, burrito_wireframe = null;
+	private Model suzanne = null;
+	private Model burrito = null;
 
 	private final int WORLD_SCENE = Scene.generateScene();
 	private final int WIREFRAME_SCENE = Scene.generateScene();
@@ -143,9 +143,6 @@ public class HW5Window extends Window {
 		catch (IOException e) {
 			e.printStackTrace();
 		}
-
-		this.suzanne_wireframe = this.generateKDOPWireframe(this.suzanne);
-		this.burrito_wireframe = this.generateKDOPWireframe(this.burrito);
 
 		this.pic = new PlayerInputController(new Vec3(0, 30, 100));
 		this.pic.setAcceptPlayerInputs(false);
@@ -305,8 +302,8 @@ public class HW5Window extends Window {
 
 		//static capsule
 		case 7: {
-			//			Body c1 = this.addCapsule(new Vec3(0, 10, 0), 3, 10);
-			//			c1.setStatic();
+			Body c1 = this.addCapsule(new Vec3(0, 10, 0), 3, 10);
+			c1.setStatic();
 
 			Body c2 = this.addCapsule(new Vec3(0, 30, 0), 3, 10);
 			c2.angvel.set(new Vec3(0, 2, 0));
@@ -448,11 +445,11 @@ public class HW5Window extends Window {
 	private Body addCapsule(Vec3 pos, float radius, float length) {
 		Capsule s = new Capsule(radius, length);
 		Body b = new Body(s, pos);
-		
+
 		ModelInstance e1 = CubeSphere.addDefaultSphere(new Vec3(0, 0, length / 2), radius, WORLD_SCENE);
 		ModelInstance e2 = CubeSphere.addDefaultSphere(new Vec3(0, 0, -length / 2), radius, WORLD_SCENE);
 		ModelInstance mid = Cylinder.addDefaultCylinder(length, radius, new Vec3(0), Quaternion.identity(), WORLD_SCENE);
-		
+
 		DisplayBody d = new DisplayBody(b, e1, e2, mid);
 		this.addBody(b, d);
 		return b;
@@ -468,6 +465,10 @@ public class HW5Window extends Window {
 		Scene.removeScene(WIREFRAME_SCENE);
 
 		this.perspectiveScreen.kill();
+
+		this.burrito.kill();
+		this.suzanne.kill();
+		this.cubeModel.kill();
 	}
 
 	@Override
@@ -609,7 +610,7 @@ public class HW5Window extends Window {
 			this.body = _body;
 			this.mi = _mi;
 			this.baseTransform = new Mat4[_mi.length];
-			for(int i = 0; i < this.mi.length; i++) {
+			for (int i = 0; i < this.mi.length; i++) {
 				this.baseTransform[i] = new Mat4(this.mi[i].getModelTransform().getModelMatrix());
 			}
 
@@ -627,24 +628,25 @@ public class HW5Window extends Window {
 				}
 			}
 		}
-		
+
 		public void updateModelInstance() {
-			Mat4 body_transform = MathUtils.quaternionToRotationMat4(this.body.orient);
-			body_transform.muli(Mat4.translate(this.body.pos));
-			
-			for(int i = 0; i < this.mi.length; i++) {
+
+			for (int i = 0; i < this.mi.length; i++) {
 				Mat4 transform = new Mat4(this.baseTransform[i]);
-				transform.muli(body_transform);
+				transform.muli(MathUtils.quaternionToRotationMat4(this.body.orient));
+				transform.muli(Mat4.translate(this.body.pos));
 				this.mi[i].setModelTransform(new ModelTransform(transform));
 			}
 
 			if (this.wireframe != null) {
-				this.wmi.setModelTransform(new ModelTransform(body_transform));
+				Mat4 transform = MathUtils.quaternionToRotationMat4(this.body.orient);
+				transform.muli(Mat4.translate(this.body.pos));
+				this.wmi.setModelTransform(new ModelTransform(transform));
 			}
 		}
 
 		public void kill() {
-			for(ModelInstance m : mi) {
+			for (ModelInstance m : mi) {
 				m.kill();
 			}
 

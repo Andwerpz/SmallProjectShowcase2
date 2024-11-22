@@ -194,7 +194,7 @@ public class KDOP extends Shape {
 				float cvol = Math.abs(MathUtils.signedTetrahedronVolume(a, b, c, new Vec3(0)));
 				Vec3 ccom = (a.add(b).add(c)).div(4.0f);
 
-				volume -= cvol;
+				volume += cvol;
 				com.addi(ccom.mul(cvol));
 			}
 		}
