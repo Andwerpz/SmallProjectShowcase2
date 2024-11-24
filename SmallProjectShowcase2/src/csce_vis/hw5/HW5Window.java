@@ -26,13 +26,12 @@ import java.util.ArrayList;
 
 import org.lwjgl.glfw.GLFW;
 
-import csce_vis.hw5.shape.AABB;
-import csce_vis.hw5.shape.Capsule;
-import csce_vis.hw5.shape.KDOP;
-import csce_vis.hw5.shape.Shape;
+import lwjglengine.impulse3d.ImpulseScene;
+import lwjglengine.impulse3d.Body;
 import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
+import lwjglengine.model.Cube;
 import lwjglengine.model.CubeSphere;
 import lwjglengine.model.Cylinder;
 import lwjglengine.model.Line;
@@ -69,13 +68,10 @@ public class HW5Window extends Window {
 	// - optimize kdop-kdop collision narrow phase
 
 	private ImpulseScene impulse;
-	private ArrayList<DisplayBody> displayBodies;
-	private Model cubeModel = null;
 	private Model suzanne = null;
 	private Model burrito = null;
 
 	private final int WORLD_SCENE = Scene.generateScene();
-	private final int WIREFRAME_SCENE = Scene.generateScene();
 
 	private PerspectiveScreen perspectiveScreen;
 	private PlayerInputController pic;
@@ -86,7 +82,7 @@ public class HW5Window extends Window {
 		private boolean pausePhysics = false;
 		private boolean pauseOnCollide = false;
 		private boolean generateWireframes = false;
-		private int demosceneNumber = 7;
+		private int demosceneNumber = 0;
 
 		public int getDemosceneNumber() {
 			return demosceneNumber;
@@ -131,12 +127,10 @@ public class HW5Window extends Window {
 		this.setDeselectOnEscPressed(true);
 		this.setUnlockCursorOnEscPressed(true);
 
-		this.impulse = new ImpulseScene();
+		this.impulse = new ImpulseScene(WORLD_SCENE);
 		this.impulse.setGravity(new Vec3(0, -50, 0));
-		this.displayBodies = new ArrayList<>();
 
 		try {
-			this.cubeModel = Model.loadModelFileRelative("/res/cube/cube.obj");
 			this.suzanne = Model.loadModelFileRelative("/res/suzanne/suzanne.obj");
 			this.burrito = Model.loadModelFileRelative("/res/burrito/burrito.obj");
 		}
@@ -213,23 +207,19 @@ public class HW5Window extends Window {
 	}
 
 	private void resetImpulseScene() {
-		for (DisplayBody d : this.displayBodies) {
-			d.kill();
-		}
-		this.displayBodies.clear();
 		this.impulse.clearScene();
 		options.pausePhysics = false;
 
 		//ground
 		{
-			Body b = this.addAABB(new Vec3(0, -210 - 0.1, 0), new Vec3(420));
+			Body b = this.impulse.addAABB(new Vec3(0, -210 - 0.1, 0), new Vec3(420));
 			b.setStatic();
 		}
 
 		switch (options.demosceneNumber) {
 		//short wide box
 		case 0: {
-			Body b = this.addAABB(new Vec3(0, 5, 0), new Vec3(50, 10, 50));
+			Body b = this.impulse.addAABB(new Vec3(0, 5, 0), new Vec3(50, 10, 50));
 			b.setStatic();
 			break;
 		}
@@ -237,37 +227,37 @@ public class HW5Window extends Window {
 		//short wide box resting on short wide box
 		case 1: {
 			{
-				Body b = this.addAABB(new Vec3(0, 5, 0), new Vec3(50, 10, 50));
+				Body b = this.impulse.addAABB(new Vec3(0, 5, 0), new Vec3(50, 10, 50));
 				b.setStatic();
 			}
 			{
-				Body b = this.addAABB(new Vec3(3, 17.5, 0), new Vec3(20, 5, 20));
+				Body b = this.impulse.addAABB(new Vec3(3, 17.5, 0), new Vec3(20, 5, 20));
 			}
 			break;
 		}
 
 		//suzanne
 		case 2: {
-			Body b = this.addKDOP(new Vec3(0, 20, 0), this.suzanne, Mat4.scale(5));
+			Body b = this.impulse.addKDOP(new Vec3(0, 20, 0), this.suzanne, Mat4.scale(5));
 			b.angvel = new Vec3(3, 0, 0);
 			break;
 		}
 
 		//burrito
 		case 3: {
-			Body b = this.addKDOP(new Vec3(0, 20, 0), this.burrito, Mat4.scale(10));
+			Body b = this.impulse.addKDOP(new Vec3(0, 20, 0), this.burrito, Mat4.scale(10));
 			break;
 		}
 
 		//table
 		case 4: {
-			Body bl = this.addAABB(new Vec3(-10, 10, -10), new Vec3(2, 20, 2));
-			Body br = this.addAABB(new Vec3(10, 10, -10), new Vec3(2, 20, 2));
-			Body tl = this.addAABB(new Vec3(-10, 10, 10), new Vec3(2, 20, 2));
-			Body tr = this.addAABB(new Vec3(10, 10, 10), new Vec3(2, 20, 2));
+			Body bl = this.impulse.addAABB(new Vec3(-10, 10, -10), new Vec3(2, 20, 2));
+			Body br = this.impulse.addAABB(new Vec3(10, 10, -10), new Vec3(2, 20, 2));
+			Body tl = this.impulse.addAABB(new Vec3(-10, 10, 10), new Vec3(2, 20, 2));
+			Body tr = this.impulse.addAABB(new Vec3(10, 10, 10), new Vec3(2, 20, 2));
 
-			Body top = this.addAABB(new Vec3(0, 22, 0), new Vec3(25, 2, 25));
-			Body burrito = this.addKDOP(new Vec3(0, 30, 0), this.burrito, Mat4.scale(10));
+			Body top = this.impulse.addAABB(new Vec3(0, 22, 0), new Vec3(25, 2, 25));
+			Body burrito = this.impulse.addKDOP(new Vec3(0, 30, 0), this.burrito, Mat4.scale(10));
 			break;
 		}
 
@@ -280,7 +270,7 @@ public class HW5Window extends Window {
 				float xptr = -(cube_sz * i) / 2;
 				xptr += cube_sz / 2;
 				for (int j = 0; j < i; j++) {
-					Body b = this.addAABB(new Vec3(xptr, yptr, 0), new Vec3(cube_sz));
+					Body b = this.impulse.addAABB(new Vec3(xptr, yptr, 0), new Vec3(cube_sz));
 					xptr += cube_sz;
 				}
 				yptr += cube_sz;
@@ -294,7 +284,7 @@ public class HW5Window extends Window {
 			float cube_sz = 3;
 			float yptr = cube_sz / 2;
 			for (int i = cube_amt; i >= 1; i--) {
-				Body b = this.addAABB(new Vec3(0, yptr, 0), new Vec3(cube_sz));
+				Body b = this.impulse.addAABB(new Vec3(0, yptr, 0), new Vec3(cube_sz));
 				yptr += cube_sz;
 			}
 			break;
@@ -302,184 +292,33 @@ public class HW5Window extends Window {
 
 		//static capsule
 		case 7: {
-			Body c1 = this.addCapsule(new Vec3(0, 10, 0), 3, 10);
+			Body c1 = this.impulse.addCapsule(new Vec3(0, 10, 0), 3, 10);
 			c1.setStatic();
 
-			Body c2 = this.addCapsule(new Vec3(0, 30, 0), 3, 10);
+			Body c2 = this.impulse.addCapsule(new Vec3(0, 30, 0), 3, 10);
 			c2.angvel.set(new Vec3(0, 2, 0));
+			break;
+		}
+
+		//capsule vs aabb pen correct test
+		case 8: {
+			Body c = this.impulse.addCapsule(new Vec3(0, 20, 0), 2, 20);
+			c.setStatic();
 			break;
 		}
 		}
 
 	}
 
-	private Model generateKDOPWireframe(Model m) {
-		KDOP kdop = this.generateKDOP(m, Mat4.identity());
-		return this.generateKDOPWireframe(kdop);
-	}
-
-	private Model generateKDOPWireframe(KDOP kdop) {
-		ArrayList<Vec3> vertex_list = new ArrayList<>();
-		ArrayList<Integer> index_list = new ArrayList<>();
-		Vec3[][] faces = kdop.getFaces();
-		for (Vec3[] f : faces) {
-			int face_start = vertex_list.size();
-			for (Vec3 v : f) {
-				vertex_list.add(v);
-			}
-			for (int i = 0; i < f.length; i++) {
-				index_list.add(i + face_start);
-				index_list.add((i + 1) % f.length + face_start);
-			}
-		}
-
-		float[] vertices = new float[vertex_list.size() * 3];
-		int[] indices = new int[index_list.size()];
-		for (int i = 0; i < vertex_list.size(); i++) {
-			vertices[i * 3 + 0] = vertex_list.get(i).x;
-			vertices[i * 3 + 1] = vertex_list.get(i).y;
-			vertices[i * 3 + 2] = vertex_list.get(i).z;
-		}
-		for (int i = 0; i < index_list.size(); i++) {
-			indices[i] = index_list.get(i);
-		}
-
-		VertexArray wire_va = new VertexArray(vertices, indices, GL_LINES);
-		return new Model(wire_va);
-	}
-
-	private Model generateCapsuleWireframe(Capsule capsule) {
-		int endcap_resolution = 20;
-		Vec3[] cap2d = new Vec3[(endcap_resolution + 1) * 2];
-		for (int i = 0; i <= endcap_resolution; i++) {
-			float ang = (float) (Math.PI / 2.0 - Math.PI * ((float) i / (float) endcap_resolution));
-			Vec2 dir = new Vec2(1, 0);
-			dir.rotate(ang);
-			cap2d[i] = new Vec3(0, dir.y * capsule.radius, dir.x * capsule.radius + capsule.length / 2.0f);
-		}
-		for (int i = 0; i <= endcap_resolution; i++) {
-			float ang = (float) (-Math.PI / 2.0 - Math.PI * ((float) i / (float) endcap_resolution));
-			Vec2 dir = new Vec2(1, 0);
-			dir.rotate(ang);
-			cap2d[i + (endcap_resolution + 1)] = new Vec3(0, dir.y * capsule.radius, dir.x * capsule.radius - capsule.length / 2.0f);
-		}
-
-		int nr_cap2d = 6;
-		ArrayList<Vec3> vertex_list = new ArrayList<>();
-		ArrayList<Integer> index_list = new ArrayList<>();
-		for (int i = 0; i < nr_cap2d; i++) {
-			float ang = (float) Math.PI * ((float) i / (float) nr_cap2d);
-			for (int j = 0; j < cap2d.length; j++) {
-				Vec3 v = new Vec3(cap2d[j]);
-				v.rotateZ(ang);
-				vertex_list.add(v);
-
-				index_list.add(j + cap2d.length * i);
-				index_list.add((j + 1) % cap2d.length + cap2d.length * i);
-			}
-		}
-
-		float[] vertices = new float[vertex_list.size() * 3];
-		int[] indices = new int[index_list.size()];
-		for (int i = 0; i < vertex_list.size(); i++) {
-			vertices[i * 3 + 0] = vertex_list.get(i).x;
-			vertices[i * 3 + 1] = vertex_list.get(i).y;
-			vertices[i * 3 + 2] = vertex_list.get(i).z;
-		}
-		for (int i = 0; i < index_list.size(); i++) {
-			indices[i] = index_list.get(i);
-		}
-
-		VertexArray wire_va = new VertexArray(vertices, indices, GL_LINES);
-		return new Model(wire_va);
-	}
-
-	private KDOP generateKDOP(Model m, Mat4 transform) {
-		ArrayList<Vec3> pts_list = new ArrayList<>();
-		for (VertexArray va : m.getMeshes()) {
-			for (int i = 0; i < va.getVertices().length / 3; i++) {
-				pts_list.add(new Vec3(va.getVertices()[i * 3 + 0], va.getVertices()[i * 3 + 1], va.getVertices()[i * 3 + 2]));
-			}
-		}
-		Vec3[] pts = new Vec3[pts_list.size()];
-		for (int i = 0; i < pts.length; i++) {
-			pts[i] = transform.mul(pts_list.get(i), 1);
-		}
-		KDOP kdop = new KDOP(pts);
-		return kdop;
-	}
-
-	private void addBody(Body b, DisplayBody d) {
-		this.impulse.addBody(b);
-		this.displayBodies.add(d);
-	}
-
-	private Body addAABB(Vec3 pos, Vec3 dim) {
-		ModelInstance mi = new ModelInstance(this.cubeModel, WORLD_SCENE);
-		mi.setModelTransform(new ModelTransform(Mat4.scale(dim.mul(0.5f))));
-
-		Shape s = new AABB(dim);
-		Body b = new Body(s, pos);
-		DisplayBody d = new DisplayBody(b, mi);
-		this.addBody(b, d);
-		return b;
-	}
-
-	private Body addKDOP(Vec3 pos, Model m, Mat4 base_transform) {
-		Shape s = this.generateKDOP(m, base_transform);
-		Body b = new Body(s, pos);
-
-		Mat4 transform = new Mat4(base_transform);
-		transform.muli(Mat4.translate(((KDOP) s).getCOMCorrection().mul(-1)));
-		ModelInstance mi = new ModelInstance(m, new ModelTransform(transform), WORLD_SCENE);
-
-		DisplayBody d = new DisplayBody(b, mi);
-		this.addBody(b, d);
-		return b;
-	}
-
-	private Body addKDOP(Vec3 pos, Model m) {
-		return this.addKDOP(pos, m, Mat4.identity());
-	}
-
-	private Body addCapsule(Vec3 pos, float radius, float length) {
-		Capsule s = new Capsule(radius, length);
-		Body b = new Body(s, pos);
-		DisplayBody d = null;
-		
-		if(length == 0) {
-			ModelInstance e1 = CubeSphere.addDefaultSphere(new Vec3(0, 0, length / 2), radius, WORLD_SCENE);
-			d = new DisplayBody(b, e1);
-		}
-		else {
-			ModelInstance e1 = CubeSphere.addDefaultSphere(new Vec3(0, 0, length / 2), radius, WORLD_SCENE);
-			ModelInstance e2 = CubeSphere.addDefaultSphere(new Vec3(0, 0, -length / 2), radius, WORLD_SCENE);
-			ModelInstance mid = Cylinder.addDefaultCylinder(length, radius, new Vec3(0), Quaternion.identity(), WORLD_SCENE);
-			d = new DisplayBody(b, e1, e2, mid);
-		}
-		
-		this.addBody(b, d);
-		return b;
-	}
-	
-	private Body addSphere(Vec3 pos, float radius) {
-		return this.addCapsule(pos, radius, 0);
-	}
-
 	@Override
 	protected void _kill() {
-		for (DisplayBody d : this.displayBodies) {
-			d.kill();
-		}
-
+		this.impulse.kill();
 		Scene.removeScene(WORLD_SCENE);
-		Scene.removeScene(WIREFRAME_SCENE);
 
 		this.perspectiveScreen.kill();
 
 		this.burrito.kill();
 		this.suzanne.kill();
-		this.cubeModel.kill();
 	}
 
 	@Override
@@ -503,11 +342,7 @@ public class HW5Window extends Window {
 				}
 			}
 		}
-
-		//update physics model transforms
-		for (DisplayBody d : this.displayBodies) {
-			d.updateModelInstance();
-		}
+		this.impulse.updateDisplayBodies();
 
 		this.pic.update();
 	}
@@ -575,34 +410,34 @@ public class HW5Window extends Window {
 			break;
 
 		case GLFW.GLFW_KEY_Q: {
-			Body b = this.addAABB(new Vec3(0, 20, 0), MathUtils.random(new Vec3(3), new Vec3(10)));
+			Body b = this.impulse.addAABB(new Vec3(0, 20, 0), MathUtils.random(new Vec3(3), new Vec3(10)));
 			b.angvel = MathUtils.randomUnitDir3D();
 			break;
 		}
 
 		case GLFW.GLFW_KEY_E: {
-			Body b = this.addAABB(this.pic.getPos().add(this.pic.getFacing().mul(5)), new Vec3(3));
+			Body b = this.impulse.addAABB(this.pic.getPos().add(this.pic.getFacing().mul(5)), new Vec3(3));
 			b.angvel = MathUtils.randomUnitDir3D().mul(10);
 			b.vel = this.pic.getFacing().mul(50);
 			break;
 		}
 
 		case GLFW.GLFW_KEY_B: {
-			Body b = this.addKDOP(this.pic.getPos().add(this.pic.getFacing().mul(5)), this.burrito, Mat4.scale(10));
+			Body b = this.impulse.addKDOP(this.pic.getPos().add(this.pic.getFacing().mul(5)), this.burrito, Mat4.scale(10));
 			b.angvel = MathUtils.randomUnitDir3D().mul(10);
 			b.vel = this.pic.getFacing().mul(50);
 			break;
 		}
 
 		case GLFW.GLFW_KEY_C: {
-			Body b = this.addCapsule(this.pic.getPos().add(this.pic.getFacing().mul(5)), 3, 6);
+			Body b = this.impulse.addCapsule(this.pic.getPos().add(this.pic.getFacing().mul(5)), 3, 6);
 			b.angvel = MathUtils.randomUnitDir3D().mul(10);
 			b.vel = this.pic.getFacing().mul(50);
 			break;
 		}
-		
+
 		case GLFW.GLFW_KEY_Z: {
-			Body b = this.addSphere(this.pic.getPos().add(this.pic.getFacing().mul(5)), 3);
+			Body b = this.impulse.addSphere(this.pic.getPos().add(this.pic.getFacing().mul(5)), 3);
 			b.vel = this.pic.getFacing().mul(50);
 			break;
 		}
@@ -613,63 +448,6 @@ public class HW5Window extends Window {
 	protected void _keyReleased(int key) {
 		// TODO Auto-generated method stub
 
-	}
-
-	class DisplayBody {
-		Model wireframe = null;
-		ModelInstance wmi = null; //wireframe model instance
-
-		Body body;
-		ModelInstance[] mi;
-		Mat4[] baseTransform;
-
-		public DisplayBody(Body _body, ModelInstance... _mi) {
-			this.body = _body;
-			this.mi = _mi;
-			this.baseTransform = new Mat4[_mi.length];
-			for (int i = 0; i < this.mi.length; i++) {
-				this.baseTransform[i] = new Mat4(this.mi[i].getModelTransform().getModelMatrix());
-			}
-
-			if (options.generateWireframes) {
-				switch (this.body.shape.type) {
-				case KDOP:
-					this.wireframe = generateKDOPWireframe((KDOP) this.body.shape);
-					this.wmi = new ModelInstance(this.wireframe, WORLD_SCENE);
-					break;
-
-				case CAPSULE:
-					this.wireframe = generateCapsuleWireframe((Capsule) this.body.shape);
-					this.wmi = new ModelInstance(this.wireframe, WORLD_SCENE);
-					break;
-				}
-			}
-		}
-
-		public void updateModelInstance() {
-			for (int i = 0; i < this.mi.length; i++) {
-				Mat4 transform = new Mat4(this.baseTransform[i]);
-				transform.muli(MathUtils.quaternionToRotationMat4(this.body.orient));
-				transform.muli(Mat4.translate(this.body.pos));
-				this.mi[i].setModelTransform(new ModelTransform(transform));
-			}
-
-			if (this.wireframe != null) {
-				Mat4 transform = MathUtils.quaternionToRotationMat4(this.body.orient);
-				transform.muli(Mat4.translate(this.body.pos));
-				this.wmi.setModelTransform(new ModelTransform(transform));
-			}
-		}
-
-		public void kill() {
-			for (ModelInstance m : mi) {
-				m.kill();
-			}
-
-			if (this.wireframe != null) {
-				this.wireframe.kill();
-			}
-		}
 	}
 
 }
