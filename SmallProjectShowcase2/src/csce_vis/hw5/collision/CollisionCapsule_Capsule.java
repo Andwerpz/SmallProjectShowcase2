@@ -36,9 +36,19 @@ public class CollisionCapsule_Capsule implements CollisionCallback {
 		v2.addi(b2.pos);
 
 		m.contacts = new ArrayList<>();
+		
+		//special case if both capsules are just spheres
+		if(s1.length == 0 && s2.length == 0){
+			if(MathUtils.dist(u1, v1) < s1.radius + s2.radius) {
+				Vec3 norm = new Vec3(v1, u1).normalize();
+				float pen = (s1.radius + s2.radius) - MathUtils.dist(u1, v1);
+				Vec3 pt = (u1.add(v1)).div(2.0f);
+				m.contacts.add(new Contact(pt, norm, pen));
+			}
+		}
 
 		//see what the ends are doing
-		{
+		if(s2.length != 0){
 			Vec3 proj = MathUtils.point_lineSegmentProjectClamped(u1, v1, v2);
 			if (MathUtils.dist(u1, proj) < s1.radius + s2.radius) {
 				Vec3 norm = new Vec3(proj, u1).normalize();
@@ -47,7 +57,7 @@ public class CollisionCapsule_Capsule implements CollisionCallback {
 				m.contacts.add(new Contact(pt, norm, pen));
 			}
 		}
-		{
+		if(s2.length != 0){
 			Vec3 proj = MathUtils.point_lineSegmentProjectClamped(u2, v1, v2);
 			if (MathUtils.dist(u2, proj) < s1.radius + s2.radius) {
 				Vec3 norm = new Vec3(proj, u2).normalize();
@@ -56,7 +66,7 @@ public class CollisionCapsule_Capsule implements CollisionCallback {
 				m.contacts.add(new Contact(pt, norm, pen));
 			}
 		}
-		{
+		if(s1.length != 0){
 			Vec3 proj = MathUtils.point_lineSegmentProjectClamped(v1, u1, u2);
 			if (MathUtils.dist(v1, proj) < s1.radius + s2.radius) {
 				Vec3 norm = new Vec3(v1, proj).normalize();
@@ -65,7 +75,7 @@ public class CollisionCapsule_Capsule implements CollisionCallback {
 				m.contacts.add(new Contact(pt, norm, pen));
 			}
 		}
-		{
+		if(s1.length != 0){
 			Vec3 proj = MathUtils.point_lineSegmentProjectClamped(v2, u1, u2);
 			if (MathUtils.dist(v2, proj) < s1.radius + s2.radius) {
 				Vec3 norm = new Vec3(v2, proj).normalize();

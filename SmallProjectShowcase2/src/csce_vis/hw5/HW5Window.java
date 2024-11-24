@@ -445,14 +445,25 @@ public class HW5Window extends Window {
 	private Body addCapsule(Vec3 pos, float radius, float length) {
 		Capsule s = new Capsule(radius, length);
 		Body b = new Body(s, pos);
-
-		ModelInstance e1 = CubeSphere.addDefaultSphere(new Vec3(0, 0, length / 2), radius, WORLD_SCENE);
-		ModelInstance e2 = CubeSphere.addDefaultSphere(new Vec3(0, 0, -length / 2), radius, WORLD_SCENE);
-		ModelInstance mid = Cylinder.addDefaultCylinder(length, radius, new Vec3(0), Quaternion.identity(), WORLD_SCENE);
-
-		DisplayBody d = new DisplayBody(b, e1, e2, mid);
+		DisplayBody d = null;
+		
+		if(length == 0) {
+			ModelInstance e1 = CubeSphere.addDefaultSphere(new Vec3(0, 0, length / 2), radius, WORLD_SCENE);
+			d = new DisplayBody(b, e1);
+		}
+		else {
+			ModelInstance e1 = CubeSphere.addDefaultSphere(new Vec3(0, 0, length / 2), radius, WORLD_SCENE);
+			ModelInstance e2 = CubeSphere.addDefaultSphere(new Vec3(0, 0, -length / 2), radius, WORLD_SCENE);
+			ModelInstance mid = Cylinder.addDefaultCylinder(length, radius, new Vec3(0), Quaternion.identity(), WORLD_SCENE);
+			d = new DisplayBody(b, e1, e2, mid);
+		}
+		
 		this.addBody(b, d);
 		return b;
+	}
+	
+	private Body addSphere(Vec3 pos, float radius) {
+		return this.addCapsule(pos, radius, 0);
 	}
 
 	@Override
@@ -589,6 +600,12 @@ public class HW5Window extends Window {
 			b.vel = this.pic.getFacing().mul(50);
 			break;
 		}
+		
+		case GLFW.GLFW_KEY_Z: {
+			Body b = this.addSphere(this.pic.getPos().add(this.pic.getFacing().mul(5)), 3);
+			b.vel = this.pic.getFacing().mul(50);
+			break;
+		}
 		}
 	}
 
@@ -630,7 +647,6 @@ public class HW5Window extends Window {
 		}
 
 		public void updateModelInstance() {
-
 			for (int i = 0; i < this.mi.length; i++) {
 				Mat4 transform = new Mat4(this.baseTransform[i]);
 				transform.muli(MathUtils.quaternionToRotationMat4(this.body.orient));
