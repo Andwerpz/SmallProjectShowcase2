@@ -1,3 +1,9 @@
 /SmallProjectShowcase2/bin/*
+SmallProjectShowcase2/bin/*
 *.class
 *.log
+.idea/*
+*.idea/*
+*.idea
+SmallProjectShowcase2.iml
+*SmallProjectShowcase2.iml
