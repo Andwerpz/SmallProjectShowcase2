@@ -3,6 +3,7 @@ package window;
 import java.awt.Color;
 import java.awt.Font;
 
+import csce_vis.buoyancy_test.BuoyancyTestWindow;
 import csce_vis.hw1.HW1Window;
 import csce_vis.hw2.HW2Window;
 import csce_vis.hw3.HW3Aquarium;
@@ -169,6 +170,7 @@ public class BackgroundWindow extends Window {
 			proj_window.addToList("Homework 4");
 			proj_window.addToList("Homework 5");
 			proj_window.addToList("The Final Homework");
+			proj_window.addToList("Buoyancy Test");
 			break;
 		}
 
@@ -392,6 +394,11 @@ public class BackgroundWindow extends Window {
 
 			case "The Final Homework": {
 				AdjustableWindow window = new AdjustableWindow(new HWFWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+
+			case "Buoyancy Test": {
+				AdjustableWindow window = new AdjustableWindow(new BuoyancyTestWindow(x, y, width, height, null), BackgroundWindow.this);
 				break;
 			}
 
