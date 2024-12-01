@@ -31,7 +31,7 @@ const Sphere atmo_sphere = Sphere(earth_center, atm_radius);	//haha
 const vec3 camera_pos = vec3(0, camera_height + earth_radius, 0);
 
 //magic number
-const float sun_intensity = 20;
+const float sun_intensity = 30;
 
 //Rayleigh and Mie scale heights
 const float Hr = 7994;
@@ -75,10 +75,6 @@ bool raySphere(Ray ray, Sphere sphere) {
 
 vec3 computeIncidentLight(Ray ray) {
 	float dmin, dmax;
-	if(raySphere(ray, earth_sphere, dmin, dmax)) {
-		//hits earth
-		return vec3(0, 0, 0);
-	}
 	if(!raySphere(ray, atmo_sphere, dmin, dmax)) {
 		//doesn't hit atmosphere
 		return vec3(0, 0, 0);
