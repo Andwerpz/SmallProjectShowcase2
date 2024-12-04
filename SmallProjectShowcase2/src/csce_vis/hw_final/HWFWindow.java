@@ -26,7 +26,7 @@ import myutils.math.Vec4;
 
 public class HWFWindow extends Window {
 
-    private static int waterResolution = 128;
+    private static int waterResolution = 256;
 	private Model waterModel;
 
 	private final int WORLD_SCENE = Scene.generateScene();
@@ -55,7 +55,7 @@ public class HWFWindow extends Window {
 		Cubemap skybox = new Cubemap(skyboxSides);
 		Scene.skyboxes.put(WORLD_SCENE, skybox);
 
-		//create water model grid
+		// CREATE WATER MODEL (TRIANGLE INITIALIZATION: THE POINTS & THE INDICES OF THE POINTS THAT MAKE UP EACH TRIANGLE)
 		{
 			int[][] vertexIndices = new int[waterResolution][waterResolution];
 			int ptr = 0;
@@ -102,25 +102,27 @@ public class HWFWindow extends Window {
 		waterMaterial.setSpecularExponent(256);
 		waterInstance.setMaterial(waterMaterial);
 
+		// INITIALIZE SCREEN
 		this.worldScreen = new HWFScreen();
 		this.worldScreen.renderSkybox(true);
 
 		this.pic = new PlayerInputController(new Vec3(0, 1, 0));
 
-		//update camera position
+		// SET CAMERA POS
 		this.worldScreen.getCamera().setFacing(this.pic.getFacing());
-		this.worldScreen.getCamera().setPos(this.pic.getPos());
+		this.worldScreen.getCamera().setPos(this.pic.getPos().add(new Vec3(0, 3, 0)));
 
+		// ADD SUN & LIGHTS
 		DirLight sun = new DirLight(new Vec3(0.3, -0.6f, 1), new Vec3(1), 0.4f);
 		Light.addLight(WORLD_SCENE, sun);
 		this.worldScreen.setSun(sun);
 
+		// DEBUGGING TOOLS IF DESIRED
 		//windows to look at water textures
-		AdjustableWindow waterHeightViewer = new AdjustableWindow("Water Height Map", new TextureViewerWindow(this.worldScreen.getWaterHeightMap()), this);
-		AdjustableWindow waterNormalViewer = new AdjustableWindow("Water Normal Map", new TextureViewerWindow(this.worldScreen.getWaterNormalMap()), this);
-
+		//AdjustableWindow waterHeightViewer = new AdjustableWindow("Water Height Map", new TextureViewerWindow(this.worldScreen.getWaterHeightMap()), this);
+		//AdjustableWindow waterNormalViewer = new AdjustableWindow("Water Normal Map", new TextureViewerWindow(this.worldScreen.getWaterNormalMap()), this);
 		//control panel for the water
-		AdjustableWindow waterAttributesPanel = new AdjustableWindow("Water Attributes", new ObjectEditorWindow(this.worldScreen.getWaterAttributes()), this);
+		//AdjustableWindow waterAttributesPanel = new AdjustableWindow("Water Attributes", new ObjectEditorWindow(this.worldScreen.getWaterAttributes()), this);
 
 		this._resize();
 	}
