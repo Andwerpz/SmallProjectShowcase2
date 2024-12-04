@@ -3,7 +3,6 @@ package csce_vis.hw_final;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
 import static org.lwjgl.opengl.GL14.*;
-import static org.lwjgl.opengl.GL13.*;
 import static org.lwjgl.opengl.GL30.*;
 
 import java.util.ArrayList;
@@ -22,7 +21,6 @@ import lwjglengine.screen.Screen;
 import lwjglengine.screen.SkyboxCube;
 import lwjglengine.util.ShaderUtils;
 import myutils.math.Mat4;
-import myutils.math.MathUtils;
 import myutils.math.Vec3;
 
 public class HWFScreen extends Screen {
@@ -32,11 +30,8 @@ public class HWFScreen extends Screen {
 
 	private int world_scene;
 
-	private int particle_scene;
-	private boolean renderParticles = false;
-
 	private static final int SHADOW_MAP_NR_CASCADES = 7;
-	private static float[] shadowCascades = new float[] { NEAR, 1, 3, 7, 15, 30, 100, FAR };
+	private static final float[] shadowCascades = new float[] { NEAR, 1, 3, 7, 15, 30, 100, FAR };
 
 	private float worldFOV;
 
@@ -49,10 +44,8 @@ public class HWFScreen extends Screen {
 	private Texture geometryNormalMap; // RGB: normal
 	private Texture geometrySpecularMap; // RGB: specular, A: shininess
 	private Texture geometryColorMap; // RGB: color, A: alpha
-	private Texture geometryColorIDMap; // RGB: colorID
 
 	private Texture lightingColorMap; // RGB: color
-	private Texture lightingBrightnessMap; // R: brightness
 
 	private Texture shadowDepthMap; // R: depth
 	private Texture shadowBackfaceMap; // R: isBackface
@@ -62,32 +55,28 @@ public class HWFScreen extends Screen {
 
 	private boolean renderSkybox = false;
 
-	private Shader waterGeometryShader;
+	private final Shader waterGeometryShader;
 
 	private float waterTime = 0f;
-	private Shader waterTextureShader; //responsible for creating the water texture.
+	private final Shader waterHMapShader; //responsible for creating the water texture.
 
-	private static int nrSumsMax = 128;
-	private static int waterTextureResolution = 1024; //resolution of the water texture should remain fixed.
-	private Framebuffer waterBuffer; //height and normal of the water.
-	private Texture waterHeightMap; //R: water height
-	private Texture waterNormalMap; //RGB: normal
+	private static final int nrSumsMax = 128;
+	private static final int waterTextureResolution = 256; //resolution of the water texture should remain fixed.
+	private final Framebuffer waterBuffer; //height and normal of the water.
+	private final Texture waterHeightMap; //R: water height
+	private final Texture waterNormalMap; //RGB: normal
 
-	private WaterAttributes waterAttributes;
-
-	private Shader waterAtmosphereShader;
+	private final Shader waterAtmosphereShader;
 
 	public HWFScreen() {
-		this.waterAttributes = new WaterAttributes();
-
-		this.waterTextureShader = ShaderUtils.createShader("/sum_of_sines_water/water_texture.vert", "/sum_of_sines_water/water_texture.frag");
+		this.waterHMapShader = ShaderUtils.createShader("/csce_vis/hw_final/fft_water_map.vert", "/csce_vis/hw_final/fft_water_map.frag");
 
 		{
 			float speed = 0.5f;
 			for (int i = 0; i < nrSumsMax; i++) {
 				float theta = (float) (Math.random() * Math.PI * 2);
-				this.waterTextureShader.setUniform1f("theta[" + i + "]", theta);
-				this.waterTextureShader.setUniform1f("speed[" + i + "]", speed);
+				this.waterHMapShader.setUniform1f("theta[" + i + "]", theta);
+				this.waterHMapShader.setUniform1f("speed[" + i + "]", speed);
 				speed *= 1.07;
 			}
 		}
@@ -120,83 +109,9 @@ public class HWFScreen extends Screen {
 		this.waterAtmosphereShader = ShaderUtils.createShader("/sum_of_sines_water/water_atmosphere.vert", "/sum_of_sines_water/water_atmosphere.frag");
 	}
 
-	public class WaterAttributes {
-		public float u_amplitude = 0.004f;
-		public float u_period = 0.05f;
-		public int nr_sums = 128;
-
-		public float period_mult = 0.877f;
-		public float amplitude_mult = 0.82f;
-
-		public float domain_warp_coeff = 0.06f;
-
-		private float water_depth = 10;
-
-		public float getU_amplitude() {
-			return u_amplitude;
-		}
-
-		public void setU_amplitude(float u_amplitude) {
-			this.u_amplitude = u_amplitude;
-		}
-
-		public float getU_period() {
-			return u_period;
-		}
-
-		public void setU_period(float u_period) {
-			this.u_period = u_period;
-		}
-
-		public int getNr_sums() {
-			return nr_sums;
-		}
-
-		public void setNr_sums(int nr_sums) {
-			this.nr_sums = nr_sums;
-		}
-
-		public float getPeriod_mult() {
-			return period_mult;
-		}
-
-		public void setPeriod_mult(float period_mult) {
-			this.period_mult = period_mult;
-		}
-
-		public float getAmplitude_mult() {
-			return amplitude_mult;
-		}
-
-		public void setAmplitude_mult(float amplitude_mult) {
-			this.amplitude_mult = amplitude_mult;
-		}
-
-		public float getDomain_warp_coeff() {
-			return domain_warp_coeff;
-		}
-
-		public void setDomain_warp_coeff(float domain_warp_coeff) {
-			this.domain_warp_coeff = domain_warp_coeff;
-		}
-
-		public float getWater_depth() {
-			return water_depth;
-		}
-
-		public void setWater_depth(float water_depth) {
-			this.water_depth = water_depth;
-		}
-
-	}
-
 	public void setSun(DirLight sun) {
 		this.waterGeometryShader.setUniform3f("sun_dir", sun.dir);
 		this.waterAtmosphereShader.setUniform3f("sun_dir", sun.dir);
-	}
-
-	public WaterAttributes getWaterAttributes() {
-		return this.waterAttributes;
 	}
 
 	public Texture getWaterHeightMap() {
@@ -210,8 +125,8 @@ public class HWFScreen extends Screen {
 	public void generateTheta() {
 		for (int i = 0; i < nrSumsMax; i++) {
 			float theta = (float) (Math.random() * Math.PI * 2);
-			this.waterTextureShader.enable();
-			this.waterTextureShader.setUniform1f("theta[" + i + "]", theta);
+			this.waterHMapShader.enable();
+			this.waterHMapShader.setUniform1f("theta[" + i + "]", theta);
 		}
 	}
 
@@ -224,13 +139,14 @@ public class HWFScreen extends Screen {
 
 		this.waterBuffer.kill();
 
-		this.waterTextureShader.kill();
+		this.waterHMapShader.kill();
 		this.waterGeometryShader.kill();
 		this.waterAtmosphereShader.kill();
 	}
 
 	@Override
 	public void buildBuffers() {
+		// KILL BUFFERS IF THEY ALREADY EXIST
 		if (this.geometryBuffer != null) {
 			this.geometryBuffer.kill();
 		}
@@ -244,26 +160,29 @@ public class HWFScreen extends Screen {
 			this.shadowBuffer.kill();
 		}
 
+		// CREATE AND BIND THE BUFFERS
 		this.geometryBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
 		this.geometryPositionMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
 		this.geometryNormalMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
 		this.geometrySpecularMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
 		this.geometryColorMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
-		this.geometryColorIDMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA8, GL_RGBA, GL_FLOAT);
+		// RGB: colorID
+		Texture geometryColorIDMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA8, GL_RGBA, GL_FLOAT);
 		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.geometryPositionMap.getID());
 		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, this.geometryNormalMap.getID());
 		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, this.geometrySpecularMap.getID());
 		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, this.geometryColorMap.getID());
-		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT4, GL_TEXTURE_2D, this.geometryColorIDMap.getID());
+		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT4, GL_TEXTURE_2D, geometryColorIDMap.getID());
 		this.geometryBuffer.addDepthBuffer();
 		this.geometryBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3, GL_COLOR_ATTACHMENT4 });
 		this.geometryBuffer.isComplete();
 
 		this.lightingBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
 		this.lightingColorMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_UNSIGNED_BYTE);
-		this.lightingBrightnessMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT);
+		// R: brightness
+		Texture lightingBrightnessMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT);
 		this.lightingBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.lightingColorMap.getID());
-		this.lightingBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, this.lightingBrightnessMap.getID());
+		this.lightingBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, lightingBrightnessMap.getID());
 		this.lightingBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 });
 		this.lightingBuffer.isComplete();
 
@@ -282,6 +201,7 @@ public class HWFScreen extends Screen {
 		this.skyboxBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
 		this.skyboxBuffer.isComplete();
 
+		// INITIALIZE CAMERA DETAILS
 		this.worldFOV = 90f;
 
 		Vec3 cameraPos = new Vec3();
@@ -306,16 +226,8 @@ public class HWFScreen extends Screen {
 		this.camera.setFacing(cameraFacing);
 	}
 
-	public void setWorldCameraFOV(float degrees) {
-		this.worldFOV = degrees;
-	}
-
 	public void setWorldScene(int scene) {
 		this.world_scene = scene;
-	}
-
-	public void setParticleScene(int scene) {
-		this.particle_scene = scene;
 	}
 
 	public void setShaderCameraUniforms(Shader shader, Camera camera) {
@@ -326,10 +238,6 @@ public class HWFScreen extends Screen {
 
 	public void renderSkybox(boolean b) {
 		this.renderSkybox = b;
-	}
-
-	public void renderParticles(boolean b) {
-		this.renderParticles = b;
 	}
 
 	@Override
@@ -345,17 +253,17 @@ public class HWFScreen extends Screen {
 		glClearDepth(1); // maximum value
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		this.waterBuffer.bind();
-		this.waterTextureShader.enable();
+		this.waterHMapShader.enable();
 		this.waterTime += Main.getDeltaSeconds();
-		this.waterTextureShader.setUniform1f("time", this.waterTime);
+		this.waterHMapShader.setUniform1f("time", this.waterTime);
 
-		this.waterTextureShader.setUniform1f("u_amplitude", this.waterAttributes.u_amplitude);
-		this.waterTextureShader.setUniform1f("u_period", this.waterAttributes.u_period);
-		this.waterTextureShader.setUniform1i("nr_sums", this.waterAttributes.nr_sums);
+		this.waterHMapShader.setUniform1f("u_amplitude", 0.004f);
+		this.waterHMapShader.setUniform1f("u_period", 0.05f);
+		this.waterHMapShader.setUniform1i("nr_sums", 8);
 
-		this.waterTextureShader.setUniform1f("period_mult", this.waterAttributes.period_mult);
-		this.waterTextureShader.setUniform1f("amplitude_mult", this.waterAttributes.amplitude_mult);
-		this.waterTextureShader.setUniform1f("domain_warp_coeff", this.waterAttributes.domain_warp_coeff);
+		this.waterHMapShader.setUniform1f("period_mult", 0.877f);
+		this.waterHMapShader.setUniform1f("amplitude_mult", 0.82f);
+		this.waterHMapShader.setUniform1f("domain_warp_coeff", 0.06f);
 
 		screenQuad.render();
 		glViewport(0, 0, this.screenWidth, this.screenHeight);
@@ -373,7 +281,7 @@ public class HWFScreen extends Screen {
 		Texture.bindingEnabled = true;
 
 		this.waterGeometryShader.enable();
-		this.waterGeometryShader.setUniform1f("water_depth", this.waterAttributes.water_depth);
+		this.waterGeometryShader.setUniform1f("water_depth", 10f);
 		Scene.skyboxes.get(this.world_scene).bind(GL_TEXTURE5);
 		this.waterHeightMap.bind(GL_TEXTURE6);
 		this.waterNormalMap.bind(GL_TEXTURE7);
@@ -560,26 +468,6 @@ public class HWFScreen extends Screen {
 		}
 
 		Texture.bindingEnabled = true;
-
-		// -- PARTICLES -- : front facing rectangular billboards
-		//this renders after lighting, so we can do transparency.
-		if (this.renderParticles) {
-			lightingBuffer.bind();
-			glEnable(GL_DEPTH_TEST);
-			glDepthFunc(GL_LESS);
-			glEnable(GL_CULL_FACE);
-			glCullFace(GL_BACK);
-			glPolygonMode(GL_FRONT, GL_FILL);
-			glEnable(GL_BLEND);
-			glBlendFunc(GL_ONE_MINUS_SRC_ALPHA, GL_ONE);
-
-			this.geometryPositionMap.bind(GL_TEXTURE5);
-
-			Shader.PARTICLE.enable();
-			this.setCameraFOV(this.worldFOV);
-			this.setShaderCameraUniforms(Shader.PARTICLE, this.camera);
-			Model.renderModels(this.particle_scene);
-		}
 
 		// -- SKYBOX -- : we'll use this texture in the post-processing step
 		if (this.renderSkybox) {
