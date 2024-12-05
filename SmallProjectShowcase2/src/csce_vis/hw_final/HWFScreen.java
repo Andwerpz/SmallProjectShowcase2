@@ -25,7 +25,7 @@ import myutils.math.Vec3;
 
 public class HWFScreen extends Screen {
 
-    private static final float NEAR = 0.1f;
+	private static final float NEAR = 0.1f;
 	private static final float FAR = 400.0f;
 
 	private int world_scene;
