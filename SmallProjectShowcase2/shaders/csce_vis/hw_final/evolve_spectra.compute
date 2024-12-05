@@ -1,0 +1,30 @@
+#version 430 core
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(rgba32f, binding = 0) uniform image2D spectraTexture;
+layout(rgba32f, binding = 1) uniform image2D evolvedSpectraTexture;
+layout(rgba32f, binding = 2) uniform image2D waveInfoTexture;
+
+uniform int spectra_sz;
+uniform float t;
+
+vec2 complex_mult(vec2 a, vec2 b) {
+	return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+void main() {
+	ivec2 tex_coord = ivec2(int(gl_GlobalInvocationID.x), int(gl_GlobalInvocationID.y));
+	ivec2 tex_coord_conj = ivec2(spectra_sz - (spectra_sz - 1 - tex_coord.x), spectra_sz - (spectra_sz - 1 - tex_coord.y));
+	
+	vec4 info = imageLoad(waveInfoTexture, tex_coord);
+	vec2 h0 = imageLoad(spectraTexture, tex_coord).xy;
+	vec2 h0c = imageLoad(spectraTexture, tex_coord_conj).xy;
+	
+	float phase = info.w * t;
+	vec2 exponent = vec2(cos(phase), sin(phase));
+	vec2 exponentc = vec2(cos(phase), -sin(phase));
+	
+	vec2 ht = complex_mult(h0, exponent) + complex_mult(h0c, exponentc);
+	
+	imageStore(evolvedSpectraTexture, tex_coord, vec4(ht.x, ht.y, 0, 1));
+}

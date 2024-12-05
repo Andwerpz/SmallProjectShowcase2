@@ -29,6 +29,7 @@ import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
 import lwjglengine.graphics.Shader;
 import lwjglengine.graphics.Texture;
+import lwjglengine.main.Main;
 import lwjglengine.model.Model;
 import lwjglengine.model.ModelInstance;
 import lwjglengine.model.ModelTransform;
@@ -44,10 +45,14 @@ import lwjglengine.window.TextureViewerWindow;
 import lwjglengine.window.Window;
 import myutils.file.FileUtils;
 import myutils.math.MathUtils;
+import myutils.math.Vec2;
 import myutils.math.Vec3;
 import myutils.math.Vec4;
 
 public class HWFWindow extends Window {
+
+	//TODO 
+	// - improve spectra generation 
 
 	private static final int WATER_RESOLUTION = 256;
 	private Model waterModel;
@@ -58,9 +63,69 @@ public class HWFWindow extends Window {
 
 	private PlayerInputController pic;
 
-	private Shader generateSpectraShader;
-	private Texture spectraTexture;
 	private Texture gaussianNoiseTexture;
+	private Shader generateSpectraShader;
+	private Texture baseSpectraTexture;
+	private Texture waveInfoTexture;
+	private Shader evolveSpectraShader;
+	private Texture evolvedSpectraTexture;
+
+	private Options options = new Options();
+
+	private float time = 0;
+
+	public class Options {
+		private float waterDepth = 1000; //height of water in meters
+		private float windSpeed = 25.0f; //avg wind speed (m/s)
+		private float fetch = 250.0f; //fetch, length of area over which wind is acting on water
+		private Vec2 windDir = new Vec2(1, 0);
+		private float multiplier = 100f; //hack for debugging
+
+		public float getWaterDepth() {
+			return waterDepth;
+		}
+
+		public void setWaterDepth(float waterDepth) {
+			this.waterDepth = waterDepth;
+			generateSpectra();
+		}
+
+		public float getWindSpeed() {
+			return windSpeed;
+		}
+
+		public void setWindSpeed(float windSpeed) {
+			this.windSpeed = windSpeed;
+			generateSpectra();
+		}
+
+		public float getFetch() {
+			return fetch;
+		}
+
+		public void setFetch(float fetch) {
+			this.fetch = fetch;
+			generateSpectra();
+		}
+
+		public Vec2 getWindDir() {
+			return windDir;
+		}
+
+		public void setWindDir(Vec2 windDir) {
+			this.windDir = windDir;
+			generateSpectra();
+		}
+
+		public float getMultiplier() {
+			return multiplier;
+		}
+
+		public void setMultiplier(float multiplier) {
+			this.multiplier = multiplier;
+			generateSpectra();
+		}
+	}
 
 	public HWFWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
@@ -151,14 +216,21 @@ public class HWFWindow extends Window {
 		//control panel for the water
 		//AdjustableWindow waterAttributesPanel = new AdjustableWindow("Water Attributes", new ObjectEditorWindow(this.worldScreen.getWaterAttributes()), this);
 
-		this.spectraTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
+		this.baseSpectraTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
+		this.waveInfoTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
+		this.evolvedSpectraTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
 		this.gaussianNoiseTexture = this.generateGaussianNoiseTexture();
 		this.generateSpectraShader = ShaderUtils.createShader("/csce_vis/hw_final/gen_spectra.compute", GL_COMPUTE_SHADER);
+		this.evolveSpectraShader = ShaderUtils.createShader("/csce_vis/hw_final/evolve_spectra.compute", GL_COMPUTE_SHADER);
 
 		this.generateSpectra();
 
 		this.addChildAdjWindow(new TextureViewerWindow(this.gaussianNoiseTexture));
-		this.addChildAdjWindow(new TextureViewerWindow(this.spectraTexture));
+		this.addChildAdjWindow(new TextureViewerWindow(this.baseSpectraTexture));
+		this.addChildAdjWindow(new TextureViewerWindow(this.waveInfoTexture));
+		this.addChildAdjWindow(new TextureViewerWindow(this.evolvedSpectraTexture));
+
+		this.addChildAdjWindow(new ObjectEditorWindow(this.options));
 
 		this._resize();
 	}
@@ -192,8 +264,15 @@ public class HWFWindow extends Window {
 	private void generateSpectra() {
 		this.generateSpectraShader.enable();
 		this.generateSpectraShader.setUniform1i("spectra_sz", WATER_RESOLUTION);
-		glBindImageTexture(0, this.spectraTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
+		this.generateSpectraShader.setUniform2f("wind_dir", this.options.windDir.normalize());
+		this.generateSpectraShader.setUniform1f("h", this.options.waterDepth);
+		this.generateSpectraShader.setUniform1f("U", this.options.windSpeed);
+		this.generateSpectraShader.setUniform1f("F", this.options.fetch);
+		this.generateSpectraShader.setUniform1f("omega_p", (float) (22.0 * Math.pow(9.81 * 9.81 / (this.options.windSpeed * this.options.fetch), 1.0 / 3.0)));
+		this.generateSpectraShader.setUniform1f("multiplier", this.options.multiplier);
+		glBindImageTexture(0, this.baseSpectraTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
 		glBindImageTexture(1, this.gaussianNoiseTexture.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
+		glBindImageTexture(2, this.waveInfoTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
 		glDispatchCompute(WATER_RESOLUTION, WATER_RESOLUTION, 1);
 	}
 
@@ -340,6 +419,7 @@ public class HWFWindow extends Window {
 		Scene.removeScene(WORLD_SCENE);
 
 		this.generateSpectraShader.kill();
+		this.evolveSpectraShader.kill();
 	}
 
 	@Override
@@ -354,6 +434,8 @@ public class HWFWindow extends Window {
 
 	@Override
 	protected void _update() {
+		this.time += Main.getDeltaSeconds();
+
 		if (this.isSelected()) {
 			this.pic.update();
 
@@ -365,6 +447,17 @@ public class HWFWindow extends Window {
 
 	@Override
 	protected void renderContent(Framebuffer outputBuffer) {
+		//generate evolved spectra
+		{
+			this.evolveSpectraShader.enable();
+			this.evolveSpectraShader.setUniform1i("spectra_sz", WATER_RESOLUTION);
+			this.evolveSpectraShader.setUniform1f("t", this.time);
+			glBindImageTexture(0, this.baseSpectraTexture.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
+			glBindImageTexture(1, this.evolvedSpectraTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
+			glBindImageTexture(2, this.waveInfoTexture.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
+			glDispatchCompute(WATER_RESOLUTION, WATER_RESOLUTION, 1);
+		}
+
 		this.worldScreen.setWorldScene(WORLD_SCENE);
 		this.worldScreen.render(outputBuffer);
 	}

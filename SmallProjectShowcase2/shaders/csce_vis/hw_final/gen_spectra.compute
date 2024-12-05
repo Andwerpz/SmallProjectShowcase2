@@ -3,20 +3,24 @@ layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 layout(rgba32f, binding = 0) uniform image2D spectraTexture;
 layout(rgba32f, binding = 1) uniform image2D noiseTexture;
+layout(rgba32f, binding = 2) uniform image2D waveInfoTexture;
 
 uniform int spectra_sz;
 
-const vec2 wind_dir = vec2(1, 0);
 const float g = 9.81;
-const float h = 200;	//height of water in meters
 const float pi = 3.14159265;
 const float sigma = 0.074;	//surface tension coeff
 const float rho = 1000.0;	//density of water
+const float length_scale = 16;
+
+uniform vec2 wind_dir;
+uniform float h;	//height of water in meters
+uniform float U;	//avg wind speed (m/s)
+uniform float F;	//fetch, length of area over which wind is acting on water
+uniform float omega_p;	//peak energy frequency
+uniform float multiplier;	//for debugging
 
 float jonswap(float omega) {
-	float U = 25.0;	//avg wind speed (m/s)
-	float F = 250.0;	//fetch, length of area over which wind is acting on water
-	float omega_p = 22.0 * (g * g / (U * F));
 	float gamma = 3.3;	
 	float r = exp(-pow(omega - omega_p, 2.0) / (2.0 * sigma * sigma * omega_p * omega_p));
 	float alpha = 0.076 * pow(U * U / (F * g), 0.22);
@@ -50,15 +54,24 @@ float cos2_spread(vec2 k) {
 void main() {
 	ivec2 tex_coord = ivec2(int(gl_GlobalInvocationID.x), int(gl_GlobalInvocationID.y));
 	
+	float delta_k = 2.0 * pi / length_scale;
 	vec2 k = vec2(tex_coord.x, tex_coord.y);
 	k -= spectra_sz / 2.0 - 0.5;
+	k *= delta_k;
+	float wavenumber = length(k);
 	float theta = atan(k.y, k.x);
-	float wavenumber = length(k) / spectra_sz;
 	float omega = dispersion(wavenumber);
+	float domega_dk = dispersion_derivative(wavenumber);
 	
-	float s = sqrt(2.0 * jonswap(omega) * cos2_spread(k) * dispersion_derivative(wavenumber) / wavenumber / spectra_sz);
+	float energy = jonswap(omega);
+	float spread = cos2_spread(k);
+	
+	float s = sqrt(2.0 * energy * spread * domega_dk / wavenumber * delta_k * delta_k);
+	s *= multiplier;
 	vec4 ret = vec4(0, 0, 0, 1);
 	ret.x = s * imageLoad(noiseTexture, tex_coord).x;
 	ret.y = s * imageLoad(noiseTexture, tex_coord).y;
 	imageStore(spectraTexture, tex_coord, ret);
+	
+	imageStore(waveInfoTexture, tex_coord, vec4(k.x, 1.0 / wavenumber, k.y, omega));
 }
