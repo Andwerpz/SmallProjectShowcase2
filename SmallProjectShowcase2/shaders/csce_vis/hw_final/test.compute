@@ -1,16 +1,12 @@
 #version 430 core
-
 layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 layout(rgba32f, binding = 0) uniform image2D myTexture;
 
 void main() {
-
-	for (int i = 0; i < 256; ++i) {
-	    for (int j = 0; j < 256; ++j) {
-	        imageStore(myTexture, ivec2(i, j), vec4(1, 0, 0, 1));
-	        //imageStore(myTexture, ivec2(i, j), vec4((i + j) % 256.0 / 256, 0.0, 0.0, 1.0));
-	    }
-	}
-
-
+    for (int i = 0; i < 256; ++i) {
+        for (int j = 0; j < 256; ++j) {
+            //imageStore(myTexture, ivec2(i, j), vec4(1, 0, 0, 1));
+            imageStore(myTexture, ivec2(i, j), vec4(((i + j) % 256) / 256.0, 0.0, 0.0, 1.0));
+        }
+    }
 }
