@@ -1,13 +1,32 @@
 package csce_vis.hw_final;
 
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.*;
+import static org.lwjgl.opengl.GL13.*;
+import static org.lwjgl.opengl.GL14.*;
+import static org.lwjgl.opengl.GL15.*;
+import static org.lwjgl.opengl.GL20.*;
+import static org.lwjgl.opengl.GL21.*;
+import static org.lwjgl.opengl.GL30.*;
+import static org.lwjgl.opengl.GL31.*;
+import static org.lwjgl.opengl.GL32.*;
+import static org.lwjgl.opengl.GL33.*;
+import static org.lwjgl.opengl.GL40.*;
+import static org.lwjgl.opengl.GL41.*;
+import static org.lwjgl.opengl.GL42.*;
+import static org.lwjgl.opengl.GL43.*;
+import static org.lwjgl.opengl.GL44.*;
+import static org.lwjgl.opengl.GL45.*;
+import static org.lwjgl.opengl.GL46.*;
+
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 
+import lwjglengine.graphics.*;
+import lwjglengine.screen.ScreenQuad;
+import lwjglengine.util.ShaderUtils;
 import org.lwjgl.glfw.GLFW;
 
-import lwjglengine.graphics.Cubemap;
-import lwjglengine.graphics.Framebuffer;
-import lwjglengine.graphics.Material;
 import lwjglengine.model.Model;
 import lwjglengine.model.ModelInstance;
 import lwjglengine.model.ModelTransform;
@@ -123,6 +142,21 @@ public class HWFWindow extends Window {
 		//AdjustableWindow waterNormalViewer = new AdjustableWindow("Water Normal Map", new TextureViewerWindow(this.worldScreen.getWaterNormalMap()), this);
 		//control panel for the water
 		//AdjustableWindow waterAttributesPanel = new AdjustableWindow("Water Attributes", new ObjectEditorWindow(this.worldScreen.getWaterAttributes()), this);
+
+		//Texture t = new Texture(256, 256);
+		Shader s = ShaderUtils.createShader("/csce_vis/hw_final/test.compute", GL_COMPUTE_SHADER);
+		Framebuffer waterBuffer = new Framebuffer(256, 256);
+		Texture waterHeightMap = new Texture(256, 256, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_LINEAR);
+		waterHeightMap.setWrapping(GL_CLAMP_TO_EDGE);
+		waterBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, waterHeightMap.getID());
+		waterBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 });
+		waterBuffer.isComplete();
+		s.setUniform1i("myTexture", 0);
+		glBindImageTexture(0, waterHeightMap.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
+		s.enable();
+		glViewport(0, 0, 256, 256);
+		glDispatchCompute(1, 1, 1);
+		this.addChildAdjWindow(new TextureViewerWindow(waterHeightMap));
 
 		this._resize();
 	}
