@@ -60,7 +60,8 @@ void fft(const int n, const int r) {
 
     for (int m = 0; m < n; ++m) {
         vec2 u = imageLoad(inputt, ivec2(r, m)).rg;
-        vec2 toMult = vec2(cos(-2 * M_PI * m / 2), sin(-2 * M_PI * m / 2));
+        //vec2 toMult = vec2(cos(-2 * M_PI * m / 2), sin(-2 * M_PI * m / 2));
+        vec2 toMult = vec2(cos(-2 * M_PI * (m - n / 2) / 2), sin(-2 * M_PI * (m - n / 2) / 2));
         imageStore(inputt, ivec2(r, m), vec4(mult(toMult, u), 0, 0));
     }
 

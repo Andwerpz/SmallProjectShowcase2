@@ -3,18 +3,21 @@ package csce_vis.hw_final;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
 import static org.lwjgl.opengl.GL14.*;
+import static org.lwjgl.opengl.GL13.*;
 import static org.lwjgl.opengl.GL30.*;
 
+import java.nio.FloatBuffer;
 import java.util.ArrayList;
 
 import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
+import lwjglengine.graphics.Material;
 import lwjglengine.graphics.Shader;
 import lwjglengine.graphics.Texture;
-import lwjglengine.main.Main;
 import lwjglengine.model.Model;
+import lwjglengine.model.ModelInstance;
+import lwjglengine.model.VertexArray;
 import lwjglengine.player.Camera;
-import lwjglengine.scene.DirLight;
 import lwjglengine.scene.Light;
 import lwjglengine.scene.Scene;
 import lwjglengine.screen.Screen;
@@ -26,127 +29,85 @@ import myutils.math.Vec3;
 public class HWFScreen extends Screen {
 
 	private static final float NEAR = 0.1f;
-	private static final float FAR = 400.0f;
+	private static final float FAR = 4000.0f;
 
-	private int world_scene;
+	private final int WATER_SCENE = Scene.generateScene();
+	private int[] world_scenes;
 
 	private static final int SHADOW_MAP_NR_CASCADES = 7;
-	private static final float[] shadowCascades = new float[] { NEAR, 1, 3, 7, 15, 30, 100, FAR };
+	private static float[] shadowCascades = new float[] { NEAR, 1, 3, 7, 15, 30, 100, FAR };
 
-	private float worldFOV;
+	private float worldFOV = 90f;
 
 	private Framebuffer geometryBuffer;
 	private Framebuffer lightingBuffer;
-	private Framebuffer shadowBuffer;
+	private Framebuffer shadowCascadeBuffer;
+	private Framebuffer shadowCubemapBuffer;
 	private Framebuffer skyboxBuffer;
 
-	private Texture geometryPositionMap; // RGB: pos, A: normalized depth; 0 - 1
-	private Texture geometryNormalMap; // RGB: normal
-	private Texture geometrySpecularMap; // RGB: specular, A: shininess
-	private Texture geometryColorMap; // RGB: color, A: alpha
+	public Texture geometryPositionMap; // RGB: pos, A: normalized depth; 0 - 1
+	public Texture geometryNormalMap; // RGB: normal
+	public Texture geometrySpecularMap; // RGB: specular, A: shininess
+	public Texture geometryColorMap; // RGB: color, A: alpha
+	public Texture geometryColorIDMap; // RGB: colorID
 
-	private Texture lightingColorMap; // RGB: color
+	public Texture lightingColorMap; // RGB: color
+	public Texture lightingBrightnessMap; // R: brightness
 
 	private Texture shadowDepthMap; // R: depth
 	private Texture shadowBackfaceMap; // R: isBackface
+
 	private Cubemap shadowCubemap; // R: depth
 
-	private Texture skyboxColorMap; // RGB: color
+	public Texture skyboxColorMap; // RGB: color
 
 	private boolean renderSkybox = false;
 
-	private final Shader waterGeometryShader;
-
-	private float waterTime = 0f;
-	private final Shader waterHMapShader; //responsible for creating the water texture.
-
-	private static final int nrSumsMax = 128;
-	private static final int waterTextureResolution = 256; //resolution of the water texture should remain fixed.
-	private final Framebuffer waterBuffer; //height and normal of the water.
-	private final Texture waterHeightMap; //R: water height
-	private final Texture waterNormalMap; //RGB: normal
-
-	private final Shader waterAtmosphereShader;
+	private Shader waterGeometryShader;
+	private Model waterModel;
+	public Texture dispTexture, normalTexture;
 
 	public HWFScreen() {
-		this.waterHMapShader = ShaderUtils.createShader("/csce_vis/hw_final/fft_water_map.vert", "/csce_vis/hw_final/fft_water_map.frag");
+		Vec3 cameraPos = new Vec3();
+		Vec3 cameraFacing = new Vec3(0, 0, -1);
 
-		{
-			float speed = 0.5f;
-			for (int i = 0; i < nrSumsMax; i++) {
-				float theta = (float) (Math.random() * Math.PI * 2);
-				this.waterHMapShader.setUniform1f("theta[" + i + "]", theta);
-				this.waterHMapShader.setUniform1f("speed[" + i + "]", speed);
-				speed *= 1.07;
-			}
-		}
+		this.camera = new Camera((float) Math.toRadians(this.worldFOV), this.screenWidth, this.screenHeight, NEAR, FAR);
+		this.camera.setPos(cameraPos);
+		this.camera.setFacing(cameraFacing);
 
-		this.waterBuffer = new Framebuffer(waterTextureResolution, waterTextureResolution);
-		this.waterHeightMap = new Texture(waterTextureResolution, waterTextureResolution, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_LINEAR);
-		this.waterNormalMap = new Texture(waterTextureResolution, waterTextureResolution, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_LINEAR);
-		this.waterHeightMap.setWrapping(GL_CLAMP_TO_EDGE);
-		this.waterNormalMap.setWrapping(GL_CLAMP_TO_EDGE);
-		this.waterBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.waterHeightMap.getID());
-		this.waterBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, this.waterNormalMap.getID());
-		this.waterBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 });
-		this.waterBuffer.isComplete();
-
-		this.waterGeometryShader = ShaderUtils.createShader("/sum_of_sines_water/water.vert", "/sum_of_sines_water/water.frag");
+		this.waterGeometryShader = ShaderUtils.createShader("/csce_vis/hw_final/water.vert", "/csce_vis/hw_final/water.frag");
 		this.waterGeometryShader.setUniform1i("tex_diffuse", 0);
 		this.waterGeometryShader.setUniform1i("tex_specular", 1);
 		this.waterGeometryShader.setUniform1i("tex_shininess", 2);
 		this.waterGeometryShader.setUniform1i("tex_normal", 3);
 		this.waterGeometryShader.setUniform1i("tex_displacement", 4);
-		this.waterGeometryShader.setUniform1i("skybox", 5);
-		this.waterGeometryShader.setUniform1i("tex_water_height", 6);
-		this.waterGeometryShader.setUniform1i("tex_water_normal", 7);
+		this.waterGeometryShader.setUniform1i("dispTexture", 5);
+		this.waterGeometryShader.setUniform1i("normalTexture", 6);
 
-		this.waterGeometryShader.setUniform1i("enableParallaxMapping", 0);
-		this.waterGeometryShader.setUniform1i("enableTexScaling", 1);
+		this.waterModel = this.createWaterMesh();
+		ModelInstance water_inst = new ModelInstance(this.waterModel, WATER_SCENE);
 
-		this.waterGeometryShader.setUniform1f("water_scale", 512);
-
-		this.waterAtmosphereShader = ShaderUtils.createShader("/sum_of_sines_water/water_atmosphere.vert", "/sum_of_sines_water/water_atmosphere.frag");
-	}
-
-	public void setSun(DirLight sun) {
-		this.waterGeometryShader.setUniform3f("sun_dir", sun.dir);
-		this.waterAtmosphereShader.setUniform3f("sun_dir", sun.dir);
-	}
-
-	public Texture getWaterHeightMap() {
-		return this.waterHeightMap;
-	}
-
-	public Texture getWaterNormalMap() {
-		return this.waterNormalMap;
-	}
-
-	public void generateTheta() {
-		for (int i = 0; i < nrSumsMax; i++) {
-			float theta = (float) (Math.random() * Math.PI * 2);
-			this.waterHMapShader.enable();
-			this.waterHMapShader.setUniform1f("theta[" + i + "]", theta);
-		}
+		Material waterMaterial = new Material(new Vec3(6, 66, 115).mul(1.0f / 255.0f));
+		waterMaterial.setSpecular(new Vec3(0.7f));
+		waterMaterial.setSpecularExponent(256);
+		water_inst.setMaterial(waterMaterial);
 	}
 
 	@Override
 	protected void _kill() {
 		this.geometryBuffer.kill();
 		this.lightingBuffer.kill();
-		this.shadowBuffer.kill();
+		this.shadowCascadeBuffer.kill();
+		this.shadowCubemapBuffer.kill();
 		this.skyboxBuffer.kill();
 
-		this.waterBuffer.kill();
-
-		this.waterHMapShader.kill();
+		Scene.removeScene(WATER_SCENE);
+		this.waterModel.kill();
 		this.waterGeometryShader.kill();
-		this.waterAtmosphereShader.kill();
 	}
 
 	@Override
 	public void buildBuffers() {
-		// KILL BUFFERS IF THEY ALREADY EXIST
 		if (this.geometryBuffer != null) {
 			this.geometryBuffer.kill();
 		}
@@ -156,65 +117,53 @@ public class HWFScreen extends Screen {
 		if (this.skyboxBuffer != null) {
 			this.skyboxBuffer.kill();
 		}
-		if (this.shadowBuffer != null) {
-			this.shadowBuffer.kill();
+		if (this.shadowCascadeBuffer != null) {
+			this.shadowCascadeBuffer.kill();
+		}
+		if (this.shadowCubemapBuffer != null) {
+			this.shadowCubemapBuffer.kill();
 		}
 
-		// CREATE AND BIND THE BUFFERS
 		this.geometryBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
 		this.geometryPositionMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
 		this.geometryNormalMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
 		this.geometrySpecularMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
 		this.geometryColorMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
-		// RGB: colorID
-		Texture geometryColorIDMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA8, GL_RGBA, GL_FLOAT);
+		this.geometryColorIDMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA8, GL_RGBA, GL_FLOAT);
 		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.geometryPositionMap.getID());
 		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, this.geometryNormalMap.getID());
 		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, this.geometrySpecularMap.getID());
 		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT3, GL_TEXTURE_2D, this.geometryColorMap.getID());
-		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT4, GL_TEXTURE_2D, geometryColorIDMap.getID());
+		this.geometryBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT4, GL_TEXTURE_2D, this.geometryColorIDMap.getID());
 		this.geometryBuffer.addDepthBuffer();
 		this.geometryBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3, GL_COLOR_ATTACHMENT4 });
 		this.geometryBuffer.isComplete();
 
 		this.lightingBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
-		this.lightingColorMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_UNSIGNED_BYTE);
-		// R: brightness
-		Texture lightingBrightnessMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA16F, GL_RGBA, GL_FLOAT);
+		this.lightingColorMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE); //RGBA8 because RGBA32 will let alpha overflow to over 1
+		this.lightingBrightnessMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA8, GL_RGBA, GL_FLOAT);
 		this.lightingBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.lightingColorMap.getID());
-		this.lightingBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, lightingBrightnessMap.getID());
+		this.lightingBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, this.lightingBrightnessMap.getID());
 		this.lightingBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 });
 		this.lightingBuffer.isComplete();
 
-		this.shadowBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
+		this.shadowCascadeBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
 		this.shadowDepthMap = new Texture(this.screenWidth, this.screenHeight, GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT, GL_FLOAT);
 		this.shadowBackfaceMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
-		this.shadowBuffer.bindTextureToBuffer(GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, this.shadowDepthMap.getID());
-		this.shadowBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.shadowBackfaceMap.getID());
-		this.shadowBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
-		this.shadowBuffer.isComplete();
-		this.shadowCubemap = new Cubemap(GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_FLOAT);
+		this.shadowCascadeBuffer.bindTextureToBuffer(GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, this.shadowDepthMap.getID());
+		this.shadowCascadeBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.shadowBackfaceMap.getID());
+		this.shadowCascadeBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
+		this.shadowCascadeBuffer.isComplete();
+
+		int shadow_cubemap_resolution = 1024;
+		this.shadowCubemapBuffer = new Framebuffer(shadow_cubemap_resolution, shadow_cubemap_resolution);
+		this.shadowCubemap = new Cubemap(GL_DEPTH_COMPONENT, GL_DEPTH_COMPONENT, GL_FLOAT, shadow_cubemap_resolution);
 
 		this.skyboxBuffer = new Framebuffer(this.screenWidth, this.screenHeight);
 		this.skyboxColorMap = new Texture(this.screenWidth, this.screenHeight, GL_RGBA32F, GL_RGBA, GL_FLOAT);
 		this.skyboxBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this.skyboxColorMap.getID());
 		this.skyboxBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0 });
 		this.skyboxBuffer.isComplete();
-
-		// INITIALIZE CAMERA DETAILS
-		this.worldFOV = 90f;
-
-		Vec3 cameraPos = new Vec3();
-		Vec3 cameraFacing = new Vec3(0, 0, -1);
-
-		if (this.camera != null) {
-			cameraPos = this.camera.getPos();
-			cameraFacing = this.camera.getFacing();
-		}
-
-		this.camera = new Camera((float) Math.toRadians(this.worldFOV), this.screenWidth, this.screenHeight, NEAR, FAR);
-		this.camera.setPos(cameraPos);
-		this.camera.setFacing(cameraFacing);
 	}
 
 	private void setCameraFOV(float degrees) {
@@ -226,8 +175,16 @@ public class HWFScreen extends Screen {
 		this.camera.setFacing(cameraFacing);
 	}
 
+	public void setWorldCameraFOV(float degrees) {
+		this.worldFOV = degrees;
+	}
+
 	public void setWorldScene(int scene) {
-		this.world_scene = scene;
+		this.world_scenes = new int[] { scene };
+	}
+
+	public void setWorldScenes(int[] scenes) {
+		this.world_scenes = scenes;
 	}
 
 	public void setShaderCameraUniforms(Shader shader, Camera camera) {
@@ -242,32 +199,6 @@ public class HWFScreen extends Screen {
 
 	@Override
 	protected void _render(Framebuffer outputBuffer) {
-		// -- WATER TEXTURE -- : render out water properties to texture
-		glViewport(0, 0, waterTextureResolution, waterTextureResolution);
-		glEnable(GL_DEPTH_TEST);
-		glDepthFunc(GL_LESS);
-		glEnable(GL_CULL_FACE);
-		glCullFace(GL_BACK);
-		glPolygonMode(GL_FRONT, GL_FILL);
-		glDisable(GL_BLEND);
-		glClearDepth(1); // maximum value
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		this.waterBuffer.bind();
-		this.waterHMapShader.enable();
-		this.waterTime += Main.getDeltaSeconds();
-		this.waterHMapShader.setUniform1f("time", this.waterTime);
-
-		this.waterHMapShader.setUniform1f("u_amplitude", 0.004f);
-		this.waterHMapShader.setUniform1f("u_period", 0.05f);
-		this.waterHMapShader.setUniform1i("nr_sums", 8);
-
-		this.waterHMapShader.setUniform1f("period_mult", 0.877f);
-		this.waterHMapShader.setUniform1f("amplitude_mult", 0.82f);
-		this.waterHMapShader.setUniform1f("domain_warp_coeff", 0.06f);
-
-		screenQuad.render();
-		glViewport(0, 0, this.screenWidth, this.screenHeight);
-
 		// -- GEOMETRY -- : render 3d perspective to geometry buffer
 		geometryBuffer.bind();
 		glEnable(GL_DEPTH_TEST);
@@ -280,15 +211,19 @@ public class HWFScreen extends Screen {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		Texture.bindingEnabled = true;
 
-		this.waterGeometryShader.enable();
-		this.waterGeometryShader.setUniform1f("water_depth", 10f);
-		Scene.skyboxes.get(this.world_scene).bind(GL_TEXTURE5);
-		this.waterHeightMap.bind(GL_TEXTURE6);
-		this.waterNormalMap.bind(GL_TEXTURE7);
-
+		Shader.GEOMETRY.enable();
 		this.setCameraFOV(this.worldFOV);
+		this.setShaderCameraUniforms(Shader.GEOMETRY, this.camera);
+		for (int scene : this.world_scenes) {
+			Model.renderModels(scene);
+		}
+
+		// -- WATER -- 
+		this.waterGeometryShader.enable();
+		this.dispTexture.bind(GL_TEXTURE5);
+		this.normalTexture.bind(GL_TEXTURE6);
 		this.setShaderCameraUniforms(this.waterGeometryShader, this.camera);
-		Model.renderModels(this.world_scene);
+		Model.renderModels(WATER_SCENE);
 
 		// -- LIGHTING -- : using information from the geometry buffer, calculate lighting.
 		lightingBuffer.bind();
@@ -319,7 +254,7 @@ public class HWFScreen extends Screen {
 		glDisable(GL_CULL_FACE);
 
 		// calculate lighting with each light seperately
-		ArrayList<Light> lights = Light.lights.get(this.world_scene);
+		ArrayList<Light> lights = Light.lights.get(this.world_scenes[0]);
 		if (lights == null || lights.size() == 0) {
 			System.err.println("PerspectiveScreen : Must have at least 1 light in world scene to render");
 			return;
@@ -332,7 +267,7 @@ public class HWFScreen extends Screen {
 				Mat4 lightMat = Mat4.lookAt(new Vec3(0), lightDir, new Vec3(0, 1, 0));
 
 				// re-bind directional depth map texture as depth map
-				shadowBuffer.bindTextureToBuffer(GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, this.shadowDepthMap.getID());
+				shadowCascadeBuffer.bindTextureToBuffer(GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, this.shadowDepthMap.getID());
 
 				// do this for each cascade near / far plane
 				for (int cascade = 0; cascade < HWFScreen.SHADOW_MAP_NR_CASCADES; cascade++) {
@@ -380,13 +315,13 @@ public class HWFScreen extends Screen {
 
 					// construct orthographic projection matrix
 					//it's important that all geometry is captured inside this orthographic frustum, so we have to consider
-					//stuff that's behind the camera as well.
+					//stuff that's behind the camera as well. 
 					float diff = FAR - NEAR;
 					Camera lightCamera = new Camera(left, right, bottom, top, near - diff, far + diff);
 					lightCamera.setFacing(lightDir);
 
 					// render shadow map
-					shadowBuffer.bind();
+					shadowCascadeBuffer.bind();
 					glViewport(0, 0, this.screenWidth, this.screenHeight);
 					glEnable(GL_DEPTH_TEST);
 					glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
@@ -398,7 +333,9 @@ public class HWFScreen extends Screen {
 					Shader.DEPTH.enable();
 
 					this.setShaderCameraUniforms(Shader.DEPTH, lightCamera);
-					Model.renderModels(this.world_scene);
+					for (int scene : this.world_scenes) {
+						Model.renderModels(scene);
+					}
 
 					// render portion of lit scene
 					lightingBuffer.bind();
@@ -415,7 +352,7 @@ public class HWFScreen extends Screen {
 				Light light = lights.get(i);
 
 				// generate cubemap
-				shadowBuffer.bind();
+				shadowCubemapBuffer.bind();
 				Shader.CUBE_DEPTH.enable();
 				float near = 0.1f;
 				float far = 50f;
@@ -444,13 +381,15 @@ public class HWFScreen extends Screen {
 					cubemapCamera.setUp(camVectors[j][1]);
 
 					int face = GL_TEXTURE_CUBE_MAP_POSITIVE_X + j;
-					shadowBuffer.bindTextureToBuffer(GL_DEPTH_ATTACHMENT, face, shadowCubemap.getID());
-					shadowBuffer.bind();
+					shadowCubemapBuffer.bindTextureToBuffer(GL_DEPTH_ATTACHMENT, face, shadowCubemap.getID());
+					shadowCubemapBuffer.bind();
 					glClear(GL_DEPTH_BUFFER_BIT);
-					// world.render(Shader.CUBE_DEPTH, cubemapCamera);
+
 					this.setShaderCameraUniforms(Shader.CUBE_DEPTH, cubemapCamera);
 					Shader.CUBE_DEPTH.enable();
-					Model.renderModels(this.world_scene);
+					for (int scene : this.world_scenes) {
+						Model.renderModels(scene);
+					}
 				}
 
 				// render lit scene
@@ -471,21 +410,27 @@ public class HWFScreen extends Screen {
 
 		// -- SKYBOX -- : we'll use this texture in the post-processing step
 		if (this.renderSkybox) {
-			skyboxBuffer.bind();
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-			glDisable(GL_CULL_FACE);
-			glDisable(GL_BLEND);
-			this.waterAtmosphereShader.enable();
-			this.waterAtmosphereShader.setUniformMat4("vw_matrix", this.camera.getViewMatrix());
-			this.waterAtmosphereShader.setUniformMat4("pr_matrix", this.camera.getProjectionMatrix());
-			SkyboxCube.skyboxCube.render();
+			if (Scene.skyboxes.containsKey(this.world_scenes[0])) {
+				skyboxBuffer.bind();
+				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+				glDisable(GL_CULL_FACE);
+				glDisable(GL_BLEND);
+				Shader.SKYBOX.enable();
+				Shader.SKYBOX.setUniformMat4("vw_matrix", this.camera.getViewMatrix());
+				Shader.SKYBOX.setUniformMat4("pr_matrix", this.camera.getProjectionMatrix());
+				Scene.skyboxes.get(this.world_scenes[0]).bind(GL_TEXTURE0);
+				SkyboxCube.skyboxCube.render();
+			}
+			else {
+				System.err.println("PerspectiveScreen : NO SKYBOX ENTRY FOR SCENE " + this.world_scenes[0]);
+			}
 		}
 
 		// -- RENDER TO OUTPUT --
 		outputBuffer.bind();
 		glDisable(GL_DEPTH_TEST);
 		glEnable(GL_BLEND);
-		glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 		Shader.SPLASH.enable();
 		Shader.SPLASH.setUniform1f("alpha", 1f);
 
@@ -495,8 +440,145 @@ public class HWFScreen extends Screen {
 		}
 
 		this.lightingColorMap.bind(GL_TEXTURE0);
-		//this.geometryPositionMap.bind(GL_TEXTURE0);
+		//		this.geometryPositionMap.bind(GL_TEXTURE0);
+		//		this.geometryColorMap.bind(GL_TEXTURE0);
+		//		this.geometryNormalMap.bind(GL_TEXTURE0);
 		screenQuad.render();
+
+	}
+
+	//with built in LODs 
+	private Model createWaterMesh() {
+		float interval = 0.025f;
+		int lod_cnt = 0;
+		int lod_sz = 512;
+
+		int[][] igrid = new int[lod_sz * 2 + 1][lod_sz * 2 + 1];
+		int iptr = 0;
+
+		ArrayList<Vec3> vertices = new ArrayList<>();
+		ArrayList<Integer> indices = new ArrayList<>();
+
+		//create base lod
+		for (int i = 0; i < igrid.length; i++) {
+			for (int j = 0; j < igrid.length; j++) {
+				vertices.add(new Vec3((i - lod_sz) * interval, 0, (j - lod_sz) * interval));
+				igrid[i][j] = iptr++;
+			}
+		}
+		for (int i = 0; i < igrid.length - 1; i++) {
+			for (int j = 0; j < igrid.length - 1; j++) {
+				indices.add(igrid[i][j]);
+				indices.add(igrid[i + 1][j + 1]);
+				indices.add(igrid[i + 1][j]);
+
+				indices.add(igrid[i][j]);
+				indices.add(igrid[i][j + 1]);
+				indices.add(igrid[i + 1][j + 1]);
+			}
+		}
+
+		//create remaining lods
+		for (int lod = 0; lod < lod_cnt; lod++) {
+			interval *= 2;
+
+			//generate next LOD indices
+			int[][] n_igrid = new int[lod_sz * 2 + 1][lod_sz * 2 + 1];
+			for (int i = 0; i < igrid.length; i++) {
+				for (int j = 0; j < igrid.length; j++) {
+					if (Math.abs(i - lod_sz) < lod_sz / 2 && Math.abs(j - lod_sz) < lod_sz / 2) {
+						continue;
+					}
+					vertices.add(new Vec3((i - lod_sz) * interval, 0, (j - lod_sz) * interval));
+					n_igrid[i][j] = iptr++;
+				}
+			}
+
+			//generate triangles
+			for (int i = 0; i < igrid.length - 1; i++) {
+				for (int j = 0; j < igrid.length - 1; j++) {
+					int z = i - lod_sz;
+					int x = j - lod_sz;
+					if (x >= -lod_sz / 2 && z >= -lod_sz / 2 && x < lod_sz / 2 && z < lod_sz / 2) {
+						//covered by previous LOD
+						continue;
+					}
+					if (x == -lod_sz / 2 - 1 && z >= -lod_sz / 2 && z < lod_sz / 2) {
+						//left
+						indices.add(n_igrid[i][j]);
+						indices.add(igrid[lod_sz + z * 2][0]);
+						indices.add(igrid[lod_sz + z * 2 + 1][0]);
+
+						indices.add(n_igrid[i][j]);
+						indices.add(igrid[lod_sz + z * 2 + 1][0]);
+						indices.add(n_igrid[i + 1][j]);
+
+						indices.add(n_igrid[i + 1][j]);
+						indices.add(igrid[lod_sz + z * 2 + 1][0]);
+						indices.add(igrid[lod_sz + z * 2 + 2][0]);
+
+					}
+					else if (x == lod_sz / 2 && z >= -lod_sz / 2 && z < lod_sz / 2) {
+						//right
+						indices.add(igrid[lod_sz + z * 2][lod_sz * 2]);
+						indices.add(n_igrid[i][j + 1]);
+						indices.add(igrid[lod_sz + z * 2 + 1][lod_sz * 2]);
+
+						indices.add(igrid[lod_sz + z * 2 + 1][lod_sz * 2]);
+						indices.add(n_igrid[i][j + 1]);
+						indices.add(n_igrid[i + 1][j + 1]);
+
+						indices.add(igrid[lod_sz + z * 2 + 1][lod_sz * 2]);
+						indices.add(n_igrid[i + 1][j + 1]);
+						indices.add(igrid[lod_sz + z * 2 + 2][lod_sz * 2]);
+
+					}
+					else if (z == -lod_sz / 2 - 1 && x >= -lod_sz / 2 && x < lod_sz / 2) {
+						//bottom
+						indices.add(n_igrid[i][j]);
+						indices.add(igrid[0][lod_sz + x * 2 + 1]);
+						indices.add(igrid[0][lod_sz + x * 2]);
+
+						indices.add(n_igrid[i][j]);
+						indices.add(n_igrid[i][j + 1]);
+						indices.add(igrid[0][lod_sz + x * 2 + 1]);
+
+						indices.add(n_igrid[i][j + 1]);
+						indices.add(igrid[0][lod_sz + x * 2 + 2]);
+						indices.add(igrid[0][lod_sz + x * 2 + 1]);
+					}
+					else if (z == lod_sz / 2 && x >= -lod_sz / 2 && x < lod_sz / 2) {
+						//top
+						indices.add(igrid[lod_sz * 2][lod_sz + x * 2]);
+						indices.add(igrid[lod_sz * 2][lod_sz + x * 2 + 1]);
+						indices.add(n_igrid[i + 1][j]);
+
+						indices.add(igrid[lod_sz * 2][lod_sz + x * 2 + 1]);
+						indices.add(n_igrid[i + 1][j + 1]);
+						indices.add(n_igrid[i + 1][j]);
+
+						indices.add(igrid[lod_sz * 2][lod_sz + x * 2 + 1]);
+						indices.add(igrid[lod_sz * 2][lod_sz + x * 2 + 2]);
+						indices.add(n_igrid[i + 1][j + 1]);
+					}
+					else {
+						//normal case
+						indices.add(n_igrid[i][j]);
+						indices.add(n_igrid[i + 1][j + 1]);
+						indices.add(n_igrid[i + 1][j]);
+
+						indices.add(n_igrid[i][j]);
+						indices.add(n_igrid[i][j + 1]);
+						indices.add(n_igrid[i + 1][j + 1]);
+					}
+				}
+			}
+
+			igrid = n_igrid;
+		}
+
+		VertexArray va = new VertexArray(vertices, indices, GL_TRIANGLES);
+		return new Model(va);
 	}
 
 }

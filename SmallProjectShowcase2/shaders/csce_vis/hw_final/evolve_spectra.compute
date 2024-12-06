@@ -2,12 +2,12 @@
 layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 layout(rgba32f, binding = 0) uniform image2D spectraTexture;
-layout(rgba32f, binding = 1) uniform image2D evolvedSpectraTexture;
-layout(rgba32f, binding = 2) uniform image2D waveInfoTexture;
+layout(rgba32f, binding = 1) uniform image2D waveInfoTexture;
 
-layout(rgba32f, binding = 3) uniform image2D dispX_Texture;
-layout(rgba32f, binding = 4) uniform image2D dispY_Texture;
-layout(rgba32f, binding = 5) uniform image2D dispZ_Texture;
+layout(rgba32f, binding = 2) uniform image2D Dx_Dz;
+layout(rgba32f, binding = 3) uniform image2D Dy_Dxz;
+layout(rgba32f, binding = 4) uniform image2D Dyx_Dyz;
+layout(rgba32f, binding = 5) uniform image2D Dxx_Dzz;
 
 uniform int spectra_sz;
 uniform float t;
@@ -18,26 +18,42 @@ vec2 complex_mult(vec2 a, vec2 b) {
 
 void main() {
 	ivec2 tex_coord = ivec2(int(gl_GlobalInvocationID.x), int(gl_GlobalInvocationID.y));
-	ivec2 tex_coord_conj = ivec2(spectra_sz - (spectra_sz - 1 - tex_coord.x), spectra_sz - (spectra_sz - 1 - tex_coord.y));
+	ivec2 tex_coord_conj = ivec2((spectra_sz - tex_coord.x) % spectra_sz, (spectra_sz - tex_coord.y) % spectra_sz);
 	
-	vec4 info = imageLoad(waveInfoTexture, tex_coord);
+	vec4 wave = imageLoad(waveInfoTexture, tex_coord);
 	vec2 h0 = imageLoad(spectraTexture, tex_coord).xy;
 	vec2 h0c = imageLoad(spectraTexture, tex_coord_conj).xy;
+	h0c.y *= -1;
 	
-	float phase = info.w * t;
+	float phase = wave.w * t;
 	vec2 exponent = vec2(cos(phase), sin(phase));
-	vec2 exponentc = vec2(cos(phase), -sin(phase));
+	vec2 exponentc = vec2(cos(-phase), sin(-phase));
 	
-	vec2 ht = complex_mult(h0, exponent) + complex_mult(h0c, exponentc);
-	vec2 iht = vec2(-ht.y, ht.x);
+	vec2 h = complex_mult(h0, exponent) + complex_mult(h0c, exponentc);
+	vec2 ih = vec2(-h.y, h.x);
 	
-	vec2 dispx = iht * info.x * info.y;
-	vec2 dispy = ht;
-	vec2 dispz = iht * info.z * info.y;
+	vec2 dispx = ih * wave.x * wave.y;
+	vec2 dispy = h;
+	vec2 dispz = ih * wave.z * wave.y;
 	
-	imageStore(evolvedSpectraTexture, tex_coord, vec4(ht, 0, 1));
+	vec2 dispx_dx = -h * wave.x * wave.x * wave.y;
+	vec2 dispy_dx = ih * wave.x;
+	vec2 dispz_dx = -h * wave.x * wave.z * wave.y;
 	
-	imageStore(dispX_Texture, tex_coord, vec4(dispx, 0, 1));
-	imageStore(dispY_Texture, tex_coord, vec4(dispy, 0, 1));
-	imageStore(dispZ_Texture, tex_coord, vec4(dispz, 0, 1));
+	vec2 dispx_dz = -h * wave.z * wave.x * wave.y;
+	vec2 dispy_dz = ih * wave.z;
+	vec2 dispz_dz = -h * wave.z * wave.z * wave.y;
+	
+	vec2 DxDz = vec2(dispx.x - dispz.y, dispx.y + dispz.x);
+	vec2 DyDxz = vec2(dispy.x - dispz_dx.y, dispy.y + dispz_dx.x);
+	vec2 DyxDyz = vec2(dispy_dx.x - dispy_dz.y, dispy_dx.y + dispy_dz.x);
+	vec2 DxxDzz = vec2(dispx_dx.x - dispz_dz.y, dispx_dx.y + dispz_dz.x);
+	
+	//DxDz = complex_mult(dispz, vec2(0, 1));
+	//DxDz = dispx;
+	
+	imageStore(Dx_Dz, tex_coord, vec4(DxDz, 0, 0));
+	imageStore(Dy_Dxz, tex_coord, vec4(DyDxz, 0, 0));
+	imageStore(Dyx_Dyz, tex_coord, vec4(DyxDyz, 0, 0));
+	imageStore(Dxx_Dzz, tex_coord, vec4(DxxDzz, 0, 0));
 }

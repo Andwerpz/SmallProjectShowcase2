@@ -56,22 +56,30 @@ void main() {
 	
 	float delta_k = 2.0 * pi / length_scale;
 	vec2 k = vec2(tex_coord.x, tex_coord.y);
-	k -= spectra_sz / 2.0 - 0.5;
+	k -= spectra_sz / 2.0;
 	k *= delta_k;
 	float wavenumber = length(k);
-	float theta = atan(k.y, k.x);
-	float omega = dispersion(wavenumber);
-	float domega_dk = dispersion_derivative(wavenumber);
-	
-	float energy = jonswap(omega);
-	float spread = cos2_spread(k);
-	
-	float s = sqrt(2.0 * energy * spread * domega_dk / wavenumber * delta_k * delta_k);
-	s *= multiplier;
-	vec4 ret = vec4(0, 0, 0, 1);
-	ret.x = s * imageLoad(noiseTexture, tex_coord).x;
-	ret.y = s * imageLoad(noiseTexture, tex_coord).y;
-	imageStore(spectraTexture, tex_coord, ret);
-	
-	imageStore(waveInfoTexture, tex_coord, vec4(k.x, 1.0 / wavenumber, k.y, omega));
+	if(wavenumber != 0) {
+		float theta = atan(k.y, k.x);
+		float omega = dispersion(wavenumber);
+		float domega_dk = dispersion_derivative(wavenumber);
+		
+		float energy = jonswap(omega);
+		float spread = cos2_spread(k);
+		
+		float s = sqrt(2.0 * energy * spread * domega_dk / wavenumber * delta_k * delta_k);
+		s *= multiplier;
+		vec4 ret = vec4(0, 0, 0, 1);
+		ret.x = s * imageLoad(noiseTexture, tex_coord).x;
+		ret.y = s * imageLoad(noiseTexture, tex_coord).y;
+		if(!(tex_coord.x == 67 && tex_coord.y == 64)) {
+			//ret *= 0;
+		}
+		imageStore(spectraTexture, tex_coord, ret);
+		imageStore(waveInfoTexture, tex_coord, vec4(k.x, 1.0 / wavenumber, k.y, omega));
+	}
+	else {
+		imageStore(spectraTexture, tex_coord, vec4(0));
+		imageStore(waveInfoTexture, tex_coord, vec4(k.x, 1.0, k.y, 0));
+	}
 }

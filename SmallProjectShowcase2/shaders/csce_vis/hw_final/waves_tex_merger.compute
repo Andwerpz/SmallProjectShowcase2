@@ -1,0 +1,30 @@
+#version 430 core
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(rgba32f, binding = 0) uniform image2D Dx_Dz;
+layout(rgba32f, binding = 1) uniform image2D Dy_Dxz;
+layout(rgba32f, binding = 2) uniform image2D Dyx_Dyz;
+layout(rgba32f, binding = 3) uniform image2D Dxx_Dzz;
+
+layout(rgba32f, binding = 4) uniform image2D dispTexture;
+layout(rgba32f, binding = 5) uniform image2D normalTexture;
+
+uniform float lambda;
+
+void main() {
+	ivec2 tex_coord = ivec2(int(gl_GlobalInvocationID.x), int(gl_GlobalInvocationID.y));
+	
+	vec2 DxDz = imageLoad(Dx_Dz, tex_coord).xy;
+	vec2 DyDxz = imageLoad(Dy_Dxz, tex_coord).xy;
+	vec2 DyxDyz = imageLoad(Dyx_Dyz, tex_coord).xy;
+	vec2 DxxDzz = imageLoad(Dxx_Dzz, tex_coord).xy;
+	
+	vec3 disp = vec3(DxDz.x * lambda, DyDxz.x, DxDz.y * lambda);
+	vec4 derivative = vec4(DyxDyz, DxxDzz * lambda);
+	vec2 slope = vec2(derivative.x / (1.0 + derivative.z), derivative.y / (1.0 + derivative.w));
+	slope *= 64;
+	vec3 normal = normalize(vec3(-slope.x, 1.0, -slope.y));
+	
+	imageStore(dispTexture, tex_coord, vec4(disp, 1.0));
+	imageStore(normalTexture, tex_coord, vec4(normal, 1.0));
+}
