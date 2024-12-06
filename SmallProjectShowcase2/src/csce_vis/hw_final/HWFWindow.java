@@ -20,10 +20,12 @@ import static org.lwjgl.opengl.GL45.*;
 import static org.lwjgl.opengl.GL46.*;
 
 import java.awt.image.BufferedImage;
+import java.nio.FloatBuffer;
 import java.util.ArrayList;
 
 import lwjglengine.graphics.*;
 import lwjglengine.screen.ScreenQuad;
+import lwjglengine.util.BufferUtils;
 import lwjglengine.util.ShaderUtils;
 import org.lwjgl.glfw.GLFW;
 
@@ -138,27 +140,74 @@ public class HWFWindow extends Window {
 
 		// DEBUGGING TOOLS IF DESIRED
 		//windows to look at water textures
-		//AdjustableWindow waterHeightViewer = new AdjustableWindow("Water Height Map", new TextureViewerWindow(this.worldScreen.getWaterHeightMap()), this);
-		//AdjustableWindow waterNormalViewer = new AdjustableWindow("Water Normal Map", new TextureViewerWindow(this.worldScreen.getWaterNormalMap()), this);
+		AdjustableWindow waterHeightViewer = new AdjustableWindow("Water Height Map", new TextureViewerWindow(this.worldScreen.getWaterHeightMap()), this);
+		AdjustableWindow waterNormalViewer = new AdjustableWindow("Water Normal Map", new TextureViewerWindow(this.worldScreen.getWaterNormalMap()), this);
 		//control panel for the water
 		//AdjustableWindow waterAttributesPanel = new AdjustableWindow("Water Attributes", new ObjectEditorWindow(this.worldScreen.getWaterAttributes()), this);
 
 		//Texture t = new Texture(256, 256);
-		Shader s = ShaderUtils.createShader("/csce_vis/hw_final/test.compute", GL_COMPUTE_SHADER);
+
+		Shader s = ShaderUtils.createShader("/csce_vis/hw_final/fft.compute", GL_COMPUTE_SHADER);
+
+		float[] data = new float[8 * 8 * 4];
+		data[8*4+5] = -1;
+		data[8*4+4] = 1;
+		data[8*4+12] = 2;
+
+		int textureID = glGenTextures(); //create texture handle
+		glBindTexture(GL_TEXTURE_2D, textureID); //set as active texture
+		glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, 8, 8); //allocate storage for texture
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 8, 8, GL_RGBA, GL_FLOAT, data); //initialize 0th mipmap layer of texture
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+		//set interpolation filters
+		glBindTexture(GL_TEXTURE_2D, 0);
+
+		Texture in = new Texture(textureID);
+
+		Texture out = new Texture(8, 8, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
+		//in.setWrapping(GL_CLAMP_TO_EDGE);
+		//out.setWrapping(GL_CLAMP_TO_EDGE);
+
+		//s.setUniform1i("inputt", 0);
+		glBindImageTexture(0, in.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
+		//s.setUniform1i("outputt", 1);
+		glBindImageTexture(1, out.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
+
+		s.enable();
+		glDispatchCompute(1, 1, 1);
+
+		float[] data2 = new float[8*8*4];
+		out.bind();
+		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, data2);
+
+		for (int i = 0; i < 8 * 8; ++i) {
+			System.out.println(data2[i*4] + " " + data2[i*4+1]);
+		}
+
+		this.addChildAdjWindow(new TextureViewerWindow(in));
+		this.addChildAdjWindow(new TextureViewerWindow(out));
+
+		System.out.println("done!");
+
+		/*
 		Framebuffer waterBuffer = new Framebuffer(256, 256);
 		Texture waterHeightMap = new Texture(256, 256, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_LINEAR);
 		waterHeightMap.setWrapping(GL_CLAMP_TO_EDGE);
 		waterBuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, waterHeightMap.getID());
 		waterBuffer.setDrawBuffers(new int[] { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 });
 		waterBuffer.isComplete();
-		s.setUniform1i("myTexture", 0);
+		s.setUniform1i("input", 0);
 		glBindImageTexture(0, waterHeightMap.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
 		s.enable();
 		glViewport(0, 0, 256, 256);
 		glDispatchCompute(1, 1, 1);
 		this.addChildAdjWindow(new TextureViewerWindow(waterHeightMap));
-
+*/
 		this._resize();
+
+		//System.exit(0);
 	}
 
 	@Override

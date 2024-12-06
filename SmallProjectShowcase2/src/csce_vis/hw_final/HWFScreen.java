@@ -4,6 +4,27 @@ import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
 import static org.lwjgl.opengl.GL14.*;
 import static org.lwjgl.opengl.GL30.*;
+import static org.lwjgl.opengl.GL42.glBindImageTexture;
+import static org.lwjgl.opengl.GL43.GL_COMPUTE_SHADER;
+
+import static org.lwjgl.opengl.GL11.*;
+import static org.lwjgl.opengl.GL12.*;
+import static org.lwjgl.opengl.GL13.*;
+import static org.lwjgl.opengl.GL14.*;
+import static org.lwjgl.opengl.GL15.*;
+import static org.lwjgl.opengl.GL20.*;
+import static org.lwjgl.opengl.GL21.*;
+import static org.lwjgl.opengl.GL30.*;
+import static org.lwjgl.opengl.GL31.*;
+import static org.lwjgl.opengl.GL32.*;
+import static org.lwjgl.opengl.GL33.*;
+import static org.lwjgl.opengl.GL40.*;
+import static org.lwjgl.opengl.GL41.*;
+import static org.lwjgl.opengl.GL42.*;
+import static org.lwjgl.opengl.GL43.*;
+import static org.lwjgl.opengl.GL44.*;
+import static org.lwjgl.opengl.GL45.*;
+import static org.lwjgl.opengl.GL46.*;
 
 import java.util.ArrayList;
 
@@ -69,17 +90,7 @@ public class HWFScreen extends Screen {
 	private final Shader waterAtmosphereShader;
 
 	public HWFScreen() {
-		this.waterHMapShader = ShaderUtils.createShader("/csce_vis/hw_final/fft_water_map.vert", "/csce_vis/hw_final/fft_water_map.frag");
-
-		{
-			float speed = 0.5f;
-			for (int i = 0; i < nrSumsMax; i++) {
-				float theta = (float) (Math.random() * Math.PI * 2);
-				this.waterHMapShader.setUniform1f("theta[" + i + "]", theta);
-				this.waterHMapShader.setUniform1f("speed[" + i + "]", speed);
-				speed *= 1.07;
-			}
-		}
+		this.waterHMapShader = ShaderUtils.createShader("/csce_vis/hw_final/fft_water.compute", GL_COMPUTE_SHADER);
 
 		this.waterBuffer = new Framebuffer(waterTextureResolution, waterTextureResolution);
 		this.waterHeightMap = new Texture(waterTextureResolution, waterTextureResolution, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_LINEAR);
@@ -120,14 +131,6 @@ public class HWFScreen extends Screen {
 
 	public Texture getWaterNormalMap() {
 		return this.waterNormalMap;
-	}
-
-	public void generateTheta() {
-		for (int i = 0; i < nrSumsMax; i++) {
-			float theta = (float) (Math.random() * Math.PI * 2);
-			this.waterHMapShader.enable();
-			this.waterHMapShader.setUniform1f("theta[" + i + "]", theta);
-		}
 	}
 
 	@Override
@@ -252,21 +255,21 @@ public class HWFScreen extends Screen {
 		glDisable(GL_BLEND);
 		glClearDepth(1); // maximum value
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 		this.waterBuffer.bind();
 		this.waterHMapShader.enable();
 		this.waterTime += Main.getDeltaSeconds();
-		this.waterHMapShader.setUniform1f("time", this.waterTime);
+		//this.waterHMapShader.setUniform1f("time", this.waterTime);
 
-		this.waterHMapShader.setUniform1f("u_amplitude", 0.004f);
-		this.waterHMapShader.setUniform1f("u_period", 0.05f);
-		this.waterHMapShader.setUniform1i("nr_sums", 8);
+		this.waterHMapShader.setUniform1i("out_height", 0);
+		glBindImageTexture(0, this.waterHeightMap.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
 
-		this.waterHMapShader.setUniform1f("period_mult", 0.877f);
-		this.waterHMapShader.setUniform1f("amplitude_mult", 0.82f);
-		this.waterHMapShader.setUniform1f("domain_warp_coeff", 0.06f);
+		this.waterHMapShader.setUniform1i("out_normal", 1);
+		glBindImageTexture(0, this.waterNormalMap.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
 
-		screenQuad.render();
+		// screenQuad.render();
 		glViewport(0, 0, this.screenWidth, this.screenHeight);
+		glDispatchCompute(1, 1, 1);
 
 		// -- GEOMETRY -- : render 3d perspective to geometry buffer
 		geometryBuffer.bind();
