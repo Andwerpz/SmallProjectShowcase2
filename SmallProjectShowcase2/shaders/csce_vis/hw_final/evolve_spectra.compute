@@ -5,6 +5,10 @@ layout(rgba32f, binding = 0) uniform image2D spectraTexture;
 layout(rgba32f, binding = 1) uniform image2D evolvedSpectraTexture;
 layout(rgba32f, binding = 2) uniform image2D waveInfoTexture;
 
+layout(rgba32f, binding = 3) uniform image2D dispX_Texture;
+layout(rgba32f, binding = 4) uniform image2D dispY_Texture;
+layout(rgba32f, binding = 5) uniform image2D dispZ_Texture;
+
 uniform int spectra_sz;
 uniform float t;
 
@@ -25,6 +29,21 @@ void main() {
 	vec2 exponentc = vec2(cos(phase), -sin(phase));
 	
 	vec2 ht = complex_mult(h0, exponent) + complex_mult(h0c, exponentc);
+	vec2 iht = vec2(-ht.y, ht.x);
 	
-	imageStore(evolvedSpectraTexture, tex_coord, vec4(ht.x, ht.y, 0, 1));
+	vec2 dispx = iht * info.x * info.y;
+	vec2 dispy = ht;
+	vec2 dispz = iht * info.z * info.y;
+	
+	vec2 dispx_dx = -ht * info.x * info.x * info.y;
+	vec2 dispy_dx = iht * info.x;
+	vec2 dispz_dx = -ht * info.x * info.z * info.y;
+	
+	vec2 dispx_dz = -ht * info.z * info.x * info.y;
+	vec2 dispy_dz = iht * info.z;
+	vec2 dispz_dz = -ht * info.z * info.z * info.y;
+	
+	imageStore(evolvedSpectraTexture, tex_coord, vec4(ht, 0, 1));
+	
+	imageStore(dispX_Texture, tex_coord, vec4(dispx, 0, 1));
 }
