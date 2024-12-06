@@ -60,7 +60,6 @@ void fft(const int n, const int r) {
 
     for (int m = 0; m < n; ++m) {
         vec2 u = imageLoad(outputt, ivec2(r, m)).rg;
-        //vec2 toMult = vec2(cos(-2 * M_PI * (m - n / 2) / 2), sin(-2 * M_PI * (m - n / 2) / 2));
         vec2 toMult = vec2(cos(-2 * M_PI * m / 2), sin(-2 * M_PI * m / 2));
         imageStore(outputt, ivec2(r, m), vec4(mult(toMult, u), 0, 0));
     }
@@ -68,7 +67,6 @@ void fft(const int n, const int r) {
 }
 
 void main() {
-
     // images are n x n
     const int n = imageSize(inputt)[0];
 
@@ -92,12 +90,4 @@ void main() {
 
     // transpose
     transpose(n);
-    
-    for(int i = 0; i < n; i++){
-    	for(int j = 0; j < n; j++){
-    		vec2 val = imageLoad(outputt, ivec2(i, j)).rg;
-    		float mag = length(val);
-    		imageStore(outputt, ivec2(i, j), vec4(vec3(log(mag) / 10.0), 1.0));
-    	}
-    }
 }
