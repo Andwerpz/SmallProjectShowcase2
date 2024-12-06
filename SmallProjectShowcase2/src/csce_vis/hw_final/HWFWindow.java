@@ -54,7 +54,7 @@ public class HWFWindow extends Window {
 
 	//	private HWFScreen worldScreen;
 
-	private PlayerInputController pic;
+	//	private PlayerInputController pic;
 
 	public HWFWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
@@ -150,18 +150,28 @@ public class HWFWindow extends Window {
 		Shader s = ShaderUtils.createShader("/csce_vis/hw_final/fft.compute", GL_COMPUTE_SHADER);
 
 		int resolution = 256;
+		//		BufferedImage img = FileUtils.loadImageRelative("/res/son3rot1.png");
+		BufferedImage img = FileUtils.loadImageRelative("/res/stp1.png");
 		float[] data = new float[resolution * resolution * 4];
+		for (int i = 0; i < resolution; i++) {
+			for (int j = 0; j < resolution; j++) {
+				int rgb = img.getRGB(i, j);
+				int b = rgb % (1 << 8);
+				data[(i * resolution + j) * 4] = Math.abs(b / 255.0f);
+				if (b != 0)
+					System.out.println(b);
+			}
+		}
 		//		data[resolution * 4 + 5] = -1;
-		data[resolution * 127 * 4 + resolution / 2 * 4 - 64 + 4] = 1;
+		//		data[resolution * 128 * 4 + 120 * 4] = 1;
 		//		data[resolution * 4 + 12] = 2;
-
+		//
 		int textureID = glGenTextures(); //create texture handle
 		glBindTexture(GL_TEXTURE_2D, textureID); //set as active texture
 		glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, resolution, resolution); //allocate storage for texture
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, resolution, resolution, GL_RGBA, GL_FLOAT, data); //initialize 0th mipmap layer of texture
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
 		Texture in = new Texture(textureID);
 		Texture out = new Texture(resolution, resolution, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
 
@@ -226,7 +236,7 @@ public class HWFWindow extends Window {
 	@Override
 	protected void _update() {
 		if (this.isSelected()) {
-			this.pic.update();
+			//			this.pic.update();
 
 			//update camera position
 			//			this.worldScreen.getCamera().setFacing(this.pic.getFacing());
