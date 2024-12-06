@@ -90,4 +90,6 @@ void main() {
 
     // transpose
     transpose(n);
+    
+    imageStore(outputt, ivec2(0, 0), vec4(1, 0, 0, 1));
 }

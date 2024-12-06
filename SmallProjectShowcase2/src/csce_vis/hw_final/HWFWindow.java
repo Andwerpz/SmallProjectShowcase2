@@ -47,12 +47,12 @@ import myutils.math.Vec4;
 
 public class HWFWindow extends Window {
 
-    private static int waterResolution = 256;
+	private static int waterResolution = 256;
 	private Model waterModel;
 
 	private final int WORLD_SCENE = Scene.generateScene();
 
-	private HWFScreen worldScreen;
+	//	private HWFScreen worldScreen;
 
 	private PlayerInputController pic;
 
@@ -62,7 +62,7 @@ public class HWFWindow extends Window {
 	}
 
 	private void init() {
-	    // USER CONTROLS
+		// USER CONTROLS
 		this.setLockCursorOnSelect(true);
 		this.setUnlockCursorOnEscPressed(true);
 		this.setDeselectOnEscPressed(true);
@@ -123,25 +123,25 @@ public class HWFWindow extends Window {
 		waterMaterial.setSpecularExponent(256);
 		waterInstance.setMaterial(waterMaterial);
 
-		// INITIALIZE SCREEN
-		this.worldScreen = new HWFScreen();
-		this.worldScreen.renderSkybox(true);
-
-		this.pic = new PlayerInputController(new Vec3(0, 1, 0));
-
-		// SET CAMERA POS
-		this.worldScreen.getCamera().setFacing(this.pic.getFacing());
-		this.worldScreen.getCamera().setPos(this.pic.getPos().add(new Vec3(0, 3, 0)));
-
-		// ADD SUN & LIGHTS
-		DirLight sun = new DirLight(new Vec3(0.3, -0.6f, 1), new Vec3(1), 0.4f);
-		Light.addLight(WORLD_SCENE, sun);
-		this.worldScreen.setSun(sun);
+		//		// INITIALIZE SCREEN
+		//		this.worldScreen = new HWFScreen();
+		//		this.worldScreen.renderSkybox(true);
+		//
+		//		this.pic = new PlayerInputController(new Vec3(0, 1, 0));
+		//
+		//		// SET CAMERA POS
+		//		this.worldScreen.getCamera().setFacing(this.pic.getFacing());
+		//		this.worldScreen.getCamera().setPos(this.pic.getPos().add(new Vec3(0, 3, 0)));
+		//
+		//		// ADD SUN & LIGHTS
+		//		DirLight sun = new DirLight(new Vec3(0.3, -0.6f, 1), new Vec3(1), 0.4f);
+		//		Light.addLight(WORLD_SCENE, sun);
+		//		this.worldScreen.setSun(sun);
 
 		// DEBUGGING TOOLS IF DESIRED
 		//windows to look at water textures
-		AdjustableWindow waterHeightViewer = new AdjustableWindow("Water Height Map", new TextureViewerWindow(this.worldScreen.getWaterHeightMap()), this);
-		AdjustableWindow waterNormalViewer = new AdjustableWindow("Water Normal Map", new TextureViewerWindow(this.worldScreen.getWaterNormalMap()), this);
+		//		AdjustableWindow waterHeightViewer = new AdjustableWindow("Water Height Map", new TextureViewerWindow(this.worldScreen.getWaterHeightMap()), this);
+		//		AdjustableWindow waterNormalViewer = new AdjustableWindow("Water Normal Map", new TextureViewerWindow(this.worldScreen.getWaterNormalMap()), this);
 		//control panel for the water
 		//AdjustableWindow waterAttributesPanel = new AdjustableWindow("Water Attributes", new ObjectEditorWindow(this.worldScreen.getWaterAttributes()), this);
 
@@ -149,46 +149,40 @@ public class HWFWindow extends Window {
 
 		Shader s = ShaderUtils.createShader("/csce_vis/hw_final/fft.compute", GL_COMPUTE_SHADER);
 
-		float[] data = new float[8 * 8 * 4];
-		data[8*4+5] = -1;
-		data[8*4+4] = 1;
-		data[8*4+12] = 2;
+		int resolution = 256;
+		float[] data = new float[resolution * resolution * 4];
+		//		data[resolution * 4 + 5] = -1;
+		data[resolution * 4 + 4] = 1;
+		//		data[resolution * 4 + 12] = 2;
 
 		int textureID = glGenTextures(); //create texture handle
 		glBindTexture(GL_TEXTURE_2D, textureID); //set as active texture
-		glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, 8, 8); //allocate storage for texture
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 8, 8, GL_RGBA, GL_FLOAT, data); //initialize 0th mipmap layer of texture
+		glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, resolution, resolution); //allocate storage for texture
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, resolution, resolution, GL_RGBA, GL_FLOAT, data); //initialize 0th mipmap layer of texture
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-		//set interpolation filters
-		glBindTexture(GL_TEXTURE_2D, 0);
-
 		Texture in = new Texture(textureID);
+		Texture out = new Texture(resolution, resolution, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
 
-		Texture out = new Texture(8, 8, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
-		//in.setWrapping(GL_CLAMP_TO_EDGE);
-		//out.setWrapping(GL_CLAMP_TO_EDGE);
-
-		//s.setUniform1i("inputt", 0);
 		glBindImageTexture(0, in.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
-		//s.setUniform1i("outputt", 1);
 		glBindImageTexture(1, out.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
 
 		s.enable();
 		glDispatchCompute(1, 1, 1);
 
-		float[] data2 = new float[8*8*4];
-		out.bind();
-		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, data2);
-
-		for (int i = 0; i < 8 * 8; ++i) {
-			System.out.println(data2[i*4] + " " + data2[i*4+1]);
-		}
+		//		float[] data2 = new float[8 * 8 * 4];
+		//		out.bind();
+		//		glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, data2);
+		//
+		//		for (int i = 0; i < 8 * 8; ++i) {
+		//			System.out.println(data2[i * 4] + " " + data2[i * 4 + 1]);
+		//		}
 
 		this.addChildAdjWindow(new TextureViewerWindow(in));
 		this.addChildAdjWindow(new TextureViewerWindow(out));
 
+		//		System.out.println(out.getID() + " " + this.worldScreen.getWaterNormalMap().getID());
 		System.out.println("done!");
 
 		/*
@@ -204,7 +198,7 @@ public class HWFWindow extends Window {
 		glViewport(0, 0, 256, 256);
 		glDispatchCompute(1, 1, 1);
 		this.addChildAdjWindow(new TextureViewerWindow(waterHeightMap));
-*/
+		*/
 		this._resize();
 
 		//System.exit(0);
@@ -212,7 +206,7 @@ public class HWFWindow extends Window {
 
 	@Override
 	protected void _kill() {
-		this.worldScreen.kill();
+		//		this.worldScreen.kill();
 
 		this.waterModel.kill();
 
@@ -221,7 +215,7 @@ public class HWFWindow extends Window {
 
 	@Override
 	protected void _resize() {
-		this.worldScreen.setScreenDimensions(this.getWidth(), this.getHeight());
+		//		this.worldScreen.setScreenDimensions(this.getWidth(), this.getHeight());
 	}
 
 	@Override
@@ -235,44 +229,54 @@ public class HWFWindow extends Window {
 			this.pic.update();
 
 			//update camera position
-			this.worldScreen.getCamera().setFacing(this.pic.getFacing());
-			this.worldScreen.getCamera().setPos(this.pic.getPos());
+			//			this.worldScreen.getCamera().setFacing(this.pic.getFacing());
+			//			this.worldScreen.getCamera().setPos(this.pic.getPos());
 		}
 	}
 
 	@Override
 	protected void renderContent(Framebuffer outputBuffer) {
-		this.worldScreen.setWorldScene(WORLD_SCENE);
-		this.worldScreen.render(outputBuffer);
+		//		this.worldScreen.setWorldScene(WORLD_SCENE);
+		//		this.worldScreen.render(outputBuffer);
 	}
 
 	@Override
-	protected void renderOverlay(Framebuffer outputBuffer) {}
+	protected void renderOverlay(Framebuffer outputBuffer) {
+	}
 
 	@Override
-	protected void selected() {}
+	protected void selected() {
+	}
 
 	@Override
-	protected void deselected() {}
+	protected void deselected() {
+	}
 
 	@Override
-	protected void subtreeSelected() {}
+	protected void subtreeSelected() {
+	}
 
 	@Override
-	protected void subtreeDeselected() {}
+	protected void subtreeDeselected() {
+	}
 
 	@Override
-	protected void _mousePressed(int button) {}
+	protected void _mousePressed(int button) {
+	}
 
 	@Override
-	protected void _mouseReleased(int button) {}
+	protected void _mouseReleased(int button) {
+	}
 
 	@Override
-	protected void _mouseScrolled(float wheelOffset, float smoothOffset) {}
+	protected void _mouseScrolled(float wheelOffset, float smoothOffset) {
+	}
 
 	@Override
-	protected void _keyPressed(int key) {}
+	protected void _keyPressed(int key) {
+	}
 
 	@Override
-	protected void _keyReleased(int key) {}
+	protected void _keyReleased(int key) {
+	}
 }
