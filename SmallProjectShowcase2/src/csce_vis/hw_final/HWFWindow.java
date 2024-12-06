@@ -69,14 +69,14 @@ public class HWFWindow extends Window {
 	private Texture baseSpectraTexture;
 	private Texture waveInfoTexture;
 
-	private Shader evolveSpectraShader;
+	private Shader evolveSpectraShader, evolveSpectraShader2;
+	private Texture evolvedSpectraTexture;
 	private Texture dispX, dispY, dispZ;
 	private Texture dispX_dx, dispY_dx, dispZ_dx;
 	private Texture dispX_dz, dispY_dz, dispZ_dz;
 
-	private Shader fftShader;
-
-	private Texture evolvedSpectraTexture;
+	private Shader fftShader, combineDispShader, calcNormalShader;
+	private Texture dispTexture, normalTexture;
 
 	private Options options = new Options();
 
@@ -224,12 +224,15 @@ public class HWFWindow extends Window {
 		//control panel for the water
 		//AdjustableWindow waterAttributesPanel = new AdjustableWindow("Water Attributes", new ObjectEditorWindow(this.worldScreen.getWaterAttributes()), this);
 
+		this.gaussianNoiseTexture = this.generateGaussianNoiseTexture();
+
+		this.generateSpectraShader = ShaderUtils.createShader("/csce_vis/hw_final/gen_spectra.compute", GL_COMPUTE_SHADER);
 		this.baseSpectraTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
 		this.waveInfoTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
-		this.evolvedSpectraTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
-		this.gaussianNoiseTexture = this.generateGaussianNoiseTexture();
-		this.generateSpectraShader = ShaderUtils.createShader("/csce_vis/hw_final/gen_spectra.compute", GL_COMPUTE_SHADER);
+
 		this.evolveSpectraShader = ShaderUtils.createShader("/csce_vis/hw_final/evolve_spectra.compute", GL_COMPUTE_SHADER);
+		this.evolveSpectraShader2 = ShaderUtils.createShader("/csce_vis/hw_final/evolve_spectra2.compute", GL_COMPUTE_SHADER);
+		this.evolvedSpectraTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
 
 		this.dispX = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
 		this.dispY = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
@@ -244,6 +247,10 @@ public class HWFWindow extends Window {
 		this.dispZ_dz = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
 
 		this.fftShader = ShaderUtils.createShader("/csce_vis/hw_final/fft.compute", GL_COMPUTE_SHADER);
+		this.combineDispShader = ShaderUtils.createShader("/csce_vis/hw_final/combine_disp.compute", GL_COMPUTE_SHADER);
+		this.calcNormalShader = ShaderUtils.createShader("/csce_vis/hw_final/calc_normal.compute", GL_COMPUTE_SHADER);
+		this.dispTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
+		this.normalTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
 
 		this.generateSpectra();
 
@@ -252,6 +259,9 @@ public class HWFWindow extends Window {
 		this.addChildAdjWindow(new TextureViewerWindow(this.waveInfoTexture));
 		this.addChildAdjWindow(new TextureViewerWindow(this.evolvedSpectraTexture));
 		this.addChildAdjWindow(new TextureViewerWindow(this.dispY));
+		this.addChildAdjWindow(new TextureViewerWindow(this.dispY_dx));
+
+		this.addChildAdjWindow(new TextureViewerWindow(this.normalTexture));
 
 		this.addChildAdjWindow(new ObjectEditorWindow(this.options));
 
@@ -292,7 +302,7 @@ public class HWFWindow extends Window {
 		this.generateSpectraShader.setUniform1f("U", this.options.windSpeed);
 		this.generateSpectraShader.setUniform1f("F", this.options.fetch);
 		this.generateSpectraShader.setUniform1f("omega_p", (float) (22.0 * Math.pow(9.81 * 9.81 / (this.options.windSpeed * this.options.fetch), 1.0 / 3.0)));
-		this.generateSpectraShader.setUniform1f("multiplier", this.options.multiplier);
+		this.generateSpectraShader.setUniform1f("multiplier", this.options.spectraMultiplier);
 		glBindImageTexture(0, this.baseSpectraTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
 		glBindImageTexture(1, this.gaussianNoiseTexture.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
 		glBindImageTexture(2, this.waveInfoTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
@@ -470,7 +480,7 @@ public class HWFWindow extends Window {
 
 	@Override
 	protected void renderContent(Framebuffer outputBuffer) {
-		//generate evolved spectra
+		// -- generate evolved spectra --
 		{
 			this.evolveSpectraShader.enable();
 			this.evolveSpectraShader.setUniform1i("spectra_sz", WATER_RESOLUTION);
@@ -483,14 +493,54 @@ public class HWFWindow extends Window {
 			glBindImageTexture(4, this.dispY.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
 			glBindImageTexture(5, this.dispZ.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
 			glDispatchCompute(WATER_RESOLUTION, WATER_RESOLUTION, 1);
+
+			this.evolveSpectraShader2.enable();
+			glBindImageTexture(0, this.evolvedSpectraTexture.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
+			glBindImageTexture(1, this.waveInfoTexture.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
+
+			glBindImageTexture(2, this.dispX_dx.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
+			glBindImageTexture(3, this.dispY_dx.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
+			glBindImageTexture(4, this.dispZ_dx.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
+
+			glBindImageTexture(5, this.dispX_dz.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
+			glBindImageTexture(6, this.dispY_dz.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
+			glBindImageTexture(7, this.dispZ_dz.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
+			glDispatchCompute(WATER_RESOLUTION, WATER_RESOLUTION, 1);
 		}
 
-		//apply fft
-		{
+		// -- apply fft --
+		if (true) {
+			Texture[] to_fft = new Texture[] { this.dispX, this.dispY, this.dispZ, this.dispX_dx, this.dispY_dx, this.dispZ_dx, this.dispX_dz, this.dispY_dz, this.dispZ_dz };
 			this.fftShader.enable();
 			this.fftShader.setUniform1i("invert", 1);
-			glBindImageTexture(0, this.dispY.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
-			glDispatchCompute(1, 1, 1);
+
+			for (Texture t : to_fft) {
+				glBindImageTexture(0, t.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
+				glDispatchCompute(1, 1, 1);
+			}
+		}
+
+		// -- compute displacement and normals --
+		if (true) {
+			this.combineDispShader.enable();
+			glBindImageTexture(0, this.dispX.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
+			glBindImageTexture(1, this.dispY.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
+			glBindImageTexture(2, this.dispZ.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
+
+			glBindImageTexture(3, this.dispTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
+			glDispatchCompute(WATER_RESOLUTION, WATER_RESOLUTION, 1);
+
+			this.calcNormalShader.enable();
+			glBindImageTexture(0, this.dispX_dx.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
+			glBindImageTexture(1, this.dispY_dx.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
+			glBindImageTexture(2, this.dispZ_dx.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
+
+			glBindImageTexture(3, this.dispX_dz.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
+			glBindImageTexture(4, this.dispY_dz.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
+			glBindImageTexture(5, this.dispZ_dz.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
+
+			glBindImageTexture(6, this.normalTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
+			glDispatchCompute(WATER_RESOLUTION, WATER_RESOLUTION, 1);
 		}
 
 		this.worldScreen.setWorldScene(WORLD_SCENE);

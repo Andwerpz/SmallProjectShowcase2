@@ -12,16 +12,12 @@ layout(rgba32f, binding = 5) uniform image2D dispX_dz_Texture;
 layout(rgba32f, binding = 6) uniform image2D dispY_dz_Texture;
 layout(rgba32f, binding = 7) uniform image2D dispZ_dz_Texture;
 
-uniform int spectra_sz;
-uniform float t;
-
 vec2 complex_mult(vec2 a, vec2 b) {
 	return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
 }
 
 void main() {
 	ivec2 tex_coord = ivec2(int(gl_GlobalInvocationID.x), int(gl_GlobalInvocationID.y));
-	ivec2 tex_coord_conj = ivec2(spectra_sz - (spectra_sz - 1 - tex_coord.x), spectra_sz - (spectra_sz - 1 - tex_coord.y));
 	
 	vec4 info = imageLoad(waveInfoTexture, tex_coord);
 
