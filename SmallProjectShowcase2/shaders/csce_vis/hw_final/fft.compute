@@ -1,0 +1,86 @@
+#version 430 core
+#define M_PI 3.1415926535897932384626433832795
+
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(rgba32f, binding = 0) uniform image2D inputt;
+
+uniform bool invert;
+
+// swap two pixels in a texture
+void swap(int i1, int j1, int i2, int j2) {
+    const vec4 temp = imageLoad(inputt, ivec2(i1, j1)).rgba;
+    imageStore(inputt, ivec2(i1, j1), imageLoad(inputt, ivec2(i2, j2)).rgba);
+    imageStore(inputt, ivec2(i2, j2), temp);
+}
+
+// transpose a texture (reflect over y = x)
+void transpose(const int n) {
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < i; ++j) {
+            swap(i, j, j, i);
+        }
+    }
+}
+
+vec2 mult(vec2 a, vec2 b) {
+    return vec2(a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]);
+}
+
+void fft(const int n, const int r) {
+    const int invertConst = invert ? -1 : 1;
+
+    for (int i = 1, j = 0; i < n; ++i) {
+        int bit = n >> 1;
+        for (; (j & bit) != 0; bit >>= 1)
+            j ^= bit;
+        j ^= bit;
+        if (i < j)
+            swap(r, i, r, j);
+    }
+
+    for (int len = 2; len <= n; len <<= 1) {
+        float ang = 2 * M_PI / len * invertConst;
+        vec2 wlen = vec2(cos(ang), sin(ang));
+
+        for (int i = 0; i < n; i += len) {
+            vec2 w = vec2(1, 0);
+            for (int j = 0; j < len / 2; j++) {
+                vec2 u = imageLoad(inputt, ivec2(r, i + j)).rg;
+                vec2 v = mult(imageLoad(inputt, ivec2(r, i + j + len / 2)).rg, w);
+
+                imageStore(inputt, ivec2(r, i+j), vec4(u + v, 0, 0));
+                imageStore(inputt, ivec2(r, i + j + len / 2), vec4(u - v, 0, 0));
+
+                w = mult(w, wlen);
+            }
+        }
+
+    }
+
+    for (int m = 0; m < n; ++m) {
+        vec2 u = imageLoad(inputt, ivec2(r, m)).rg;
+        vec2 toMult = vec2(cos(-2 * M_PI * m / 2), sin(-2 * M_PI * m / 2));
+        imageStore(inputt, ivec2(r, m), vec4(mult(toMult, u), 0, 0));
+    }
+
+}
+
+void main() {
+    // images are n x n
+    const int n = imageSize(inputt)[0];
+
+    // run fft on each row
+    for (int r = 0; r < n; ++r)
+        fft(n, r);
+
+    // transpose
+    transpose(n);
+
+    // run fft on each column
+    for (int r = 0; r < n; ++r)
+        fft(n, r);
+
+    // transpose
+    transpose(n);
+}

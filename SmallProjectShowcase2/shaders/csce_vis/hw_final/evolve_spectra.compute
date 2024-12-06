@@ -35,15 +35,9 @@ void main() {
 	vec2 dispy = ht;
 	vec2 dispz = iht * info.z * info.y;
 	
-	vec2 dispx_dx = -ht * info.x * info.x * info.y;
-	vec2 dispy_dx = iht * info.x;
-	vec2 dispz_dx = -ht * info.x * info.z * info.y;
-	
-	vec2 dispx_dz = -ht * info.z * info.x * info.y;
-	vec2 dispy_dz = iht * info.z;
-	vec2 dispz_dz = -ht * info.z * info.z * info.y;
-	
 	imageStore(evolvedSpectraTexture, tex_coord, vec4(ht, 0, 1));
 	
 	imageStore(dispX_Texture, tex_coord, vec4(dispx, 0, 1));
+	imageStore(dispY_Texture, tex_coord, vec4(dispy, 0, 1));
+	imageStore(dispZ_Texture, tex_coord, vec4(dispz, 0, 1));
 }

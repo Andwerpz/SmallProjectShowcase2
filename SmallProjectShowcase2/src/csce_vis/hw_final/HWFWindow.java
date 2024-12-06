@@ -74,6 +74,8 @@ public class HWFWindow extends Window {
 	private Texture dispX_dx, dispY_dx, dispZ_dx;
 	private Texture dispX_dz, dispY_dz, dispZ_dz;
 
+	private Shader fftShader;
+
 	private Texture evolvedSpectraTexture;
 
 	private Options options = new Options();
@@ -85,7 +87,7 @@ public class HWFWindow extends Window {
 		private float windSpeed = 25.0f; //avg wind speed (m/s)
 		private float fetch = 250.0f; //fetch, length of area over which wind is acting on water
 		private Vec2 windDir = new Vec2(1, 0);
-		private float multiplier = 100f; //hack for debugging
+		private float spectraMultiplier = 1f; //hack for debugging
 
 		public float getWaterDepth() {
 			return waterDepth;
@@ -123,12 +125,12 @@ public class HWFWindow extends Window {
 			generateSpectra();
 		}
 
-		public float getMultiplier() {
-			return multiplier;
+		public float getSpectraMultiplier() {
+			return spectraMultiplier;
 		}
 
-		public void setMultiplier(float multiplier) {
-			this.multiplier = multiplier;
+		public void setSpectraMultiplier(float spectraMultiplier) {
+			this.spectraMultiplier = spectraMultiplier;
 			generateSpectra();
 		}
 	}
@@ -241,12 +243,15 @@ public class HWFWindow extends Window {
 		this.dispY_dz = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
 		this.dispZ_dz = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
 
+		this.fftShader = ShaderUtils.createShader("/csce_vis/hw_final/fft.compute", GL_COMPUTE_SHADER);
+
 		this.generateSpectra();
 
 		this.addChildAdjWindow(new TextureViewerWindow(this.gaussianNoiseTexture));
 		this.addChildAdjWindow(new TextureViewerWindow(this.baseSpectraTexture));
 		this.addChildAdjWindow(new TextureViewerWindow(this.waveInfoTexture));
 		this.addChildAdjWindow(new TextureViewerWindow(this.evolvedSpectraTexture));
+		this.addChildAdjWindow(new TextureViewerWindow(this.dispY));
 
 		this.addChildAdjWindow(new ObjectEditorWindow(this.options));
 
@@ -478,6 +483,14 @@ public class HWFWindow extends Window {
 			glBindImageTexture(4, this.dispY.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
 			glBindImageTexture(5, this.dispZ.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
 			glDispatchCompute(WATER_RESOLUTION, WATER_RESOLUTION, 1);
+		}
+
+		//apply fft
+		{
+			this.fftShader.enable();
+			this.fftShader.setUniform1i("invert", 1);
+			glBindImageTexture(0, this.dispY.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
+			glDispatchCompute(1, 1, 1);
 		}
 
 		this.worldScreen.setWorldScene(WORLD_SCENE);
