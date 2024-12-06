@@ -27,7 +27,7 @@ vec2 mult(vec2 a, vec2 b) {
 }
 
 void fft(const int n, const int r) {
-    const bool invert = false;
+    const bool invert = true;
     const int invertConst = invert ? -1 : 1;
 
     for (int i = 1, j = 0; i < n; ++i) {
@@ -58,9 +58,10 @@ void fft(const int n, const int r) {
 
     }
 
-    if (invert) {
-        for (int x = 0; x < n; ++x)
-            imageStore(outputt, ivec2(r, x), imageLoad(outputt, ivec2(r, x)).rgba / n);
+    for (int m = 0; m < n; ++m) {
+        vec2 u = imageLoad(outputt, ivec2(r, m)).rg;
+        vec2 toMult = vec2(cos(-2 * M_PI * m / 2), sin(-2 * M_PI * m / 2));
+        imageStore(outputt, ivec2(r, m), vec4(mult(toMult, u), 0, 0));
     }
 
 }

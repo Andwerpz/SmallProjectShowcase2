@@ -8,7 +8,7 @@ void main() {
     for (int x = 0; x < 256; ++x) {
         for (int z = 0; z < 256; ++z) {
             imageStore(out_height, ivec2(x, z), vec4(vec3(0, 1, 0), 1));
-            imageStore(out_normal, ivec2(x, z), vec4(vec3(0, 1, 0), 1));
+            imageStore(out_normal, ivec2(x, z), vec4(vec3(1, 1, 0), 1));
         }
     }
 }

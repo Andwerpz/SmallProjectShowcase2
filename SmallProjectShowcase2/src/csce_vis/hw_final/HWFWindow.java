@@ -152,7 +152,7 @@ public class HWFWindow extends Window {
 		int resolution = 256;
 		float[] data = new float[resolution * resolution * 4];
 		//		data[resolution * 4 + 5] = -1;
-		data[resolution * 4 + 4] = 1;
+		data[resolution * 127 * 4 + resolution / 2 * 4 - 64 + 4] = 1;
 		//		data[resolution * 4 + 12] = 2;
 
 		int textureID = glGenTextures(); //create texture handle
