@@ -2,32 +2,16 @@
 #define M_PI 3.1415926535897932384626433832795
 
 layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
-
 layout(rgba32f, binding = 0) uniform image2D inputt;
-
+uniform bool workRow;
 uniform bool invert;
 
-// swap two pixels in a texture
-void swap(int i1, int j1, int i2, int j2) {
-    const vec4 temp = imageLoad(inputt, ivec2(i1, j1)).rgba;
-    imageStore(inputt, ivec2(i1, j1), imageLoad(inputt, ivec2(i2, j2)).rgba);
-    imageStore(inputt, ivec2(i2, j2), temp);
-}
-
-// transpose a texture (reflect over y = x)
-void transpose(const int n) {
-    for (int i = 0; i < n; ++i) {
-        for (int j = 0; j < i; ++j) {
-            swap(i, j, j, i);
-        }
-    }
-}
 
 vec2 mult(vec2 a, vec2 b) {
     return vec2(a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]);
 }
 
-void fft(const int n, const int r) {
+void fft(const int n, inout vec2 arr[256]) {
     const int invertConst = invert ? -1 : 1;
 
     for (int i = 1, j = 0; i < n; ++i) {
@@ -35,8 +19,12 @@ void fft(const int n, const int r) {
         for (; (j & bit) != 0; bit >>= 1)
             j ^= bit;
         j ^= bit;
-        if (i < j)
-            swap(r, i, r, j);
+        if (i < j) {
+            // swap
+            vec2 temp = arr[i];
+            arr[i] = arr[j];
+            arr[j] = temp;
+        }
     }
 
     for (int len = 2; len <= n; len <<= 1) {
@@ -46,11 +34,11 @@ void fft(const int n, const int r) {
         for (int i = 0; i < n; i += len) {
             vec2 w = vec2(1, 0);
             for (int j = 0; j < len / 2; j++) {
-                vec2 u = imageLoad(inputt, ivec2(r, i + j)).rg;
-                vec2 v = mult(imageLoad(inputt, ivec2(r, i + j + len / 2)).rg, w);
+                vec2 u = arr[i+j];
+                vec2 v = mult(arr[i + j + len / 2], w);
 
-                imageStore(inputt, ivec2(r, i+j), vec4(u + v, 0, 0));
-                imageStore(inputt, ivec2(r, i + j + len / 2), vec4(u - v, 0, 0));
+                arr[i+j] = u + v;
+                arr[i + j + len / 2] = u - v;
 
                 w = mult(w, wlen);
             }
@@ -59,29 +47,38 @@ void fft(const int n, const int r) {
     }
 
     for (int m = 0; m < n; ++m) {
-        vec2 u = imageLoad(inputt, ivec2(r, m)).rg;
-        //vec2 toMult = vec2(cos(-2 * M_PI * m / 2), sin(-2 * M_PI * m / 2));
-        vec2 toMult = vec2(cos(-2 * M_PI * (m - n / 2) / 2), sin(-2 * M_PI * (m - n / 2) / 2));
-        imageStore(inputt, ivec2(r, m), vec4(mult(toMult, u), 0, 0));
+        vec2 u = arr[m];
+        vec2 toMult = vec2(cos(-2 * M_PI * m / 2), sin(-2 * M_PI * m / 2));
+        arr[m] = mult(toMult, u);
     }
 
 }
 
 void main() {
+
+    // gl_GlobalInvocationID[0]: gives me my row
+    const uint id = gl_GlobalInvocationID[0];
+
     // images are n x n
     const int n = imageSize(inputt)[0];
 
-    // run fft on each row
-    for (int r = 0; r < n; ++r)
-        fft(n, r);
+    vec2 arr[256];
 
-    // transpose
-    transpose(n);
+    // copy input into the temp image
+    for (int i = 0; i < n; ++i) {
+        if (workRow)
+            arr[i] = imageLoad(inputt, ivec2(id, i)).rg;
+        else
+            arr[i] = imageLoad(inputt, ivec2(i, id)).rg;
+    }
 
-    // run fft on each column
-    for (int r = 0; r < n; ++r)
-        fft(n, r);
-
-    // transpose
-    transpose(n);
+    fft(n, arr);
+    
+    // move temp back into the output image
+    for (int i = 0; i < n; ++i) {
+        if (workRow)
+            imageStore(inputt, ivec2(id, i), vec4(arr[i], 0, 0));
+        else
+            imageStore(inputt, ivec2(i, id), vec4(arr[i], 0, 0));
+    }
 }

@@ -317,13 +317,9 @@ public class HWFWindow extends Window {
 			Texture[] to_fft = new Texture[] { this.Dx_Dz, this.Dy_Dxz, this.Dyx_Dyz, this.Dxx_Dzz };
 			//			Texture[] to_fft = new Texture[] { this.Dx_Dz };
 			this.fftShader.enable();
-			this.fftShader.setUniform1i("invert", 1);
-
 			for (Texture t : to_fft) {
-				glBindImageTexture(0, t.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
-				glDispatchCompute(1, 1, 1);
+				this.apply2DFFT(t, WATER_RESOLUTION, true);
 			}
-			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 		}
 
 		// -- compute displacement and normals --
@@ -347,6 +343,19 @@ public class HWFWindow extends Window {
 
 		this.worldScreen.setWorldScene(WORLD_SCENE);
 		this.worldScreen.render(outputBuffer);
+	}
+
+	private void apply2DFFT(Texture t, int resolution, boolean invert) {
+		this.fftShader.setUniform1i("invert", invert ? 1 : 0);
+		glBindImageTexture(0, t.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
+		glDispatchCompute(1, 1, 1);
+
+		this.fftShader.setUniform1i("workRow", 1);
+		glDispatchCompute(resolution, 1, 1);
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		this.fftShader.setUniform1i("workRow", 0);
+		glDispatchCompute(resolution, 1, 1);
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 	}
 
 	@Override
