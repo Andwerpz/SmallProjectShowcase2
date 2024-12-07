@@ -9,6 +9,7 @@ layout(rgba32f, binding = 3) uniform image2D Dxx_Dzz;
 layout(rgba32f, binding = 4) uniform image2D dispTexture;
 layout(rgba32f, binding = 5) uniform image2D normalTexture;
 
+uniform float length_scale;
 uniform float lambda;
 
 void main() {
@@ -22,7 +23,7 @@ void main() {
 	vec3 disp = vec3(DxDz.x * lambda, DyDxz.x, DxDz.y * lambda);
 	vec4 derivative = vec4(DyxDyz, DxxDzz * lambda);
 	vec2 slope = vec2(derivative.x / (1.0 + derivative.z), derivative.y / (1.0 + derivative.w));
-	slope *= 64;
+	slope *= length_scale;
 	vec3 normal = normalize(vec3(-slope.x, 1.0, -slope.y));
 	
 	imageStore(dispTexture, tex_coord, vec4(disp, 1.0));

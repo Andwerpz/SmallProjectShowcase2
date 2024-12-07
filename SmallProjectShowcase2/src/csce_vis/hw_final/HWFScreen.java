@@ -31,6 +31,8 @@ public class HWFScreen extends Screen {
 	private static final float NEAR = 0.1f;
 	private static final float FAR = 4000.0f;
 
+	private static final int SKYBOX_RES = 1024;
+
 	private final int WATER_SCENE = Scene.generateScene();
 	private int[] world_scenes;
 
@@ -61,11 +63,15 @@ public class HWFScreen extends Screen {
 
 	public Texture skyboxColorMap; // RGB: color
 
-	private boolean renderSkybox = false;
+	private Cubemap skyboxCubemap;
+	private Shader skyboxShader;
+	private Framebuffer skyboxFramebuffer;
 
 	private Shader waterGeometryShader;
 	private Model waterModel;
 	public Texture dispTexture, normalTexture;
+
+	private Vec3 sunDir = new Vec3(1);
 
 	public HWFScreen() {
 		Vec3 cameraPos = new Vec3();
@@ -83,6 +89,7 @@ public class HWFScreen extends Screen {
 		this.waterGeometryShader.setUniform1i("tex_displacement", 4);
 		this.waterGeometryShader.setUniform1i("dispTexture", 5);
 		this.waterGeometryShader.setUniform1i("normalTexture", 6);
+		this.waterGeometryShader.setUniform1i("skyboxCubemap", 7);
 
 		this.waterModel = this.createWaterMesh();
 		ModelInstance water_inst = new ModelInstance(this.waterModel, WATER_SCENE);
@@ -91,6 +98,13 @@ public class HWFScreen extends Screen {
 		waterMaterial.setSpecular(new Vec3(0.7f));
 		waterMaterial.setSpecularExponent(256);
 		water_inst.setMaterial(waterMaterial);
+
+		//		this.skyboxShader = ShaderUtils.createShader("/csce_vis/hw_final/gen_skybox.vert", "/csce_vis/hw_final/gen_skybox.frag");
+		//		this.skyboxShader.setUniform1i("spaceSkybox", 0);
+
+		this.skyboxShader = ShaderUtils.createShader("/csce_vis/hw_final/water_atmosphere.vert", "/csce_vis/hw_final/water_atmosphere.frag");
+		this.skyboxCubemap = new Cubemap(GL_RGBA16F, GL_RGBA, GL_FLOAT, SKYBOX_RES);
+		this.skyboxFramebuffer = new Framebuffer(SKYBOX_RES, SKYBOX_RES);
 	}
 
 	@Override
@@ -193,14 +207,25 @@ public class HWFScreen extends Screen {
 		shader.setUniform3f("view_pos", camera.getPos());
 	}
 
-	public void renderSkybox(boolean b) {
-		this.renderSkybox = b;
-	}
-
 	@Override
 	protected void _render(Framebuffer outputBuffer) {
-		// -- GEOMETRY -- : render 3d perspective to geometry buffer
+		// -- SKYBOX -- : we'll use this texture in the post-processing step
+		{
+			this.generateSkybox();
+			skyboxBuffer.bind();
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			glDisable(GL_CULL_FACE);
+			glDisable(GL_BLEND);
+			Shader.SKYBOX.enable();
+			Shader.SKYBOX.setUniformMat4("vw_matrix", this.camera.getViewMatrix());
+			Shader.SKYBOX.setUniformMat4("pr_matrix", this.camera.getProjectionMatrix());
+			this.skyboxCubemap.bind(GL_TEXTURE0);
+			SkyboxCube.skyboxCube.render();
+		}
+
+		// -- WATER -- 
 		geometryBuffer.bind();
+
 		glEnable(GL_DEPTH_TEST);
 		glDepthFunc(GL_LESS);
 		glEnable(GL_CULL_FACE);
@@ -211,20 +236,38 @@ public class HWFScreen extends Screen {
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		Texture.bindingEnabled = true;
 
+		this.waterGeometryShader.enable();
+		this.waterGeometryShader.setUniform3f("sun_dir", this.sunDir.normalize());
+		this.waterGeometryShader.setUniform3f("view_pos", this.camera.getPos());
+
+		this.dispTexture.bind(GL_TEXTURE5);
+		this.normalTexture.bind(GL_TEXTURE6);
+		this.skyboxCubemap.bind(GL_TEXTURE7);
+		this.setCameraFOV(this.worldFOV);
+		this.setShaderCameraUniforms(this.waterGeometryShader, this.camera);
+		Model.renderModels(WATER_SCENE);
+
+		/*
+		// -- GEOMETRY -- : render 3d perspective to geometry buffer
+		geometryBuffer.bind();
+		
+		glEnable(GL_DEPTH_TEST);
+		glDepthFunc(GL_LESS);
+		glEnable(GL_CULL_FACE);
+		glCullFace(GL_BACK);
+		glPolygonMode(GL_FRONT, GL_FILL);
+		glDisable(GL_BLEND);
+		glClearDepth(1); // maximum value
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		Texture.bindingEnabled = true;
+		
 		Shader.GEOMETRY.enable();
 		this.setCameraFOV(this.worldFOV);
 		this.setShaderCameraUniforms(Shader.GEOMETRY, this.camera);
 		for (int scene : this.world_scenes) {
 			Model.renderModels(scene);
-		}
-
-		// -- WATER -- 
-		this.waterGeometryShader.enable();
-		this.dispTexture.bind(GL_TEXTURE5);
-		this.normalTexture.bind(GL_TEXTURE6);
-		this.setShaderCameraUniforms(this.waterGeometryShader, this.camera);
-		Model.renderModels(WATER_SCENE);
-
+		}	
+		
 		// -- LIGHTING -- : using information from the geometry buffer, calculate lighting.
 		lightingBuffer.bind();
 		Shader.LIGHTING.enable();
@@ -234,7 +277,7 @@ public class HWFScreen extends Screen {
 		glEnable(GL_BLEND);
 		glPolygonMode(GL_FRONT, GL_FILL);
 		glBlendFunc(GL_ONE, GL_ONE);
-
+		
 		// TODO split lighting shader into directional and cubemap lighting
 		this.geometryPositionMap.bind(GL_TEXTURE0);
 		this.geometryNormalMap.bind(GL_TEXTURE1);
@@ -243,16 +286,16 @@ public class HWFScreen extends Screen {
 		this.shadowDepthMap.bind(GL_TEXTURE4);
 		this.shadowBackfaceMap.bind(GL_TEXTURE5);
 		this.shadowCubemap.bind(GL_TEXTURE6);
-
+		
 		Shader.LIGHTING.setUniform3f("view_pos", this.camera.getPos());
-
+		
 		// disable to prevent overwriting geometry buffer textures
 		// don't forget to re-enable
 		Texture.bindingEnabled = false;
-
+		
 		// backfaces should also be able to cast shadows
 		glDisable(GL_CULL_FACE);
-
+		
 		// calculate lighting with each light seperately
 		ArrayList<Light> lights = Light.lights.get(this.world_scenes[0]);
 		if (lights == null || lights.size() == 0) {
@@ -262,13 +305,13 @@ public class HWFScreen extends Screen {
 		for (int i = 0; i < lights.size(); i++) {
 			// generate depth map for light
 			if (lights.get(i).type == Light.DIR_LIGHT) {
-
+		
 				Vec3 lightDir = new Vec3(lights.get(i).dir).normalize();
 				Mat4 lightMat = Mat4.lookAt(new Vec3(0), lightDir, new Vec3(0, 1, 0));
-
+		
 				// re-bind directional depth map texture as depth map
 				shadowCascadeBuffer.bindTextureToBuffer(GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, this.shadowDepthMap.getID());
-
+		
 				// do this for each cascade near / far plane
 				for (int cascade = 0; cascade < HWFScreen.SHADOW_MAP_NR_CASCADES; cascade++) {
 					// calculate orthographic projection matrix
@@ -277,25 +320,25 @@ public class HWFScreen extends Screen {
 					float far = shadowCascades[cascade + 1];
 					float y1 = near * (float) Math.tan(this.camera.getVerticalFOV() / 2f);
 					float y2 = far * (float) Math.tan(this.camera.getVerticalFOV() / 2f);
-
+		
 					float aspectRatio = (float) this.screenWidth / (float) this.screenHeight;
 					float x1 = y1 * aspectRatio;
 					float x2 = y2 * aspectRatio;
 					Vec3[] corners = new Vec3[] { new Vec3(x1, y1, -near), new Vec3(-x1, y1, -near), new Vec3(-x1, -y1, -near), new Vec3(x1, -y1, -near), new Vec3(x2, y2, -far), new Vec3(-x2, y2, -far), new Vec3(-x2, -y2, -far), new Vec3(x2, -y2, -far), };
-
+		
 					//we have to normalize the near and far coordinates
 					near = (1f / near - 1f / NEAR) / (1f / FAR - 1f / NEAR);
 					far = (1f / far - 1f / NEAR) / (1f / FAR - 1f / NEAR);
 					Shader.LIGHTING.setUniform1f("shadowMapNear", near);
 					Shader.LIGHTING.setUniform1f("shadowMapFar", far);
-
+		
 					// transform frustum corners from camera space to light space
 					Mat4 transformMatrix = new Mat4(this.camera.getInvViewMatrix()); // from camera to world space
 					transformMatrix.muli(lightMat); // apply rotation to align light dir with -z axis
 					for (int j = 0; j < corners.length; j++) {
 						corners[j] = transformMatrix.mul(corners[j], 1f);
 					}
-
+		
 					// generate the AABB that bounds the corners in light space
 					float left = corners[0].x;
 					float right = corners[0].x;
@@ -303,7 +346,7 @@ public class HWFScreen extends Screen {
 					float top = corners[0].y;
 					near = corners[0].z;
 					far = corners[0].z;
-
+		
 					for (Vec3 v : corners) {
 						left = Math.min(left, v.x);
 						right = Math.max(right, v.x);
@@ -312,14 +355,14 @@ public class HWFScreen extends Screen {
 						near = Math.min(near, v.z);
 						far = Math.max(far, v.z);
 					}
-
+		
 					// construct orthographic projection matrix
 					//it's important that all geometry is captured inside this orthographic frustum, so we have to consider
 					//stuff that's behind the camera as well. 
 					float diff = FAR - NEAR;
 					Camera lightCamera = new Camera(left, right, bottom, top, near - diff, far + diff);
 					lightCamera.setFacing(lightDir);
-
+		
 					// render shadow map
 					shadowCascadeBuffer.bind();
 					glViewport(0, 0, this.screenWidth, this.screenHeight);
@@ -328,15 +371,15 @@ public class HWFScreen extends Screen {
 					glDisable(GL_BLEND);
 					glEnable(GL_CULL_FACE);
 					glCullFace(GL_FRONT);
-
+		
 					Shader.LIGHTING.setUniformMat4("lightSpace_matrix", lightMat.mul(lightCamera.getProjectionMatrix()));
 					Shader.DEPTH.enable();
-
+		
 					this.setShaderCameraUniforms(Shader.DEPTH, lightCamera);
 					for (int scene : this.world_scenes) {
 						Model.renderModels(scene);
 					}
-
+		
 					// render portion of lit scene
 					lightingBuffer.bind();
 					glDisable(GL_DEPTH_TEST);
@@ -350,15 +393,15 @@ public class HWFScreen extends Screen {
 			}
 			else {
 				Light light = lights.get(i);
-
+		
 				// generate cubemap
 				shadowCubemapBuffer.bind();
 				Shader.CUBE_DEPTH.enable();
 				float near = 0.1f;
 				float far = 50f;
-
+		
 				Shader.CUBE_DEPTH.setUniform1f("far", far);
-
+		
 				Vec3[][] camVectors = new Vec3[][] { { new Vec3(1, 0, 0), new Vec3(0, -1, 0) }, // -x
 						{ new Vec3(-1, 0, 0), new Vec3(0, -1, 0) }, // +x
 						{ new Vec3(0, 1, 0), new Vec3(0, 0, 1) }, // -y
@@ -366,65 +409,48 @@ public class HWFScreen extends Screen {
 						{ new Vec3(0, 0, 1), new Vec3(0, -1, 0) }, // -z
 						{ new Vec3(0, 0, -1), new Vec3(0, -1, 0) }, // +z
 				};
-
+		
 				Camera cubemapCamera = new Camera((float) Math.toRadians(90), 1f, 1f, near, far); // aspect ratio of 1
 				cubemapCamera.setPos(light.pos);
-
+		
 				glViewport(0, 0, shadowCubemap.getSize(), shadowCubemap.getSize());
 				glEnable(GL_DEPTH_TEST);
 				glDisable(GL_BLEND);
 				glClear(GL_DEPTH_BUFFER_BIT);
-
+		
 				// render each side of cubemap separately
 				for (int j = 0; j < 6; j++) {
 					cubemapCamera.setFacing(camVectors[j][0]);
 					cubemapCamera.setUp(camVectors[j][1]);
-
+		
 					int face = GL_TEXTURE_CUBE_MAP_POSITIVE_X + j;
 					shadowCubemapBuffer.bindTextureToBuffer(GL_DEPTH_ATTACHMENT, face, shadowCubemap.getID());
 					shadowCubemapBuffer.bind();
 					glClear(GL_DEPTH_BUFFER_BIT);
-
+		
 					this.setShaderCameraUniforms(Shader.CUBE_DEPTH, cubemapCamera);
 					Shader.CUBE_DEPTH.enable();
 					for (int scene : this.world_scenes) {
 						Model.renderModels(scene);
 					}
 				}
-
+		
 				// render lit scene
 				lightingBuffer.bind();
 				glViewport(0, 0, this.screenWidth, this.screenHeight);
 				glDisable(GL_DEPTH_TEST);
 				glEnable(GL_BLEND);
-
+		
 				Shader.LIGHTING.enable();
 				Shader.LIGHTING.setUniform1f("shadowCubemapFar", far);
-
+		
 				lights.get(i).bind(Shader.LIGHTING, i);
 				screenQuad.render();
 			}
 		}
-
+		
 		Texture.bindingEnabled = true;
-
-		// -- SKYBOX -- : we'll use this texture in the post-processing step
-		if (this.renderSkybox) {
-			if (Scene.skyboxes.containsKey(this.world_scenes[0])) {
-				skyboxBuffer.bind();
-				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-				glDisable(GL_CULL_FACE);
-				glDisable(GL_BLEND);
-				Shader.SKYBOX.enable();
-				Shader.SKYBOX.setUniformMat4("vw_matrix", this.camera.getViewMatrix());
-				Shader.SKYBOX.setUniformMat4("pr_matrix", this.camera.getProjectionMatrix());
-				Scene.skyboxes.get(this.world_scenes[0]).bind(GL_TEXTURE0);
-				SkyboxCube.skyboxCube.render();
-			}
-			else {
-				System.err.println("PerspectiveScreen : NO SKYBOX ENTRY FOR SCENE " + this.world_scenes[0]);
-			}
-		}
+		*/
 
 		// -- RENDER TO OUTPUT --
 		outputBuffer.bind();
@@ -434,17 +460,48 @@ public class HWFScreen extends Screen {
 		Shader.SPLASH.enable();
 		Shader.SPLASH.setUniform1f("alpha", 1f);
 
-		if (this.renderSkybox) {
-			this.skyboxColorMap.bind(GL_TEXTURE0);
-			screenQuad.render();
-		}
+		this.skyboxColorMap.bind(GL_TEXTURE0);
+		screenQuad.render();
 
-		this.lightingColorMap.bind(GL_TEXTURE0);
+		this.geometryColorMap.bind(GL_TEXTURE0);
 		//		this.geometryPositionMap.bind(GL_TEXTURE0);
 		//		this.geometryColorMap.bind(GL_TEXTURE0);
 		//		this.geometryNormalMap.bind(GL_TEXTURE0);
 		screenQuad.render();
 
+	}
+
+	private void generateSkybox() {
+		Vec3[][] camVectors = new Vec3[][] { { new Vec3(1, 0, 0), new Vec3(0, -1, 0) }, // -x
+				{ new Vec3(-1, 0, 0), new Vec3(0, -1, 0) }, // +x
+				{ new Vec3(0, 1, 0), new Vec3(0, 0, 1) }, // -y
+				{ new Vec3(0, -1, 0), new Vec3(0, 0, -1) }, // +y
+				{ new Vec3(0, 0, 1), new Vec3(0, -1, 0) }, // -z
+				{ new Vec3(0, 0, -1), new Vec3(0, -1, 0) }, // +z
+		};
+
+		glViewport(0, 0, SKYBOX_RES, SKYBOX_RES);
+		glEnable(GL_DEPTH_TEST);
+		glDisable(GL_BLEND);
+		glDisable(GL_CULL_FACE);
+
+		Camera cubemapCamera = new Camera((float) Math.toRadians(90), 1f, 1f, 0.1f, 50f); // aspect ratio of 1
+		cubemapCamera.setPos(new Vec3(0));
+
+		for (int i = 0; i < 6; i++) {
+			cubemapCamera.setFacing(camVectors[i][0]);
+			cubemapCamera.setUp(camVectors[i][1]);
+			this.skyboxShader.enable();
+			this.skyboxShader.setUniformMat4("pr_matrix", cubemapCamera.getProjectionMatrix());
+			this.skyboxShader.setUniformMat4("vw_matrix", cubemapCamera.getViewMatrix());
+			this.skyboxShader.setUniform3f("sun_dir", this.sunDir.normalize());
+
+			this.skyboxFramebuffer.bindTextureToBuffer(GL_COLOR_ATTACHMENT0, GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, this.skyboxCubemap.getID());
+			this.skyboxFramebuffer.bind();
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			SkyboxCube.skyboxCube.render();
+		}
+		glViewport(0, 0, this.getScreenWidth(), this.getScreenHeight());
 	}
 
 	//with built in LODs 

@@ -54,7 +54,17 @@ public class HWFWindow extends Window {
 	//TODO 
 	// - improve spectra generation 
 
-	private static final int WATER_RESOLUTION = 128;
+	//tentative cascade list:
+	// - 1
+	//   - length_scale = 128
+	//   - omega_min = 0.5
+	//   - omega_max = 4
+	// - 2
+	//   - length_scale = 32
+	// - 3
+	//   - length_scale = 8
+
+	private static final int WATER_RESOLUTION = 256;
 
 	private final int WORLD_SCENE = Scene.generateScene();
 
@@ -82,9 +92,14 @@ public class HWFWindow extends Window {
 		private float waterDepth = 100; //height of water in meters
 		private float windSpeed = 0.5f; //avg wind speed (m/s)
 		private float fetch = 100000.0f; //fetch, length of area over which wind is acting on water
-		private Vec2 windDir = new Vec2(1, 0);
+		private Vec2 windDir = new Vec2(1, 0.6).normalize();
 		private float spectraMultiplier = 1f; //hack for debugging
-		private float lambda = 0.5f;
+		private float lambda = 1f;
+
+		//these should be per cascade
+		private float lengthScale = 32;
+		private float omegaMinCutoff = 0.5f;
+		private float omegaMaxCutoff = 2;
 
 		public float getWaterDepth() {
 			return waterDepth;
@@ -138,6 +153,33 @@ public class HWFWindow extends Window {
 		public void setLambda(float lambda) {
 			this.lambda = lambda;
 		}
+
+		public float getLengthScale() {
+			return lengthScale;
+		}
+
+		public void setLengthScale(float lengthScale) {
+			this.lengthScale = lengthScale;
+			generateSpectra();
+		}
+
+		public float getOmegaMinCutoff() {
+			return omegaMinCutoff;
+		}
+
+		public void setOmegaMinCutoff(float omegaMinCutoff) {
+			this.omegaMinCutoff = omegaMinCutoff;
+			generateSpectra();
+		}
+
+		public float getOmegaMaxCutoff() {
+			return omegaMaxCutoff;
+		}
+
+		public void setOmegaMaxCutoff(float omegaMaxCutoff) {
+			this.omegaMaxCutoff = omegaMaxCutoff;
+			generateSpectra();
+		}
 	}
 
 	public HWFWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
@@ -162,7 +204,6 @@ public class HWFWindow extends Window {
 
 		// INITIALIZE SCREEN
 		this.worldScreen = new HWFScreen();
-		this.worldScreen.renderSkybox(true);
 
 		this.pic = new PlayerInputController(new Vec3(0, 1, 0));
 		this.pic.setAcceptPlayerInputs(false);
@@ -198,8 +239,8 @@ public class HWFWindow extends Window {
 
 		this.fftShader = ShaderUtils.createShader("/csce_vis/hw_final/fft.compute", GL_COMPUTE_SHADER);
 		this.waveTexMergerShader = ShaderUtils.createShader("/csce_vis/hw_final/waves_tex_merger.compute", GL_COMPUTE_SHADER);
-		this.dispTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, 5, null);
-		this.normalTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, 5, null);
+		this.dispTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, 6, null);
+		this.normalTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, 6, null);
 
 		this.generateSpectra();
 
@@ -207,7 +248,7 @@ public class HWFWindow extends Window {
 		this.worldScreen.normalTexture = this.normalTexture;
 
 		//		this.addChildAdjWindow(new TextureViewerWindow(this.gaussianNoiseTexture, "Gaussian Noise"));
-		//		this.addChildAdjWindow(new TextureViewerWindow(this.baseSpectraTexture, "Base Spectra"));
+		this.addChildAdjWindow(new TextureViewerWindow(this.baseSpectraTexture, "Base Spectra"));
 		//		this.addChildAdjWindow(new TextureViewerWindow(this.waveInfoTexture, "Wave Info"));
 		//
 		//		this.addChildAdjWindow(new TextureViewerWindow(this.Dx_Dz, "Dx_Dz"));
@@ -256,6 +297,9 @@ public class HWFWindow extends Window {
 		this.generateSpectraShader.setUniform1f("F", this.options.fetch);
 		this.generateSpectraShader.setUniform1f("omega_p", (float) (22.0 * Math.pow(9.81 * 9.81 / (this.options.windSpeed * this.options.fetch), 1.0 / 3.0)));
 		this.generateSpectraShader.setUniform1f("multiplier", this.options.spectraMultiplier);
+		this.generateSpectraShader.setUniform1f("length_scale", this.options.lengthScale);
+		this.generateSpectraShader.setUniform1f("omega_min_cutoff", this.options.omegaMinCutoff);
+		this.generateSpectraShader.setUniform1f("omega_max_cutoff", this.options.omegaMaxCutoff);
 		glBindImageTexture(0, this.baseSpectraTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
 		glBindImageTexture(1, this.gaussianNoiseTexture.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
 		glBindImageTexture(2, this.waveInfoTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
@@ -326,6 +370,7 @@ public class HWFWindow extends Window {
 		if (true) {
 			this.waveTexMergerShader.enable();
 			this.waveTexMergerShader.setUniform1f("lambda", this.options.lambda);
+			this.waveTexMergerShader.setUniform1f("length_scale", this.options.lengthScale);
 			glBindImageTexture(0, this.Dx_Dz.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
 			glBindImageTexture(1, this.Dy_Dxz.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
 			glBindImageTexture(2, this.Dyx_Dyz.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
@@ -336,8 +381,10 @@ public class HWFWindow extends Window {
 			glDispatchCompute(WATER_RESOLUTION, WATER_RESOLUTION, 1);
 			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
-			//generate mipmaps for normal texture
+			//generate mipmaps
 			this.normalTexture.bind();
+			glGenerateMipmap(GL_TEXTURE_2D);
+			this.dispTexture.bind();
 			glGenerateMipmap(GL_TEXTURE_2D);
 		}
 
@@ -348,7 +395,6 @@ public class HWFWindow extends Window {
 	private void apply2DFFT(Texture t, int resolution, boolean invert) {
 		this.fftShader.setUniform1i("invert", invert ? 1 : 0);
 		glBindImageTexture(0, t.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
-		glDispatchCompute(1, 1, 1);
 
 		this.fftShader.setUniform1i("workRow", 1);
 		glDispatchCompute(resolution, 1, 1);

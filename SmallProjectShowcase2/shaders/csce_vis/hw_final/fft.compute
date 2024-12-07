@@ -48,7 +48,8 @@ void fft(const int n, inout vec2 arr[256]) {
 
     for (int m = 0; m < n; ++m) {
         vec2 u = arr[m];
-        vec2 toMult = vec2(cos(-2 * M_PI * m / 2), sin(-2 * M_PI * m / 2));
+        vec2 toMult = vec2(cos(-2 * M_PI * (m - n / 2) / 2), sin(-2 * M_PI * (m - n / 2) / 2));
+        //vec2 toMult = vec2(cos(-2 * M_PI * m / 2), sin(-2 * M_PI * m / 2));
         arr[m] = mult(toMult, u);
     }
 

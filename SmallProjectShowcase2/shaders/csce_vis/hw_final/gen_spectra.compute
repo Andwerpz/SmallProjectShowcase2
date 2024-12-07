@@ -11,7 +11,6 @@ const float g = 9.81;
 const float pi = 3.14159265;
 const float sigma = 0.074;	//surface tension coeff
 const float rho = 1000.0;	//density of water
-const float length_scale = 16;
 
 uniform vec2 wind_dir;
 uniform float h;	//height of water in meters
@@ -19,6 +18,11 @@ uniform float U;	//avg wind speed (m/s)
 uniform float F;	//fetch, length of area over which wind is acting on water
 uniform float omega_p;	//peak energy frequency
 uniform float multiplier;	//for debugging
+
+//per cascade
+uniform float length_scale;
+uniform float omega_min_cutoff;
+uniform float omega_max_cutoff;
 
 float jonswap(float omega) {
 	float gamma = 3.3;	
@@ -51,6 +55,10 @@ float cos2_spread(vec2 k) {
 	return 2.0 / pi * c * c;
 }
 
+float flat_spread(vec2 k) {
+	return 1.0 / (2.0 * pi);
+}
+
 void main() {
 	ivec2 tex_coord = ivec2(int(gl_GlobalInvocationID.x), int(gl_GlobalInvocationID.y));
 	
@@ -59,9 +67,9 @@ void main() {
 	k -= spectra_sz / 2.0;
 	k *= delta_k;
 	float wavenumber = length(k);
-	if(wavenumber != 0) {
-		float theta = atan(k.y, k.x);
-		float omega = dispersion(wavenumber);
+	float omega = dispersion(wavenumber);
+	float theta = atan(k.y, k.x);
+	if(omega_min_cutoff < omega && omega < omega_max_cutoff) {
 		float domega_dk = dispersion_derivative(wavenumber);
 		
 		float energy = jonswap(omega);
@@ -69,10 +77,11 @@ void main() {
 		
 		float s = sqrt(2.0 * energy * spread * domega_dk / wavenumber * delta_k * delta_k);
 		s *= multiplier;
+		s /= length_scale;
 		vec4 ret = vec4(0, 0, 0, 1);
 		ret.x = s * imageLoad(noiseTexture, tex_coord).x;
 		ret.y = s * imageLoad(noiseTexture, tex_coord).y;
-		if(!(tex_coord.x == 67 && tex_coord.y == 64)) {
+		if(!(tex_coord.x == 67 && tex_coord.y == 66)) {
 			//ret *= 0;
 		}
 		imageStore(spectraTexture, tex_coord, ret);

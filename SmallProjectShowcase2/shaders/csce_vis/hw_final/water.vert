@@ -24,9 +24,10 @@ out float frag_material_shininess;
 
 out vec3 frag_colorID;
 
+const float length_scale = 128;
+
 void main() {	
-	float scale = 64;
-	vec3 disp = texture(dispTexture, pos.xz / scale).xyz * scale;
+	vec3 disp = texture(dispTexture, pos.xz / length_scale).xyz * length_scale;
 	disp.y *= -1;
 	vec3 adj_pos = pos + disp;
 	frag_pos = vec3(md_matrix * vec4(adj_pos, 1.0));
