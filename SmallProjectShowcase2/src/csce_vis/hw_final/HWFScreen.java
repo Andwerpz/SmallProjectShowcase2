@@ -16,6 +16,7 @@ import lwjglengine.graphics.Shader;
 import lwjglengine.graphics.Texture;
 import lwjglengine.model.Model;
 import lwjglengine.model.ModelInstance;
+import lwjglengine.model.ModelTransform;
 import lwjglengine.model.VertexArray;
 import lwjglengine.player.Camera;
 import lwjglengine.scene.Light;
@@ -69,8 +70,10 @@ public class HWFScreen extends Screen {
 
 	private Shader waterGeometryShader;
 	private Model waterModel;
-	public Texture dispTexture, normalTexture;
+	private ModelInstance waterInst;
+	public WaveCascade cascadeLong, cascadeMed, cascadeShort;
 
+	public HWFWindow.Options options;
 	private Vec3 sunDir = new Vec3(1);
 
 	public HWFScreen() {
@@ -87,17 +90,16 @@ public class HWFScreen extends Screen {
 		this.waterGeometryShader.setUniform1i("tex_shininess", 2);
 		this.waterGeometryShader.setUniform1i("tex_normal", 3);
 		this.waterGeometryShader.setUniform1i("tex_displacement", 4);
-		this.waterGeometryShader.setUniform1i("dispTexture", 5);
-		this.waterGeometryShader.setUniform1i("normalTexture", 6);
-		this.waterGeometryShader.setUniform1i("skyboxCubemap", 7);
+		this.waterGeometryShader.setUniform1i("skyboxCubemap", 5);
+		this.waterGeometryShader.setUniform1i("dispTextureLong", 6);
+		this.waterGeometryShader.setUniform1i("derivativeTextureLong", 7);
+		this.waterGeometryShader.setUniform1i("dispTextureMed", 8);
+		this.waterGeometryShader.setUniform1i("derivativeTextureMed", 9);
+		this.waterGeometryShader.setUniform1i("dispTextureShort", 10);
+		this.waterGeometryShader.setUniform1i("derivativeTextureShort", 11);
 
 		this.waterModel = this.createWaterMesh();
-		ModelInstance water_inst = new ModelInstance(this.waterModel, WATER_SCENE);
-
-		Material waterMaterial = new Material(new Vec3(6, 66, 115).mul(1.0f / 255.0f));
-		waterMaterial.setSpecular(new Vec3(0.7f));
-		waterMaterial.setSpecularExponent(256);
-		water_inst.setMaterial(waterMaterial);
+		this.waterInst = new ModelInstance(this.waterModel, WATER_SCENE);
 
 		//		this.skyboxShader = ShaderUtils.createShader("/csce_vis/hw_final/gen_skybox.vert", "/csce_vis/hw_final/gen_skybox.frag");
 		//		this.skyboxShader.setUniform1i("spaceSkybox", 0);
@@ -226,6 +228,10 @@ public class HWFScreen extends Screen {
 		// -- WATER -- 
 		geometryBuffer.bind();
 
+		//set water position to be centered under the player
+		Mat4 transform = Mat4.translate(new Vec3(this.camera.getPos().x, 0, this.camera.getPos().z));
+		this.waterInst.setModelTransform(new ModelTransform(transform));
+
 		glEnable(GL_DEPTH_TEST);
 		glDepthFunc(GL_LESS);
 		glEnable(GL_CULL_FACE);
@@ -239,10 +245,26 @@ public class HWFScreen extends Screen {
 		this.waterGeometryShader.enable();
 		this.waterGeometryShader.setUniform3f("sun_dir", this.sunDir.normalize());
 		this.waterGeometryShader.setUniform3f("view_pos", this.camera.getPos());
+		this.waterGeometryShader.setUniform1f("length_scale_long", this.cascadeLong.lengthScale);
+		this.waterGeometryShader.setUniform1f("length_scale_med", this.cascadeMed.lengthScale);
+		this.waterGeometryShader.setUniform1f("length_scale_short", this.cascadeShort.lengthScale);
 
-		this.dispTexture.bind(GL_TEXTURE5);
-		this.normalTexture.bind(GL_TEXTURE6);
-		this.skyboxCubemap.bind(GL_TEXTURE7);
+		this.waterGeometryShader.setUniform1f("cascadeScale0", this.options.getCascadeScale0());
+		this.waterGeometryShader.setUniform1f("cascadeScale1", this.options.getCascadeScale1());
+		this.waterGeometryShader.setUniform1f("cascadeScale2", this.options.getCascadeScale2());
+
+		this.waterGeometryShader.setUniform1i("render_normals", this.options.getRenderNormals() ? 1 : 0);
+		this.waterGeometryShader.setUniform1i("render_reflection", this.options.getRenderReflection() ? 1 : 0);
+		this.waterGeometryShader.setUniform1f("sun_irradiance_mult", this.options.getSunIrradianceMult());
+		this.waterGeometryShader.setUniform1f("environment_light_strength", this.options.getEnvironmentLightStrength());
+
+		this.skyboxCubemap.bind(GL_TEXTURE5);
+		this.cascadeLong.dispTexture.bind(GL_TEXTURE6);
+		this.cascadeLong.derivativeTexture.bind(GL_TEXTURE7);
+		this.cascadeMed.dispTexture.bind(GL_TEXTURE8);
+		this.cascadeMed.derivativeTexture.bind(GL_TEXTURE9);
+		this.cascadeShort.dispTexture.bind(GL_TEXTURE10);
+		this.cascadeShort.derivativeTexture.bind(GL_TEXTURE11);
 		this.setCameraFOV(this.worldFOV);
 		this.setShaderCameraUniforms(this.waterGeometryShader, this.camera);
 		Model.renderModels(WATER_SCENE);
@@ -507,8 +529,8 @@ public class HWFScreen extends Screen {
 	//with built in LODs 
 	private Model createWaterMesh() {
 		float interval = 0.025f;
-		int lod_cnt = 0;
-		int lod_sz = 512;
+		int lod_cnt = 10;
+		int lod_sz = 128;
 
 		int[][] igrid = new int[lod_sz * 2 + 1][lod_sz * 2 + 1];
 		int iptr = 0;

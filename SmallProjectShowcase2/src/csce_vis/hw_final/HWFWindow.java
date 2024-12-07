@@ -64,28 +64,15 @@ public class HWFWindow extends Window {
 	// - 3
 	//   - length_scale = 8
 
-	private static final int WATER_RESOLUTION = 256;
-
 	private final int WORLD_SCENE = Scene.generateScene();
 
 	private HWFScreen worldScreen;
 
 	private PlayerInputController pic;
 
-	private Texture gaussianNoiseTexture;
-
-	private Shader generateSpectraShader;
-	private Texture baseSpectraTexture;
-	private Texture waveInfoTexture;
-
-	private Shader evolveSpectraShader;
-	private Texture Dx_Dz, Dy_Dxz, Dyx_Dyz, Dxx_Dzz;
-
-	private Shader fftShader, waveTexMergerShader;
-	private Texture dispTexture, normalTexture;
+	private WaveCascade cascadeLong, cascadeMed, cascadeShort;
 
 	private Options options = new Options();
-
 	private float time = 0;
 
 	public class Options {
@@ -96,10 +83,16 @@ public class HWFWindow extends Window {
 		private float spectraMultiplier = 1f; //hack for debugging
 		private float lambda = 1f;
 
-		//these should be per cascade
-		private float lengthScale = 32;
-		private float omegaMinCutoff = 0.5f;
-		private float omegaMaxCutoff = 2;
+		private float cascadeScale0 = 1.2f;
+		private float cascadeScale1 = 0.6f;
+		private float cascadeScale2 = 0.3f;
+
+		private boolean pauseTime = false;
+		private boolean renderNormals = false;
+		private boolean renderReflection = false;
+
+		private float sunIrradianceMult = 0.3f;
+		private float environmentLightStrength = 0.5f;
 
 		public float getWaterDepth() {
 			return waterDepth;
@@ -107,7 +100,7 @@ public class HWFWindow extends Window {
 
 		public void setWaterDepth(float waterDepth) {
 			this.waterDepth = waterDepth;
-			generateSpectra();
+			generateSpectrum();
 		}
 
 		public float getWindSpeed() {
@@ -116,7 +109,7 @@ public class HWFWindow extends Window {
 
 		public void setWindSpeed(float windSpeed) {
 			this.windSpeed = windSpeed;
-			generateSpectra();
+			generateSpectrum();
 		}
 
 		public float getFetch() {
@@ -125,7 +118,7 @@ public class HWFWindow extends Window {
 
 		public void setFetch(float fetch) {
 			this.fetch = fetch;
-			generateSpectra();
+			generateSpectrum();
 		}
 
 		public Vec2 getWindDir() {
@@ -134,7 +127,7 @@ public class HWFWindow extends Window {
 
 		public void setWindDir(Vec2 windDir) {
 			this.windDir = windDir;
-			generateSpectra();
+			generateSpectrum();
 		}
 
 		public float getSpectraMultiplier() {
@@ -143,7 +136,7 @@ public class HWFWindow extends Window {
 
 		public void setSpectraMultiplier(float spectraMultiplier) {
 			this.spectraMultiplier = spectraMultiplier;
-			generateSpectra();
+			generateSpectrum();
 		}
 
 		public float getLambda() {
@@ -154,31 +147,68 @@ public class HWFWindow extends Window {
 			this.lambda = lambda;
 		}
 
-		public float getLengthScale() {
-			return lengthScale;
+		public float getCascadeScale0() {
+			return cascadeScale0;
 		}
 
-		public void setLengthScale(float lengthScale) {
-			this.lengthScale = lengthScale;
-			generateSpectra();
+		public void setCascadeScale0(float cascadeScale0) {
+			this.cascadeScale0 = cascadeScale0;
 		}
 
-		public float getOmegaMinCutoff() {
-			return omegaMinCutoff;
+		public float getCascadeScale1() {
+			return cascadeScale1;
 		}
 
-		public void setOmegaMinCutoff(float omegaMinCutoff) {
-			this.omegaMinCutoff = omegaMinCutoff;
-			generateSpectra();
+		public void setCascadeScale1(float cascadeScale1) {
+			this.cascadeScale1 = cascadeScale1;
 		}
 
-		public float getOmegaMaxCutoff() {
-			return omegaMaxCutoff;
+		public float getCascadeScale2() {
+			return cascadeScale2;
 		}
 
-		public void setOmegaMaxCutoff(float omegaMaxCutoff) {
-			this.omegaMaxCutoff = omegaMaxCutoff;
-			generateSpectra();
+		public void setCascadeScale2(float cascadeScale2) {
+			this.cascadeScale2 = cascadeScale2;
+		}
+
+		public boolean getPauseTime() {
+			return pauseTime;
+		}
+
+		public void setPauseTime(boolean pauseTime) {
+			this.pauseTime = pauseTime;
+		}
+
+		public boolean getRenderNormals() {
+			return renderNormals;
+		}
+
+		public void setRenderNormals(boolean renderNormals) {
+			this.renderNormals = renderNormals;
+		}
+
+		public float getSunIrradianceMult() {
+			return sunIrradianceMult;
+		}
+
+		public void setSunIrradianceMult(float sunIrradianceMult) {
+			this.sunIrradianceMult = sunIrradianceMult;
+		}
+
+		public float getEnvironmentLightStrength() {
+			return environmentLightStrength;
+		}
+
+		public void setEnvironmentLightStrength(float environmentLightStrength) {
+			this.environmentLightStrength = environmentLightStrength;
+		}
+
+		public boolean getRenderReflection() {
+			return renderReflection;
+		}
+
+		public void setRenderReflection(boolean renderReflection) {
+			this.renderReflection = renderReflection;
 		}
 	}
 
@@ -224,87 +254,40 @@ public class HWFWindow extends Window {
 		//control panel for the water
 		//AdjustableWindow waterAttributesPanel = new AdjustableWindow("Water Attributes", new ObjectEditorWindow(this.worldScreen.getWaterAttributes()), this);
 
-		this.gaussianNoiseTexture = this.generateGaussianNoiseTexture();
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		float omega_0 = 0.5f;
+		float omega_1 = 4f;
+		float omega_2 = 8f;
+		float omega_3 = 20f;
 
-		this.generateSpectraShader = ShaderUtils.createShader("/csce_vis/hw_final/gen_spectra.compute", GL_COMPUTE_SHADER);
-		this.baseSpectraTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
-		this.waveInfoTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
+		this.cascadeLong = new WaveCascade(100, omega_0, omega_1, this.options);
+		this.cascadeMed = new WaveCascade(27, omega_1, omega_2, this.options);
+		this.cascadeShort = new WaveCascade(7, omega_2, omega_3, this.options);
 
-		this.evolveSpectraShader = ShaderUtils.createShader("/csce_vis/hw_final/evolve_spectra.compute", GL_COMPUTE_SHADER);
-		this.Dx_Dz = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
-		this.Dy_Dxz = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
-		this.Dyx_Dyz = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
-		this.Dxx_Dzz = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_NEAREST);
+		this.worldScreen.options = this.options;
 
-		this.fftShader = ShaderUtils.createShader("/csce_vis/hw_final/fft.compute", GL_COMPUTE_SHADER);
-		this.waveTexMergerShader = ShaderUtils.createShader("/csce_vis/hw_final/waves_tex_merger.compute", GL_COMPUTE_SHADER);
-		this.dispTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, 6, null);
-		this.normalTexture = new Texture(WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA32F, GL_RGBA, GL_FLOAT, GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR, 6, null);
+		this.worldScreen.cascadeLong = this.cascadeLong;
+		this.worldScreen.cascadeMed = this.cascadeMed;
+		this.worldScreen.cascadeShort = this.cascadeShort;
 
-		this.generateSpectra();
-
-		this.worldScreen.dispTexture = this.dispTexture;
-		this.worldScreen.normalTexture = this.normalTexture;
-
-		//		this.addChildAdjWindow(new TextureViewerWindow(this.gaussianNoiseTexture, "Gaussian Noise"));
-		this.addChildAdjWindow(new TextureViewerWindow(this.baseSpectraTexture, "Base Spectra"));
+		//		this.addChildAdjWindow(new TextureViewerWindow(this.cascadeLong.gaussianNoiseTexture, "Gaussian Noise"));
+		//		this.addChildAdjWindow(new TextureViewerWindow(this.baseSpectraTexture, "Base Spectra"));
 		//		this.addChildAdjWindow(new TextureViewerWindow(this.waveInfoTexture, "Wave Info"));
 		//
 		//		this.addChildAdjWindow(new TextureViewerWindow(this.Dx_Dz, "Dx_Dz"));
 		//		this.addChildAdjWindow(new TextureViewerWindow(this.Dyx_Dyz, "Dyx_Dyz"));
 
-		this.addChildAdjWindow(new TextureViewerWindow(this.dispTexture, "Displacement"));
-		this.addChildAdjWindow(new TextureViewerWindow(this.normalTexture, "Normals"));
+		//		this.addChildAdjWindow(new TextureViewerWindow(this.cascadeLong.dispTexture, "Displacement Long"));
+		//		this.addChildAdjWindow(new TextureViewerWindow(this.cascadeLong.derivativeTexture, "Derivatives Long"));
 
 		this.addChildAdjWindow(new ObjectEditorWindow(this.options));
 
 		this._resize();
 	}
 
-	private Texture generateGaussianNoiseTexture() {
-		float[] data = new float[WATER_RESOLUTION * WATER_RESOLUTION * 4];
-		for (int i = 0; i < data.length; i++) {
-			float u1 = (float) Math.random();
-			float u2 = (float) Math.random();
-			data[i] = (float) (Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(Math.PI * 2.0 * u2));
-		}
-
-		int textureID = glGenTextures(); //create texture handle
-		glBindTexture(GL_TEXTURE_2D, textureID); //set as active texture
-		glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, WATER_RESOLUTION, WATER_RESOLUTION); //allocate storage for texture
-		if (data != null) {
-			glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WATER_RESOLUTION, WATER_RESOLUTION, GL_RGBA, GL_FLOAT, data); //initialize 0th mipmap layer of texture
-		}
-
-		//set interpolation filters
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		//set border behaviour
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-		glBindTexture(GL_TEXTURE_2D, 0);
-
-		return new Texture(textureID);
-	}
-
-	private void generateSpectra() {
-		this.generateSpectraShader.enable();
-		this.generateSpectraShader.setUniform1i("spectra_sz", WATER_RESOLUTION);
-		this.generateSpectraShader.setUniform2f("wind_dir", this.options.windDir.normalize());
-		this.generateSpectraShader.setUniform1f("h", this.options.waterDepth);
-		this.generateSpectraShader.setUniform1f("U", this.options.windSpeed);
-		this.generateSpectraShader.setUniform1f("F", this.options.fetch);
-		this.generateSpectraShader.setUniform1f("omega_p", (float) (22.0 * Math.pow(9.81 * 9.81 / (this.options.windSpeed * this.options.fetch), 1.0 / 3.0)));
-		this.generateSpectraShader.setUniform1f("multiplier", this.options.spectraMultiplier);
-		this.generateSpectraShader.setUniform1f("length_scale", this.options.lengthScale);
-		this.generateSpectraShader.setUniform1f("omega_min_cutoff", this.options.omegaMinCutoff);
-		this.generateSpectraShader.setUniform1f("omega_max_cutoff", this.options.omegaMaxCutoff);
-		glBindImageTexture(0, this.baseSpectraTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
-		glBindImageTexture(1, this.gaussianNoiseTexture.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
-		glBindImageTexture(2, this.waveInfoTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
-		glDispatchCompute(WATER_RESOLUTION, WATER_RESOLUTION, 1);
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+	private void generateSpectrum() {
+		this.cascadeLong.generateSpectrum();
+		this.cascadeMed.generateSpectrum();
+		this.cascadeShort.generateSpectrum();
 	}
 
 	@Override
@@ -313,8 +296,9 @@ public class HWFWindow extends Window {
 
 		Scene.removeScene(WORLD_SCENE);
 
-		this.generateSpectraShader.kill();
-		this.evolveSpectraShader.kill();
+		this.cascadeLong.kill();
+		this.cascadeMed.kill();
+		this.cascadeShort.kill();
 	}
 
 	@Override
@@ -329,7 +313,9 @@ public class HWFWindow extends Window {
 
 	@Override
 	protected void _update() {
-		this.time += Main.getDeltaSeconds();
+		if (!this.options.pauseTime) {
+			this.time += Main.getDeltaSeconds();
+		}
 
 		this.pic.update();
 
@@ -340,68 +326,14 @@ public class HWFWindow extends Window {
 
 	@Override
 	protected void renderContent(Framebuffer outputBuffer) {
-		// -- generate evolved spectra --
-		{
-			this.evolveSpectraShader.enable();
-			this.evolveSpectraShader.setUniform1i("spectra_sz", WATER_RESOLUTION);
-			this.evolveSpectraShader.setUniform1f("t", this.time);
-			glBindImageTexture(0, this.baseSpectraTexture.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
-			glBindImageTexture(1, this.waveInfoTexture.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
-
-			glBindImageTexture(2, this.Dx_Dz.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
-			glBindImageTexture(3, this.Dy_Dxz.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
-			glBindImageTexture(4, this.Dyx_Dyz.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
-			glBindImageTexture(5, this.Dxx_Dzz.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
-			glDispatchCompute(WATER_RESOLUTION, WATER_RESOLUTION, 1);
-			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-		}
-
-		// -- apply fft --
-		if (true) {
-			Texture[] to_fft = new Texture[] { this.Dx_Dz, this.Dy_Dxz, this.Dyx_Dyz, this.Dxx_Dzz };
-			//			Texture[] to_fft = new Texture[] { this.Dx_Dz };
-			this.fftShader.enable();
-			for (Texture t : to_fft) {
-				this.apply2DFFT(t, WATER_RESOLUTION, true);
-			}
-		}
-
-		// -- compute displacement and normals --
-		if (true) {
-			this.waveTexMergerShader.enable();
-			this.waveTexMergerShader.setUniform1f("lambda", this.options.lambda);
-			this.waveTexMergerShader.setUniform1f("length_scale", this.options.lengthScale);
-			glBindImageTexture(0, this.Dx_Dz.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
-			glBindImageTexture(1, this.Dy_Dxz.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
-			glBindImageTexture(2, this.Dyx_Dyz.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
-			glBindImageTexture(3, this.Dxx_Dzz.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
-
-			glBindImageTexture(4, this.dispTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
-			glBindImageTexture(5, this.normalTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
-			glDispatchCompute(WATER_RESOLUTION, WATER_RESOLUTION, 1);
-			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
-			//generate mipmaps
-			this.normalTexture.bind();
-			glGenerateMipmap(GL_TEXTURE_2D);
-			this.dispTexture.bind();
-			glGenerateMipmap(GL_TEXTURE_2D);
+		if (!this.options.pauseTime) {
+			this.cascadeLong.update(this.time);
+			this.cascadeMed.update(this.time);
+			this.cascadeShort.update(this.time);
 		}
 
 		this.worldScreen.setWorldScene(WORLD_SCENE);
 		this.worldScreen.render(outputBuffer);
-	}
-
-	private void apply2DFFT(Texture t, int resolution, boolean invert) {
-		this.fftShader.setUniform1i("invert", invert ? 1 : 0);
-		glBindImageTexture(0, t.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
-
-		this.fftShader.setUniform1i("workRow", 1);
-		glDispatchCompute(resolution, 1, 1);
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-		this.fftShader.setUniform1i("workRow", 0);
-		glDispatchCompute(resolution, 1, 1);
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 	}
 
 	@Override

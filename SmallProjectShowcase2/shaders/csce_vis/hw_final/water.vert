@@ -13,9 +13,6 @@ layout (location = 12) in vec4 material_shininess;
 uniform mat4 pr_matrix;	//projection
 uniform mat4 vw_matrix;	//view
 
-uniform sampler2D dispTexture;
-uniform sampler2D normalTexture;
-
 out vec3 frag_pos;
 
 out vec4 frag_material_diffuse;
@@ -24,14 +21,44 @@ out float frag_material_shininess;
 
 out vec3 frag_colorID;
 
-const float length_scale = 128;
+uniform sampler2D dispTextureLong;
+uniform sampler2D dispTextureMed;
+uniform sampler2D dispTextureShort;
+
+uniform float length_scale_long;
+uniform float length_scale_med;
+uniform float length_scale_short;
+
+uniform float cascadeScale0;
+uniform float cascadeScale1;
+uniform float cascadeScale2;
+
+vec3 sampleDisplacement(vec3 pt) {
+	vec3 disp0 = texture(dispTextureLong, pt.xz / length_scale_long).xyz * length_scale_long;
+	vec3 disp1 = texture(dispTextureMed, pt.xz / length_scale_med).xyz * length_scale_med;
+	vec3 disp2 = texture(dispTextureShort, pt.xz / length_scale_short).xyz * length_scale_short;
+	disp0 *= cascadeScale0;
+	disp1 *= cascadeScale1;
+	disp2 *= cascadeScale2;
+	vec3 disp = disp0 + disp1 + disp2;
+	disp.y *= -1;
+	return disp;
+}
 
 void main() {	
-	vec3 disp = texture(dispTexture, pos.xz / length_scale).xyz * length_scale;
-	disp.y *= -1;
+	vec3 world_pos = vec3(md_matrix * vec4(pos, 1.0));
+	vec3 disp = sampleDisplacement(world_pos);
+	vec3 adj_pos = world_pos + disp;
+	
+	frag_pos = adj_pos;
+	gl_Position = pr_matrix * vw_matrix * vec4(adj_pos, 1.0);
+
+	/*
+	vec3 disp = sampleDisplacement();
 	vec3 adj_pos = pos + disp;
 	frag_pos = vec3(md_matrix * vec4(adj_pos, 1.0));
 	gl_Position = pr_matrix * vw_matrix * md_matrix * vec4(adj_pos, 1.0);
+	*/
 	
     frag_colorID = colorID;
     frag_material_diffuse = material_diffuse;

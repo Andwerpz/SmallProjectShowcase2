@@ -19,14 +19,26 @@ uniform sampler2D tex_normal;
 uniform sampler2D tex_displacement;
 uniform bool enableParallaxMapping;
 
-uniform sampler2D dispTexture;
-uniform sampler2D normalTexture;
-
 uniform vec3 sun_dir;
 uniform vec3 view_pos;
 uniform samplerCube skyboxCubemap;
 
 const float PI = 3.14159265359;
+
+uniform sampler2D derivativeTextureLong;
+uniform sampler2D derivativeTextureMed;
+uniform sampler2D derivativeTextureShort;
+
+uniform float length_scale_long;
+uniform float length_scale_med;
+uniform float length_scale_short;
+
+uniform float cascadeScale0;
+uniform float cascadeScale1;
+uniform float cascadeScale2;
+
+uniform bool render_normals;
+uniform bool render_reflection;
 
 vec4 scaleWithMaterial(vec4 color, vec4 material) {
 	vec4 ans = vec4(0);
@@ -140,14 +152,26 @@ vec3 aces_tonemap(vec3 color) {
   return pow(clamp(m2 * (a / b), 0.0, 1.0), vec3(1.0 / 2.2));  
 }
 
-const float water_ior = 1.333;
-const vec3 water_base_color = vec3(6, 66, 115) * (1.0 / 255.0);
-const vec3 water_tip_color = vec3(0, 187, 204) * (1.0 / 255.0);
-const float length_scale = 128;	//should be per cascade
+vec3 sampleNormal() {
+	vec4 derivative_long = texture(derivativeTextureLong, frag_pos.xz / length_scale_long).xyzw;
+	vec4 derivative_med = texture(derivativeTextureMed, frag_pos.xz / length_scale_med).xyzw;
+	vec4 derivative_short = texture(derivativeTextureShort, frag_pos.xz / length_scale_short).xyzw;
+	vec2 slope_long = vec2(derivative_long.x / (1.0 + derivative_long.z), derivative_long.y / (1.0 + derivative_long.w));
+	vec2 slope_med = vec2(derivative_med.x / (1.0 + derivative_med.z), derivative_med.y / (1.0 + derivative_med.w));
+	vec2 slope_short = vec2(derivative_short.x / (1.0 + derivative_short.z), derivative_short.y / (1.0 + derivative_short.w));
+	slope_long *= cascadeScale0 * length_scale_long;
+	slope_med *= cascadeScale1 * length_scale_med;
+	slope_short *= cascadeScale2 * length_scale_short;
+	vec2 slope = slope_long + slope_med + slope_short;
+	return normalize(vec3(-slope.x, 1.0, -slope.y));
+}
+
+uniform float sun_irradiance_mult;
+uniform float environment_light_strength;
+
 const float roughness = 0.075;
-const vec3 sun_irradiance = vec3(1.0, 0.694, 0.32);
-const float environment_light_strength = 0.5;
-const vec3 _scatter_color = vec3(0.016000003, 0.07359998, 0.16);
+const vec3 sun_irradiance_base = vec3(1.0, 0.7, 0.4);
+const vec3 _scatter_color = vec3(0.016, 0.0736, 0.16);
 const vec3 _bubble_color = vec3(0, 0.02, 0.015999999);
 const float _bubble_density = 10;
 const float wave_peak_scatter_strength = 10;
@@ -156,7 +180,9 @@ const float scatter_shadow_strength = 5;
 const float height_modifier = 20;
 
 void main() {
-	vec3 normal = texture(normalTexture, frag_pos.xz / length_scale).xyz;
+	vec3 sun_irradiance = sun_irradiance_base * sun_irradiance_mult;
+
+	vec3 normal = sampleNormal();
 	vec3 macro_normal = vec3(0, 1, 0);
 	vec3 light_dir = sun_dir;
 	vec3 view_dir = normalize(view_pos - frag_pos);
@@ -198,10 +224,13 @@ void main() {
 	vec3 scatter = (k1 + k2) * scatter_color * sun_irradiance / (1.0 + light_mask);
 	scatter += k3 * scatter_color * sun_irradiance + k4 * bubble_color * sun_irradiance;
 	
-	vec3 output = (1.0 - F) * scatter + specular + F * env_reflection;
-	output = max(vec3(0.0), output);
+	//vec3 output = (1.0 - F) * scatter + specular + F * env_reflection;
+	vec3 output = scatter + specular + F * env_reflection;
+	output = aces_tonemap(output);
 
     gColor.rgba = vec4(output, 1.0);
+    if(render_normals) gColor.rgba = vec4(normal, 1.0);
+    if(render_reflection) gColor.rgba = vec4(env_reflection, 1.0);
     gPosition.rgb = frag_pos;
     gPosition.a = gl_FragCoord.z;
     gSpecular.rgb = scaleWithMaterial(texture(tex_specular, vec2(0.5)).rgba, frag_material_specular.rgba).rgb;
