@@ -317,9 +317,8 @@ public class HWFWindow extends Window {
 			Texture[] to_fft = new Texture[] { this.Dx_Dz, this.Dy_Dxz, this.Dyx_Dyz, this.Dxx_Dzz };
 			//			Texture[] to_fft = new Texture[] { this.Dx_Dz };
 			this.fftShader.enable();
-			this.fftShader.setUniform1i("invert", 1);
 			for (Texture t : to_fft) {
-				this.apply2DFFT(t, WATER_RESOLUTION);
+				this.apply2DFFT(t, WATER_RESOLUTION, true);
 			}
 		}
 
@@ -346,7 +345,8 @@ public class HWFWindow extends Window {
 		this.worldScreen.render(outputBuffer);
 	}
 
-	private void apply2DFFT(Texture t, int resolution) {
+	private void apply2DFFT(Texture t, int resolution, boolean invert) {
+		this.fftShader.setUniform1i("invert", invert ? 1 : 0);
 		glBindImageTexture(0, t.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
 		glDispatchCompute(1, 1, 1);
 
