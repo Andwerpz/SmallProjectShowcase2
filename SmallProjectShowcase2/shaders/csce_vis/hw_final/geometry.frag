@@ -53,6 +53,11 @@ void main() {
     
     //simple cosine law lighting
 	float diffuse = dot(normal, sun_dir) / 2.0 + 0.5;
+	if(sun_dir.y < 0){
+		float night_blend = exp(sun_dir.y * 10.0);
+		float night_diffuse = 0.1 * (dot(normal, vec3(0, 1, 0)) / 2.0 + 0.5);
+		diffuse = diffuse * night_blend + (1.0 - night_blend) * night_diffuse;
+	}
 	vec4 color = fragColor * diffuse;
 	
 	//blending with water surface

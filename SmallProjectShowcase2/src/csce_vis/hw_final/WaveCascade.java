@@ -137,7 +137,6 @@ public class WaveCascade {
 		// -- apply fft --
 		if (true) {
 			Texture[] to_fft = new Texture[] { this.Dx_Dz, this.Dy_Dxz, this.Dyx_Dyz, this.Dxx_Dzz };
-			//			Texture[] to_fft = new Texture[] { this.Dx_Dz };
 			this.fftShader.enable();
 			for (Texture t : to_fft) {
 				this.apply2DFFT(t, WATER_RESOLUTION, true);

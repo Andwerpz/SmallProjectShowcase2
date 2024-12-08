@@ -33,7 +33,7 @@ import myutils.math.Vec3;
 public class HWFScreen extends Screen {
 
 	private static final float NEAR = 0.1f;
-	private static final float FAR = 4000.0f;
+	private static final float FAR = 40000.0f;
 
 	private static final int SKYBOX_RES = 1024;
 
@@ -360,7 +360,7 @@ public class HWFScreen extends Screen {
 	//with built in LODs 
 	private Model createWaterMesh() {
 		float interval = 0.025f;
-		int lod_cnt = 10;
+		int lod_cnt = 12;
 		int lod_sz = 128;
 
 		int[][] igrid = new int[lod_sz * 2 + 1][lod_sz * 2 + 1];

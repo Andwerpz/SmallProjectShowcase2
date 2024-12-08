@@ -29,6 +29,7 @@ import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
 import lwjglengine.graphics.Shader;
+import lwjglengine.graphics.ShaderStorageBuffer;
 import lwjglengine.graphics.Texture;
 import lwjglengine.impulse3d.Body;
 import lwjglengine.impulse3d.ImpulseScene;
@@ -71,7 +72,14 @@ public class HWFWindow extends Window {
 	private float time = 0;
 
 	private ImpulseScene impulse;
-	private HashMap<Body, BuoyancyBody> buoyancyBodies;
+	private ArrayList<BuoyancyBody> buoyancyBodies;
+
+	private static final int MAX_BUOYANCY_BODIES = 100;
+
+	//when querying, should have vec3s with stride of 4 floats. 
+	//result will be of form height, {nx, ny, nz}
+	private ShaderStorageBuffer heightQuerySSBO;
+	private Shader queryHeightShader;
 
 	public HWFWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
@@ -118,12 +126,12 @@ public class HWFWindow extends Window {
 
 		float omega_0 = 0.5f;
 		float omega_1 = 4f;
-		float omega_2 = 10f;
-		float omega_3 = 20f;
+		float omega_2 = 12f;
+		float omega_3 = 25f;
 
 		this.cascadeLong = new WaveCascade(247, omega_0, omega_1, this.options);
-		this.cascadeMed = new WaveCascade(57, omega_1, omega_2, this.options);
-		this.cascadeShort = new WaveCascade(13, omega_2, omega_3, this.options);
+		this.cascadeMed = new WaveCascade(37, omega_1, omega_2, this.options);
+		this.cascadeShort = new WaveCascade(5, omega_2, omega_3, this.options);
 
 		this.worldScreen.options = this.options;
 		this.worldScreen.generateSkybox();
@@ -145,7 +153,19 @@ public class HWFWindow extends Window {
 		this.addChildAdjWindow(new ObjectEditorWindow(this.options));
 
 		this.impulse = new ImpulseScene(WORLD_SCENE);
-		this.buoyancyBodies = new HashMap<>();
+		this.buoyancyBodies = new ArrayList<>();
+
+		this.heightQuerySSBO = new ShaderStorageBuffer();
+		this.heightQuerySSBO.setUsage(GL_DYNAMIC_DRAW);
+		this.heightQuerySSBO.setSize(MAX_BUOYANCY_BODIES * VOXEL_AMT * VOXEL_AMT * VOXEL_AMT * 4 * 4);
+
+		this.queryHeightShader = ShaderUtils.createShader("/csce_vis/hw_final/query_height.compute", GL_COMPUTE_SHADER);
+		this.queryHeightShader.setUniform1i("dispTextureLong", 0);
+		this.queryHeightShader.setUniform1i("derivativeTextureLong", 1);
+		this.queryHeightShader.setUniform1i("dispTextureMed", 2);
+		this.queryHeightShader.setUniform1i("derivativeTextureMed", 3);
+		this.queryHeightShader.setUniform1i("dispTextureShort", 4);
+		this.queryHeightShader.setUniform1i("derivativeTextureShort", 5);
 
 		this._resize();
 	}
@@ -158,6 +178,10 @@ public class HWFWindow extends Window {
 
 	private void resetImpulseScene() {
 		this.impulse.clearScene();
+	}
+
+	private void addBuoyancyBody(Body b) {
+		this.buoyancyBodies.add(new BuoyancyBody(b));
 	}
 
 	@Override
@@ -181,23 +205,69 @@ public class HWFWindow extends Window {
 		return "FFT Waves & Buoyancy";
 	}
 
+	private void queryWaterHeight() {
+		//write query positions into buffer
+		{
+			int ptr = 0;
+			float[] buf = new float[MAX_BUOYANCY_BODIES * VOXEL_AMT * VOXEL_AMT * VOXEL_AMT * 4];
+			for (int i = 0; i < this.buoyancyBodies.size(); i++) {
+				BuoyancyBody b = this.buoyancyBodies.get(i);
+				b.writeQueryToBuffer(buf, ptr);
+				ptr += VOXEL_AMT * VOXEL_AMT * VOXEL_AMT * 4;
+			}
+			this.heightQuerySSBO.setSubData(buf, 0);
+		}
+
+		//run query
+		{
+			this.queryHeightShader.enable();
+			this.queryHeightShader.setUniform1f("length_scale_long", this.cascadeLong.lengthScale);
+			this.queryHeightShader.setUniform1f("length_scale_med", this.cascadeMed.lengthScale);
+			this.queryHeightShader.setUniform1f("length_scale_short", this.cascadeShort.lengthScale);
+
+			this.queryHeightShader.setUniform1f("cascadeScale0", this.options.getCascadeScale0());
+			this.queryHeightShader.setUniform1f("cascadeScale1", this.options.getCascadeScale1());
+			this.queryHeightShader.setUniform1f("cascadeScale2", this.options.getCascadeScale2());
+
+			this.cascadeLong.dispTexture.bind(GL_TEXTURE0);
+			this.cascadeLong.derivativeTexture.bind(GL_TEXTURE1);
+			this.cascadeMed.dispTexture.bind(GL_TEXTURE2);
+			this.cascadeMed.derivativeTexture.bind(GL_TEXTURE3);
+			this.cascadeShort.dispTexture.bind(GL_TEXTURE4);
+			this.cascadeShort.derivativeTexture.bind(GL_TEXTURE5);
+
+			this.heightQuerySSBO.bindToBase(0);
+			glDispatchCompute(MAX_BUOYANCY_BODIES * VOXEL_AMT * VOXEL_AMT * VOXEL_AMT, 1, 1);
+		}
+
+		//read result back out
+		{
+			int ptr = 0;
+			float[] buf = new float[MAX_BUOYANCY_BODIES * VOXEL_AMT * VOXEL_AMT * VOXEL_AMT * 4];
+			this.heightQuerySSBO.getSubData(buf, 0);
+			for (int i = 0; i < this.buoyancyBodies.size(); i++) {
+				BuoyancyBody b = this.buoyancyBodies.get(i);
+				b.readResultFromBuffer(buf, ptr);
+				ptr += VOXEL_AMT * VOXEL_AMT * VOXEL_AMT * 4;
+			}
+		}
+	}
+
 	@Override
 	protected void _update() {
 		if (!this.options.pauseTime) {
+			float dt = Main.getDeltaSeconds();
 			this.time += Main.getDeltaSeconds();
+
+			//query relevant information
+			this.queryWaterHeight();
 
 			int itercnt = 4;
 			for (int i = 0; i < itercnt; i++) {
-				float dt = 1.0f / (60.0f * itercnt);
-
-				for (Body b : this.impulse.getBodies()) {
-					if (this.buoyancyBodies.get(b) == null) {
-						this.buoyancyBodies.put(b, new BuoyancyBody(b));
-					}
-					this.buoyancyBodies.get(b).applyBuoyancy(dt);
+				for (BuoyancyBody b : this.buoyancyBodies) {
+					b.applyBuoyancy(dt / itercnt);
 				}
-
-				this.impulse.update(dt);
+				this.impulse.update(dt / itercnt);
 			}
 		}
 		this.impulse.updateDisplayBodies();
@@ -264,6 +334,7 @@ public class HWFWindow extends Window {
 		case GLFW.GLFW_KEY_Q: {
 			Body b = this.impulse.addAABB(new Vec3(0, 20, 0), MathUtils.random(new Vec3(3), new Vec3(10)));
 			b.angvel = MathUtils.randomUnitDir3D();
+			this.addBuoyancyBody(b);
 			break;
 		}
 
@@ -271,6 +342,7 @@ public class HWFWindow extends Window {
 			Body b = this.impulse.addAABB(this.pic.getPos().add(this.pic.getFacing().mul(5)), new Vec3(3));
 			b.angvel = MathUtils.randomUnitDir3D().mul(10);
 			b.vel = this.pic.getFacing().mul(50);
+			this.addBuoyancyBody(b);
 			break;
 		}
 
@@ -278,17 +350,20 @@ public class HWFWindow extends Window {
 			Body b = this.impulse.addCapsule(this.pic.getPos().add(this.pic.getFacing().mul(5)), 3, 6);
 			b.angvel = MathUtils.randomUnitDir3D().mul(10);
 			b.vel = this.pic.getFacing().mul(50);
+			this.addBuoyancyBody(b);
 			break;
 		}
 
 		case GLFW.GLFW_KEY_Z: {
 			Body b = this.impulse.addSphere(this.pic.getPos().add(this.pic.getFacing().mul(5)), 3);
 			b.vel = this.pic.getFacing().mul(50);
+			this.addBuoyancyBody(b);
 			break;
 		}
 
 		case GLFW.GLFW_KEY_P: {
 			Body b = this.impulse.addAABB(new Vec3(0, 10, 0), new Vec3(30, 5, 30));
+			this.addBuoyancyBody(b);
 			break;
 		}
 		}
@@ -298,17 +373,14 @@ public class HWFWindow extends Window {
 	protected void _keyReleased(int key) {
 	}
 
-	private float queryWaterHeight(Vec3 pos) {
-		return 0;
-	}
-
 	private static final int VOXEL_AMT = 5;
-	private float waterDensity = 1.5f;
+	private float waterDensity = 2f;
 	private float dragCoeff = 0.5f;
 
 	class BuoyancyBody {
 		public Body b;
 		public Vec3 bmin, bmax; //bounding box dimensions
+		public float[][][] queryHeights;
 
 		public BuoyancyBody(Body _b) {
 			this.b = _b;
@@ -318,6 +390,7 @@ public class HWFWindow extends Window {
 			lwjglengine.impulse3d.bvh.KDOP bb = s.calcBoundingBox(Quaternion.identity(), new Vec3(0));
 			this.bmin = new Vec3(bb.bmin[0], bb.bmin[1], bb.bmin[2]);
 			this.bmax = new Vec3(bb.bmax[0], bb.bmax[1], bb.bmax[2]);
+			this.queryHeights = new float[VOXEL_AMT][VOXEL_AMT][VOXEL_AMT];
 		}
 
 		//TODO 
@@ -344,7 +417,7 @@ public class HWFWindow extends Window {
 						vcenter.addi(this.b.pos);
 
 						//compute buoyancy force
-						float water_height = queryWaterHeight(vcenter) - vcenter.y;
+						float water_height = queryHeights[x][y][z] - vcenter.y;
 						float disp_vol = MathUtils.clamp(0, vdim.y, vdim.y / 2.0f + water_height) * vdim.x * vdim.z;
 						float disp_mass = disp_vol * waterDensity;
 
@@ -356,6 +429,42 @@ public class HWFWindow extends Window {
 						Vec3 body_pt_vel = this.b.calcBodyPtVel(vcenter);
 						Vec3 drag = body_pt_vel.mul(-dragCoeff * disp_vol);
 						this.b.applyImpulse(vcenter, drag.mul(dt));
+					}
+				}
+			}
+		}
+
+		public void writeQueryToBuffer(float[] buf, int ptr) {
+			Vec3 vdim = bmax.sub(bmin).div(VOXEL_AMT);
+			for (int x = 0; x < VOXEL_AMT; x++) {
+				for (int y = 0; y < VOXEL_AMT; y++) {
+					for (int z = 0; z < VOXEL_AMT; z++) {
+						Vec3 vcenter = bmin.add(vdim.div(2.0f));
+						vcenter.x += vdim.x * x;
+						vcenter.y += vdim.y * y;
+						vcenter.z += vdim.z * z;
+
+						//transform vcenter to world space
+						vcenter = MathUtils.quaternionRotateVec3(this.b.orient, vcenter);
+						vcenter.addi(this.b.pos);
+
+						buf[ptr++] = vcenter.x;
+						buf[ptr++] = vcenter.y;
+						buf[ptr++] = vcenter.z;
+						buf[ptr++] = 0;
+					}
+				}
+			}
+		}
+
+		public void readResultFromBuffer(float[] buf, int ptr) {
+			for (int x = 0; x < VOXEL_AMT; x++) {
+				for (int y = 0; y < VOXEL_AMT; y++) {
+					for (int z = 0; z < VOXEL_AMT; z++) {
+						this.queryHeights[x][y][z] = buf[ptr++];
+						ptr++;
+						ptr++;
+						ptr++;
 					}
 				}
 			}

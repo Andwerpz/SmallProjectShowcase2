@@ -225,6 +225,10 @@ void main() {
 	scatter += k3 * scatter_color * sun_irradiance + k4 * bubble_color * sun_irradiance;
 	
 	//vec3 outputt = (1.0 - F) * scatter + specular + F * env_reflection;
+	if(sun_dir.y < 0) {
+		specular *= exp(sun_dir.y * 100);
+		scatter *= exp(sun_dir.y * 10);
+	}
 	vec3 outputt = scatter + specular + F * env_reflection;
 	outputt = aces_tonemap(outputt);
 
