@@ -170,14 +170,14 @@ uniform float sun_irradiance_mult;
 uniform float environment_light_strength;
 
 const float roughness = 0.075;
-const vec3 sun_irradiance_base = vec3(1.0, 0.7, 0.4);
-const vec3 _scatter_color = vec3(0.016, 0.0736, 0.16);
-const vec3 _bubble_color = vec3(0, 0.02, 0.015999999);
-const float _bubble_density = 10;
-const float wave_peak_scatter_strength = 10;
-const float scatter_strength = 10;
-const float scatter_shadow_strength = 5;
-const float height_modifier = 20;
+uniform vec3 sun_irradiance_base;
+uniform vec3 _scatter_color;
+uniform vec3 _bubble_color;
+uniform float bubble_density;
+uniform float wave_peak_scatter_strength;
+uniform float scatter_strength;
+uniform float scatter_shadow_strength;
+uniform float height_modifier;
 
 void main() {
 	vec3 sun_irradiance = sun_irradiance_base * sun_irradiance_mult;
@@ -214,7 +214,6 @@ void main() {
 	float H = max(0.0, frag_pos.y * height_modifier);
 	vec3 scatter_color = _scatter_color;
 	vec3 bubble_color = _bubble_color;
-	float bubble_density = _bubble_density;
 	
 	float k1 = wave_peak_scatter_strength * H * pow(dot_clamped(light_dir, -view_dir), 4.0) * pow(0.5 - 0.5 * dot(light_dir, normal), 3.0);
 	float k2 = scatter_strength * pow(dot_clamped(view_dir, normal), 2.0);
@@ -232,7 +231,7 @@ void main() {
     if(render_normals) gColor.rgba = vec4(normal, 1.0);
     if(render_reflection) gColor.rgba = vec4(env_reflection, 1.0);
     gPosition.rgb = frag_pos;
-    gPosition.a = gl_FragCoord.z;
+    gPosition.a = 1.0;
     gSpecular.rgb = scaleWithMaterial(texture(tex_specular, vec2(0.5)).rgba, frag_material_specular.rgba).rgb;
     gSpecular.a = frag_material_shininess;
     gNormal.rgb = normalize(normal);
