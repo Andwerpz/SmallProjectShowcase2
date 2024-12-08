@@ -281,7 +281,42 @@ public class HWFWindow extends Window {
 
 		this.addChildAdjWindow(new ObjectEditorWindow(this.options));
 
+		Shader s = ShaderUtils.createShader("/csce_vis/hw_final/fft.compute", GL_COMPUTE_SHADER);
+
+		int resolution = 256;
+		float[] data = new float[resolution * resolution * 4];
+		data[resolution * 127 * 4 + resolution / 2 * 4 - 64 + 4] = 1;
+		int textureID = glGenTextures(); //create texture handle
+		glBindTexture(GL_TEXTURE_2D, textureID); //set as active texture
+		glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, resolution, resolution); //allocate storage for texture
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, resolution, resolution, GL_RGBA, GL_FLOAT, data); //initialize 0th mipmap layer of texture
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		Texture in = new Texture(textureID);
+
+		glBindImageTexture(0, in.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
+
+		s.enable();
+		apply2DFFT(s, in, 256, false);
+
+		this.addChildAdjWindow(new TextureViewerWindow(in));
+
+		//		System.out.println(out.getID() + " " + this.worldScreen.getWaterNormalMap().getID());
+		System.out.println("done!");
+
 		this._resize();
+	}
+
+	private void apply2DFFT(Shader fftShader, Texture t, int resolution, boolean invert) {
+		fftShader.setUniform1i("invert", invert ? 1 : 0);
+		glBindImageTexture(0, t.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
+
+		fftShader.setUniform1i("workRow", 1);
+		glDispatchCompute(resolution, 1, 1);
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		fftShader.setUniform1i("workRow", 0);
+		glDispatchCompute(resolution, 1, 1);
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 	}
 
 	private void generateSpectrum() {

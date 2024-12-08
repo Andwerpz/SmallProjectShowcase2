@@ -1,7 +1,7 @@
 #version 430 core
 #define M_PI 3.1415926535897932384626433832795
 
-layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 layout(rgba32f, binding = 0) uniform image2D inputt;
 uniform bool workRow;
 uniform bool invert;
@@ -14,14 +14,14 @@ vec2 mult(vec2 a, vec2 b) {
     return vec2(a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]);
 }
 
-void fft(const int n, const int i) {
+void fft(const int n) {
     const int LOG_N = int(round(log2(n)));
     const int MINUS_SIDE = 1 << (LOG_N - 1);
     const int INVERSION = invert ? -1 : 1;
 
-    barrier();
-
     for (int l = LOG_N - 1; l >= 0; --l) {
+
+        for (int i = 0; i < n; ++i) {
 
         const int SIZE = 1 << (LOG_N - l);
         const int MINI_MOVEMENT = 1 << l;
@@ -43,7 +43,7 @@ void fft(const int n, const int i) {
         else
         	arr[t][i] = arr[f][i2] - mult(toMult, arr[f][i3]);
 
-        barrier();
+        }
 
         t ^= 1;
         f ^= 1;
@@ -54,29 +54,34 @@ void main() {
 
     // get the row (id) and specific index (i)
     const uint id = gl_GlobalInvocationID[0];
-    const int i = int(gl_LocalInvocationID[0]);
 
     // images are n x n
     const int n = imageSize(inputt)[0];
 
     // copy input into the temp image
+    for (int i = 0; i < n; ++i) {
     if (workRow)
         arr[0][i] = imageLoad(inputt, ivec2(id, i)).rg;
     else
         arr[0][i] = imageLoad(inputt, ivec2(i, id)).rg;
+    }
 
     // parallel fft
-    fft(n, i);
+    fft(n);
 
     // offset shift
+    for (int i = 0; i < n; ++i) {
     const int m = i;
     vec2 u = arr[f][m];
     vec2 toMult = vec2(cos(-2 * M_PI * (m - n / 2) / 2), sin(-2 * M_PI * (m - n / 2) / 2));
     arr[f][m] = mult(toMult, u);
-    
+
     // move temp back into the output image
+    for (int i = 0; i < n; ++i) {
     if (workRow)
         imageStore(inputt, ivec2(id, i), vec4(arr[f][i], 0, 0));
     else
         imageStore(inputt, ivec2(i, id), vec4(arr[f][i], 0, 0));
+    }
+    }
 }
