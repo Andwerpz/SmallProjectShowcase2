@@ -53,7 +53,7 @@ void fft(const int n, const int i) {
 void main() {
 
     // get the row (id) and specific index (i)
-    const uint id = gl_GlobalInvocationID[0];
+    const uint id = gl_WorkGroupID[0];
     const int i = int(gl_LocalInvocationID[0]);
 
     // images are n x n

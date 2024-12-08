@@ -297,7 +297,7 @@ public class HWFWindow extends Window {
 		glBindImageTexture(0, in.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
 
 		s.enable();
-		apply2DFFT(s, in, 256, false);
+		apply2DFFT(s, in, 256, true);
 
 		this.addChildAdjWindow(new TextureViewerWindow(in));
 
