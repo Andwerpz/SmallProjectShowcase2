@@ -59,16 +59,6 @@ public class HWFWindow extends Window {
 	//TODO 
 	// - improve spectra generation 
 
-	//tentative cascade list:
-	// - 1
-	//   - length_scale = 128
-	//   - omega_min = 0.5
-	//   - omega_max = 4
-	// - 2
-	//   - length_scale = 32
-	// - 3
-	//   - length_scale = 8
-
 	private final int WORLD_SCENE = Scene.generateScene();
 
 	private HWFScreen worldScreen;
@@ -401,6 +391,9 @@ public class HWFWindow extends Window {
 		private float scatterShadowStrength = 5;
 		private float heightModifier = 10;
 
+		private float swell = 2.0f;
+		private float spreadBlend = 0.9f;
+
 		public float getWaterDepth() {
 			return waterDepth;
 		}
@@ -589,6 +582,24 @@ public class HWFWindow extends Window {
 		public void setSunDir(Vec3 sunDir) {
 			this.sunDir = sunDir;
 			worldScreen.generateSkybox();
+		}
+
+		public float getSwell() {
+			return swell;
+		}
+
+		public void setSwell(float swell) {
+			this.swell = swell;
+			generateSpectrum();
+		}
+
+		public float getSpreadBlend() {
+			return spreadBlend;
+		}
+
+		public void setSpreadBlend(float spreadBlend) {
+			this.spreadBlend = spreadBlend;
+			generateSpectrum();
 		}
 	}
 }

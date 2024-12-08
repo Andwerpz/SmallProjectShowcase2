@@ -187,6 +187,7 @@ void main() {
 	vec3 light_dir = sun_dir;
 	vec3 view_dir = normalize(view_pos - frag_pos);
 	vec3 halfway_dir = normalize(light_dir + view_dir);
+	vec3 reflect_dir = reflect(-view_dir, normal);
 	
 	float NdotL = dot_clamped(normal, sun_dir);
 	
@@ -208,7 +209,7 @@ void main() {
 	specular /= 4.0 * max(0.0001, dot_clamped(macro_normal, light_dir));
 	specular *= dot_clamped(normal, light_dir);
 	
-	vec3 env_reflection = texture(skyboxCubemap, reflect(-view_dir, normal)).rgb;
+	vec3 env_reflection = texture(skyboxCubemap, reflect_dir).rgb;
 	env_reflection *= environment_light_strength;
 	
 	float H = max(0.0, frag_pos.y * height_modifier);

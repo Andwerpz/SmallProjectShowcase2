@@ -24,6 +24,9 @@ uniform float length_scale;
 uniform float omega_min_cutoff;
 uniform float omega_max_cutoff;
 
+uniform float swell;
+uniform float spread_blend;
+
 float jonswap(float omega) {
 	float gamma = 3.3;	
 	float r = exp(-pow(omega - omega_p, 2.0) / (2.0 * sigma * sigma * omega_p * omega_p));
@@ -59,6 +62,38 @@ float flat_spread(vec2 k) {
 	return 1.0 / (2.0 * pi);
 }
 
+float lerp(float x1, float x2, float t) {
+	return (1.0 - t) * x1 + t * x2;
+}
+
+float ShortWavesFade(float kLength) {
+	float shortWavesFade = 0.05;
+	return exp(-shortWavesFade * shortWavesFade * kLength * kLength);
+}
+
+float NormalisationFactor(float s) {
+	float s2 = s * s;
+	float s3 = s2 * s;
+	float s4 = s3 * s;
+	if (s < 5) return -0.000564 * s4 + 0.00776 * s3 - 0.044 * s2 + 0.192 * s + 0.163;
+	else return -4.80e-08 * s4 + 1.07e-05 * s3 - 9.53e-04 * s2 + 5.90e-02 * s + 3.93e-01;
+}
+
+float Cosine2s(float theta, float s) {
+	return NormalisationFactor(s) * pow(abs(cos(0.5 * theta)), 2 * s);
+}
+
+float SpreadPower(float omega, float peakOmega) {
+	if (omega > peakOmega) return 9.77 * pow(abs(omega / peakOmega), -2.5);
+	else return 6.97 * pow(abs(omega / peakOmega), 5);
+}
+
+float DirectionSpectrum(float theta, float omega) {
+	float wind_theta = atan(wind_dir.y, wind_dir.x);
+	float s = SpreadPower(omega, omega_p) + 16.0 * tanh(min(omega / omega_p, 20.0)) * swell * swell;
+	return lerp(2.0 / pi * cos(theta) * cos(theta), Cosine2s(theta - wind_theta, s), spread_blend);
+}
+
 void main() {
 	ivec2 tex_coord = ivec2(int(gl_GlobalInvocationID.x), int(gl_GlobalInvocationID.y));
 	
@@ -69,13 +104,18 @@ void main() {
 	float wavenumber = length(k);
 	float omega = dispersion(wavenumber);
 	float theta = atan(k.y, k.x);
+	
 	if(omega_min_cutoff < omega && omega < omega_max_cutoff) {
 		float domega_dk = dispersion_derivative(wavenumber);
 		
 		float energy = jonswap(omega);
-		float spread = cos2_spread(k);
+		//float spread = cos2_spread(k);
+		float spread = DirectionSpectrum(theta, omega);
+		float fade = ShortWavesFade(wavenumber);
 		
-		float s = sqrt(2.0 * energy * spread * domega_dk / wavenumber * delta_k * delta_k);
+		float spectrum = energy * spread * fade;
+		
+		float s = sqrt(2.0 * spectrum * domega_dk / wavenumber * delta_k * delta_k);
 		s *= multiplier;
 		s /= length_scale;
 		vec4 ret = vec4(0, 0, 0, 1);

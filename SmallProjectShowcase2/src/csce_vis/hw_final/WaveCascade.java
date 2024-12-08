@@ -108,6 +108,8 @@ public class WaveCascade {
 		this.generateSpectraShader.setUniform1f("length_scale", this.lengthScale);
 		this.generateSpectraShader.setUniform1f("omega_min_cutoff", this.omegaMinCutoff);
 		this.generateSpectraShader.setUniform1f("omega_max_cutoff", this.omegaMaxCutoff);
+		this.generateSpectraShader.setUniform1f("swell", this.options.getSwell());
+		this.generateSpectraShader.setUniform1f("spread_blend", this.options.getSpreadBlend());
 		glBindImageTexture(0, this.baseSpectraTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
 		glBindImageTexture(1, this.gaussianNoiseTexture.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
 		glBindImageTexture(2, this.waveInfoTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);

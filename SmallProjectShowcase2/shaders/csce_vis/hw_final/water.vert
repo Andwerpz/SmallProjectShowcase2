@@ -52,13 +52,6 @@ void main() {
 	
 	frag_pos = adj_pos;
 	gl_Position = pr_matrix * vw_matrix * vec4(adj_pos, 1.0);
-
-	/*
-	vec3 disp = sampleDisplacement();
-	vec3 adj_pos = pos + disp;
-	frag_pos = vec3(md_matrix * vec4(adj_pos, 1.0));
-	gl_Position = pr_matrix * vw_matrix * md_matrix * vec4(adj_pos, 1.0);
-	*/
 	
     frag_colorID = colorID;
     frag_material_diffuse = material_diffuse;
