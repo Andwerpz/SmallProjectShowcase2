@@ -223,11 +223,11 @@ void main() {
 	vec3 scatter = (k1 + k2) * scatter_color * sun_irradiance / (1.0 + light_mask);
 	scatter += k3 * scatter_color * sun_irradiance + k4 * bubble_color * sun_irradiance;
 	
-	//vec3 output = (1.0 - F) * scatter + specular + F * env_reflection;
-	vec3 output = scatter + specular + F * env_reflection;
-	output = aces_tonemap(output);
+	//vec3 outputt = (1.0 - F) * scatter + specular + F * env_reflection;
+	vec3 outputt = scatter + specular + F * env_reflection;
+	outputt = aces_tonemap(outputt);
 
-    gColor.rgba = vec4(output, 1.0);
+    gColor.rgba = vec4(outputt, 1.0);
     if(render_normals) gColor.rgba = vec4(normal, 1.0);
     if(render_reflection) gColor.rgba = vec4(env_reflection, 1.0);
     gPosition.rgb = frag_pos;
