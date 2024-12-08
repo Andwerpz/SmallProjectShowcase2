@@ -1,85 +1,82 @@
 #version 430 core
 #define M_PI 3.1415926535897932384626433832795
 
-layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 layout(rgba32f, binding = 0) uniform image2D inputt;
 uniform bool workRow;
 uniform bool invert;
 
+shared vec2 arr[2][256];
+int f = 0;
+int t = 1;
 
 vec2 mult(vec2 a, vec2 b) {
     return vec2(a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]);
 }
 
-void fft(const int n, inout vec2 arr[256]) {
-    const int invertConst = invert ? -1 : 1;
+void fft(const int n, const int i) {
+    const int LOG_N = int(round(log2(n)));
+    const int MINUS_SIDE = 1 << (LOG_N - 1);
+    const int INVERSION = invert ? -1 : 1;
 
-    for (int i = 1, j = 0; i < n; ++i) {
-        int bit = n >> 1;
-        for (; (j & bit) != 0; bit >>= 1)
-            j ^= bit;
-        j ^= bit;
-        if (i < j) {
-            // swap
-            vec2 temp = arr[i];
-            arr[i] = arr[j];
-            arr[j] = temp;
-        }
+    barrier();
+
+    for (int l = LOG_N - 1; l >= 0; --l) {
+
+        const int SIZE = 1 << (LOG_N - l);
+        const int MINI_MOVEMENT = 1 << l;
+
+        const int index = (i & (MINUS_SIDE-1)) >> l;
+
+        float rad = INVERSION * 2 * M_PI * index / SIZE;
+        vec2 toMult = vec2(cos(rad), sin(rad));
+
+        const int group = i & (MINI_MOVEMENT-1);
+
+        const int MOVEMENT = index << (l+1);
+
+        const int i2 = group + MOVEMENT;
+        const int i3 = group + MOVEMENT + MINI_MOVEMENT;
+
+        if ((i & MINUS_SIDE) == 0)
+        	arr[t][i] = arr[f][i2] + mult(toMult, arr[f][i3]);
+        else
+        	arr[t][i] = arr[f][i2] - mult(toMult, arr[f][i3]);
+
+        barrier();
+
+        t ^= 1;
+        f ^= 1;
     }
-
-    for (int len = 2; len <= n; len <<= 1) {
-        float ang = 2 * M_PI / len * invertConst;
-        vec2 wlen = vec2(cos(ang), sin(ang));
-
-        for (int i = 0; i < n; i += len) {
-            vec2 w = vec2(1, 0);
-            for (int j = 0; j < len / 2; j++) {
-                vec2 u = arr[i+j];
-                vec2 v = mult(arr[i + j + len / 2], w);
-
-                arr[i+j] = u + v;
-                arr[i + j + len / 2] = u - v;
-
-                w = mult(w, wlen);
-            }
-        }
-
-    }
-
-    for (int m = 0; m < n; ++m) {
-        vec2 u = arr[m];
-        vec2 toMult = vec2(cos(-2 * M_PI * (m - n / 2) / 2), sin(-2 * M_PI * (m - n / 2) / 2));
-        //vec2 toMult = vec2(cos(-2 * M_PI * m / 2), sin(-2 * M_PI * m / 2));
-        arr[m] = mult(toMult, u);
-    }
-
 }
 
 void main() {
 
-    // gl_GlobalInvocationID[0]: gives me my row
-    const uint id = gl_GlobalInvocationID[0];
+    // get the row (id) and specific index (i)
+    const uint id = gl_WorkGroupID.x;
+    const int i = int(gl_LocalInvocationID.x);
 
     // images are n x n
     const int n = imageSize(inputt)[0];
 
-    vec2 arr[256];
-
     // copy input into the temp image
-    for (int i = 0; i < n; ++i) {
-        if (workRow)
-            arr[i] = imageLoad(inputt, ivec2(id, i)).rg;
-        else
-            arr[i] = imageLoad(inputt, ivec2(i, id)).rg;
-    }
+    if (workRow)
+        arr[0][i] = imageLoad(inputt, ivec2(id, i)).rg;
+    else
+        arr[0][i] = imageLoad(inputt, ivec2(i, id)).rg;
 
-    fft(n, arr);
+    // parallel fft
+    fft(n, i);
+
+    // offset shift
+    const int m = i;
+    vec2 u = arr[f][m];
+    vec2 toMult = vec2(cos(-2 * M_PI * (m - n / 2) / 2), sin(-2 * M_PI * (m - n / 2) / 2));
+    arr[f][m] = mult(toMult, u);
     
     // move temp back into the output image
-    for (int i = 0; i < n; ++i) {
-        if (workRow)
-            imageStore(inputt, ivec2(id, i), vec4(arr[i], 0, 0));
-        else
-            imageStore(inputt, ivec2(i, id), vec4(arr[i], 0, 0));
-    }
+    if (workRow)
+        imageStore(inputt, ivec2(id, i), vec4(arr[f][i], 0, 0));
+    else
+        imageStore(inputt, ivec2(i, id), vec4(arr[f][i], 0, 0));
 }
