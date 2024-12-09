@@ -11,6 +11,14 @@ layout(rgba32f, binding = 5) uniform image2D derivativeTexture;
 
 uniform float lambda;
 
+uniform float dt;
+uniform float foam_bias;
+uniform float foam_generation_rate;
+uniform float foam_decay_rate;
+
+uniform float length_scale;
+uniform float cascade_scale;
+
 void main() {
 	ivec2 tex_coord = ivec2(int(gl_GlobalInvocationID.x), int(gl_GlobalInvocationID.y));
 	
@@ -22,6 +30,15 @@ void main() {
 	vec3 disp = vec3(DxDz.x * lambda, DyDxz.x, DxDz.y * lambda);
 	vec4 derivative = vec4(DyxDyz, DxxDzz * lambda);
 	
-	imageStore(dispTexture, tex_coord, vec4(disp, 1.0));
+	float old_foam = imageLoad(dispTexture, tex_coord).w;
+	float foam = old_foam * exp(-foam_decay_rate);
+	float Jxx = 1.0 + lambda * DxxDzz.x * cascade_scale * length_scale;
+	float Jzz = 1.0 + lambda * DxxDzz.y * cascade_scale * length_scale;
+	float Jxz = lambda * DyDxz.y * cascade_scale * length_scale;
+	float jacobian = Jxx * Jzz - Jxz * Jxz;
+	jacobian = (jacobian - foam_bias);
+	if(jacobian > 0) foam += foam_generation_rate * jacobian;
+	
+	imageStore(dispTexture, tex_coord, vec4(disp, foam));
 	imageStore(derivativeTexture, tex_coord, derivative);
 }

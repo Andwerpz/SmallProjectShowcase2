@@ -88,10 +88,10 @@ float SpreadPower(float omega, float peakOmega) {
 	else return 6.97 * pow(abs(omega / peakOmega), 5);
 }
 
-float DirectionSpectrum(float theta, float omega) {
+float DirectionSpectrum(float theta, float omega, vec2 k) {
 	float wind_theta = atan(wind_dir.y, wind_dir.x);
 	float s = SpreadPower(omega, omega_p) + 16.0 * tanh(min(omega / omega_p, 20.0)) * swell * swell;
-	return lerp(2.0 / pi * cos(theta) * cos(theta), Cosine2s(theta - wind_theta, s), spread_blend);
+	return lerp(flat_spread(k), Cosine2s(theta - wind_theta, s), spread_blend);
 }
 
 void main() {
@@ -109,8 +109,8 @@ void main() {
 		float domega_dk = dispersion_derivative(wavenumber);
 		
 		float energy = jonswap(omega);
-		//float spread = cos2_spread(k);
-		float spread = DirectionSpectrum(theta, omega);
+		float spread = DirectionSpectrum(theta, omega, k);
+		//float spread = flat_spread(k);
 		float fade = ShortWavesFade(wavenumber);
 		
 		float spectrum = energy * spread * fade;

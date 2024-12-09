@@ -1,5 +1,5 @@
 #version 430 core
-layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 layout(binding = 0) buffer queryBuffer {
 	vec4[] queryData;
@@ -24,11 +24,9 @@ uniform float cascadeScale2;
 vec3 sampleDisplacement(vec3 pt) {
 	vec3 disp0 = texture(dispTextureLong, pt.xz / length_scale_long).xyz * length_scale_long;
 	vec3 disp1 = texture(dispTextureMed, pt.xz / length_scale_med).xyz * length_scale_med;
-	vec3 disp2 = texture(dispTextureShort, pt.xz / length_scale_short).xyz * length_scale_short;
 	disp0 *= cascadeScale0;
 	disp1 *= cascadeScale1;
-	disp2 *= cascadeScale2;
-	vec3 disp = disp0 + disp1 + disp2;
+	vec3 disp = disp0 + disp1;
 	disp.y *= -1;
 	return disp;
 }
@@ -36,14 +34,11 @@ vec3 sampleDisplacement(vec3 pt) {
 vec3 sampleNormal(vec3 pt) {
 	vec4 derivative_long = texture(derivativeTextureLong, pt.xz / length_scale_long).xyzw;
 	vec4 derivative_med = texture(derivativeTextureMed, pt.xz / length_scale_med).xyzw;
-	vec4 derivative_short = texture(derivativeTextureShort, pt.xz / length_scale_short).xyzw;
 	vec2 slope_long = vec2(derivative_long.x / (1.0 + derivative_long.z), derivative_long.y / (1.0 + derivative_long.w));
 	vec2 slope_med = vec2(derivative_med.x / (1.0 + derivative_med.z), derivative_med.y / (1.0 + derivative_med.w));
-	vec2 slope_short = vec2(derivative_short.x / (1.0 + derivative_short.z), derivative_short.y / (1.0 + derivative_short.w));
 	slope_long *= cascadeScale0 * length_scale_long;
 	slope_med *= cascadeScale1 * length_scale_med;
-	slope_short *= cascadeScale2 * length_scale_short;
-	vec2 slope = slope_long + slope_med + slope_short;
+	vec2 slope = slope_long + slope_med;
 	return normalize(vec3(-slope.x, 1.0, -slope.y));
 }
 
@@ -53,7 +48,7 @@ void main() {
 	vec3 cpos = qpos;
 	
 	//approximate actual position
-	for(int i = 0; i < 5; i++){
+	for(int i = 0; i < 3; i++){
 		vec3 disp = sampleDisplacement(cpos);
 		cpos = qpos - disp;
 	}

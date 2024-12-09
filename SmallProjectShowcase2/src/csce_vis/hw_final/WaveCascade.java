@@ -49,8 +49,10 @@ public class WaveCascade {
 	public Texture Dx_Dz, Dy_Dxz, Dyx_Dyz, Dxx_Dzz;
 	public Texture dispTexture, derivativeTexture;
 
-	public float lengthScale;
+	public float lengthScale, cascadeScale;
 	public float omegaMinCutoff, omegaMaxCutoff;
+
+	private float prevTime;
 
 	public WaveCascade(float _lengthScale, float _omegaMinCutoff, float _omegaMaxCutoff, HWFWindow.Options _options) {
 		this.lengthScale = _lengthScale;
@@ -118,6 +120,9 @@ public class WaveCascade {
 	}
 
 	public void update(float time) {
+		float dt = time - prevTime;
+		prevTime = time;
+
 		// -- generate evolved spectra --
 		{
 			this.evolveSpectraShader.enable();
@@ -147,12 +152,18 @@ public class WaveCascade {
 		if (true) {
 			this.waveTexMergerShader.enable();
 			this.waveTexMergerShader.setUniform1f("lambda", this.options.getLambda());
+			this.waveTexMergerShader.setUniform1f("dt", dt);
+			this.waveTexMergerShader.setUniform1f("foam_bias", this.options.getFoamBias());
+			this.waveTexMergerShader.setUniform1f("foam_generation_rate", this.options.getFoamGenerationRate());
+			this.waveTexMergerShader.setUniform1f("foam_decay_rate", this.options.getFoamDecayRate());
+			this.waveTexMergerShader.setUniform1f("cascade_scale", this.cascadeScale);
+			this.waveTexMergerShader.setUniform1f("length_scale", this.lengthScale);
 			glBindImageTexture(0, this.Dx_Dz.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
 			glBindImageTexture(1, this.Dy_Dxz.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
 			glBindImageTexture(2, this.Dyx_Dyz.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
 			glBindImageTexture(3, this.Dxx_Dzz.getID(), 0, false, 0, GL_READ_ONLY, GL_RGBA32F);
 
-			glBindImageTexture(4, this.dispTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
+			glBindImageTexture(4, this.dispTexture.getID(), 0, false, 0, GL_READ_WRITE, GL_RGBA32F);
 			glBindImageTexture(5, this.derivativeTexture.getID(), 0, false, 0, GL_WRITE_ONLY, GL_RGBA32F);
 			glDispatchCompute(WATER_RESOLUTION, WATER_RESOLUTION, 1);
 			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);

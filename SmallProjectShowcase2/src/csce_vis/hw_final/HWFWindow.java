@@ -74,7 +74,7 @@ public class HWFWindow extends Window {
 	private ImpulseScene impulse;
 	private ArrayList<BuoyancyBody> buoyancyBodies;
 
-	private static final int MAX_BUOYANCY_BODIES = 100;
+	private static final int MAX_BUOYANCY_BODIES = 128;
 
 	//when querying, should have vec3s with stride of 4 floats. 
 	//result will be of form height, {nx, ny, nz}
@@ -124,14 +124,18 @@ public class HWFWindow extends Window {
 		//control panel for the water
 		//AdjustableWindow waterAttributesPanel = new AdjustableWindow("Water Attributes", new ObjectEditorWindow(this.worldScreen.getWaterAttributes()), this);
 
-		float omega_0 = 0.5f;
-		float omega_1 = 4f;
-		float omega_2 = 12f;
-		float omega_3 = 25f;
+		float omega_0 = 0.0f;
+		float omega_1 = 4.0f;
+		float omega_2 = 10f;
+		float omega_3 = 20f;
 
-		this.cascadeLong = new WaveCascade(247, omega_0, omega_1, this.options);
+		this.cascadeLong = new WaveCascade(128, omega_0, omega_1, this.options);
 		this.cascadeMed = new WaveCascade(37, omega_1, omega_2, this.options);
-		this.cascadeShort = new WaveCascade(5, omega_2, omega_3, this.options);
+		this.cascadeShort = new WaveCascade(12, omega_2, omega_3, this.options);
+
+		this.cascadeLong.cascadeScale = this.options.cascadeScale0;
+		this.cascadeMed.cascadeScale = this.options.cascadeScale1;
+		this.cascadeShort.cascadeScale = this.options.cascadeScale2;
 
 		this.worldScreen.options = this.options;
 		this.worldScreen.generateSkybox();
@@ -147,7 +151,9 @@ public class HWFWindow extends Window {
 		//		this.addChildAdjWindow(new TextureViewerWindow(this.Dx_Dz, "Dx_Dz"));
 		//		this.addChildAdjWindow(new TextureViewerWindow(this.Dyx_Dyz, "Dyx_Dyz"));
 
-		//		this.addChildAdjWindow(new TextureViewerWindow(this.cascadeLong.dispTexture, "Displacement Long"));
+		this.addChildAdjWindow(new TextureViewerWindow(this.cascadeLong.dispTexture, "Displacement Long"));
+		this.addChildAdjWindow(new TextureViewerWindow(this.cascadeMed.dispTexture, "Displacement Med"));
+		this.addChildAdjWindow(new TextureViewerWindow(this.cascadeShort.dispTexture, "Displacement Short"));
 		//		this.addChildAdjWindow(new TextureViewerWindow(this.cascadeLong.derivativeTexture, "Derivatives Long"));
 
 		this.addChildAdjWindow(new ObjectEditorWindow(this.options));
@@ -237,7 +243,7 @@ public class HWFWindow extends Window {
 			this.cascadeShort.derivativeTexture.bind(GL_TEXTURE5);
 
 			this.heightQuerySSBO.bindToBase(0);
-			glDispatchCompute(MAX_BUOYANCY_BODIES * VOXEL_AMT * VOXEL_AMT * VOXEL_AMT, 1, 1);
+			glDispatchCompute(MAX_BUOYANCY_BODIES * VOXEL_AMT * VOXEL_AMT * VOXEL_AMT / 32, 1, 1);
 		}
 
 		//read result back out
@@ -480,7 +486,7 @@ public class HWFWindow extends Window {
 		private float lambda = 1f;
 
 		private float cascadeScale0 = 1.2f;
-		private float cascadeScale1 = 0.6f;
+		private float cascadeScale1 = 0.4f;
 		private float cascadeScale2 = 0.3f;
 
 		private boolean pauseTime = false;
@@ -502,6 +508,10 @@ public class HWFWindow extends Window {
 
 		private float swell = 2.0f;
 		private float spreadBlend = 0.9f;
+
+		private float foamBias = 1.6f;
+		private float foamGenerationRate = 0.1f;
+		private float foamDecayRate = 0.017f;
 
 		public float getWaterDepth() {
 			return waterDepth;
@@ -562,6 +572,7 @@ public class HWFWindow extends Window {
 
 		public void setCascadeScale0(float cascadeScale0) {
 			this.cascadeScale0 = cascadeScale0;
+			cascadeLong.cascadeScale = this.cascadeScale0;
 		}
 
 		public float getCascadeScale1() {
@@ -570,6 +581,7 @@ public class HWFWindow extends Window {
 
 		public void setCascadeScale1(float cascadeScale1) {
 			this.cascadeScale1 = cascadeScale1;
+			cascadeMed.cascadeScale = this.cascadeScale1;
 		}
 
 		public float getCascadeScale2() {
@@ -578,6 +590,7 @@ public class HWFWindow extends Window {
 
 		public void setCascadeScale2(float cascadeScale2) {
 			this.cascadeScale2 = cascadeScale2;
+			cascadeShort.cascadeScale = this.cascadeScale2;
 		}
 
 		public boolean getPauseTime() {
@@ -709,6 +722,30 @@ public class HWFWindow extends Window {
 		public void setSpreadBlend(float spreadBlend) {
 			this.spreadBlend = spreadBlend;
 			generateSpectrum();
+		}
+
+		public float getFoamBias() {
+			return foamBias;
+		}
+
+		public void setFoamBias(float foamBias) {
+			this.foamBias = foamBias;
+		}
+
+		public float getFoamGenerationRate() {
+			return foamGenerationRate;
+		}
+
+		public void setFoamGenerationRate(float foamGenerationRate) {
+			this.foamGenerationRate = foamGenerationRate;
+		}
+
+		public float getFoamDecayRate() {
+			return foamDecayRate;
+		}
+
+		public void setFoamDecayRate(float foamDecayRate) {
+			this.foamDecayRate = foamDecayRate;
 		}
 	}
 }

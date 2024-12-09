@@ -45,7 +45,7 @@ void main() {
 	vec2 dispz_dz = -h * wave.z * wave.z * wave.y;
 	
 	vec2 DxDz = vec2(dispx.x - dispz.y, dispx.y + dispz.x);
-	vec2 DyDxz = vec2(dispy.x - dispz_dx.y, dispy.y + dispz_dx.x);
+	vec2 DyDxz = vec2(dispy.x - dispx_dz.y, dispy.y + dispx_dz.x);
 	vec2 DyxDyz = vec2(dispy_dx.x - dispy_dz.y, dispy_dx.y + dispy_dz.x);
 	vec2 DxxDzz = vec2(dispx_dx.x - dispz_dz.y, dispx_dx.y + dispz_dz.x);
 	

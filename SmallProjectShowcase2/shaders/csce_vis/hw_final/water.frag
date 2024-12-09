@@ -6,6 +6,7 @@ layout (location = 3) out vec4 gColor;
 layout (location = 4) out vec4 gColorID;
 
 in vec3 frag_pos;
+in vec3 frag_opos;
 
 in vec4 frag_material_diffuse;
 in vec4 frag_material_specular;
@@ -28,6 +29,10 @@ const float PI = 3.14159265359;
 uniform sampler2D derivativeTextureLong;
 uniform sampler2D derivativeTextureMed;
 uniform sampler2D derivativeTextureShort;
+
+uniform sampler2D dispTextureLong;
+uniform sampler2D dispTextureMed;
+uniform sampler2D dispTextureShort;
 
 uniform float length_scale_long;
 uniform float length_scale_med;
@@ -153,9 +158,9 @@ vec3 aces_tonemap(vec3 color) {
 }
 
 vec3 sampleNormal() {
-	vec4 derivative_long = texture(derivativeTextureLong, frag_pos.xz / length_scale_long).xyzw;
-	vec4 derivative_med = texture(derivativeTextureMed, frag_pos.xz / length_scale_med).xyzw;
-	vec4 derivative_short = texture(derivativeTextureShort, frag_pos.xz / length_scale_short).xyzw;
+	vec4 derivative_long = texture(derivativeTextureLong, frag_opos.xz / length_scale_long).xyzw;
+	vec4 derivative_med = texture(derivativeTextureMed, frag_opos.xz / length_scale_med).xyzw;
+	vec4 derivative_short = texture(derivativeTextureShort, frag_opos.xz / length_scale_short).xyzw;
 	vec2 slope_long = vec2(derivative_long.x / (1.0 + derivative_long.z), derivative_long.y / (1.0 + derivative_long.w));
 	vec2 slope_med = vec2(derivative_med.x / (1.0 + derivative_med.z), derivative_med.y / (1.0 + derivative_med.w));
 	vec2 slope_short = vec2(derivative_short.x / (1.0 + derivative_short.z), derivative_short.y / (1.0 + derivative_short.w));
@@ -164,6 +169,14 @@ vec3 sampleNormal() {
 	slope_short *= cascadeScale2 * length_scale_short;
 	vec2 slope = slope_long + slope_med + slope_short;
 	return normalize(vec3(-slope.x, 1.0, -slope.y));
+}
+
+float sampleFoam() {
+	float foam = 0;
+	foam += texture(dispTextureLong, frag_opos.xz / length_scale_long).w;
+	foam += texture(dispTextureMed, frag_opos.xz / length_scale_med).w;
+	foam += texture(dispTextureShort, frag_opos.xz / length_scale_short).w;
+	return clamp(foam, 0, 1);
 }
 
 uniform float sun_irradiance_mult;
@@ -179,6 +192,9 @@ uniform float scatter_strength;
 uniform float scatter_shadow_strength;
 uniform float height_modifier;
 
+const vec3 foam_color = vec3(0.6, 0.5568, 0.492);
+const float foam_roughness_modifier = 0.0;
+
 void main() {
 	vec3 sun_irradiance = sun_irradiance_base * sun_irradiance_mult;
 
@@ -188,10 +204,11 @@ void main() {
 	vec3 view_dir = normalize(view_pos - frag_pos);
 	vec3 halfway_dir = normalize(light_dir + view_dir);
 	vec3 reflect_dir = reflect(-view_dir, normal);
+	float foam = sampleFoam();
 	
 	float NdotL = dot_clamped(normal, sun_dir);
 	
-	float a = roughness;
+	float a = roughness + foam * foam_roughness_modifier;
 	float NdotH = max(0.0001, dot(normal, halfway_dir));
 	float view_mask = SmithMaskingBeckmann(halfway_dir, view_dir, a);
 	float light_mask = SmithMaskingBeckmann(halfway_dir, light_dir, a);
@@ -224,12 +241,16 @@ void main() {
 	vec3 scatter = (k1 + k2) * scatter_color * sun_irradiance / (1.0 + light_mask);
 	scatter += k3 * scatter_color * sun_irradiance + k4 * bubble_color * sun_irradiance;
 	
+	vec3 foam_diffuse = foam_color * (dot(normal, sun_dir) / 3.0 + (2.0 / 3.0));
+	
 	//vec3 outputt = (1.0 - F) * scatter + specular + F * env_reflection;
 	if(sun_dir.y < 0) {
 		specular *= exp(sun_dir.y * 100);
 		scatter *= exp(sun_dir.y * 10);
+		foam_diffuse *= exp(sun_dir.y * 10);
 	}
 	vec3 outputt = scatter + specular + F * env_reflection;
+	outputt = (1.0 - foam) * outputt + foam * foam_diffuse;
 	outputt = aces_tonemap(outputt);
 
     gColor.rgba = vec4(outputt, 1.0);

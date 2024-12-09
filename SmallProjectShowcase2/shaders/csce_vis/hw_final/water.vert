@@ -14,6 +14,7 @@ uniform mat4 pr_matrix;	//projection
 uniform mat4 vw_matrix;	//view
 
 out vec3 frag_pos;
+out vec3 frag_opos;
 
 out vec4 frag_material_diffuse;
 out vec4 frag_material_specular;
@@ -47,6 +48,7 @@ vec3 sampleDisplacement(vec3 pt) {
 
 void main() {	
 	vec3 world_pos = vec3(md_matrix * vec4(pos, 1.0));
+	frag_opos = world_pos;
 	vec3 disp = sampleDisplacement(world_pos);
 	vec3 adj_pos = world_pos + disp;
 	
