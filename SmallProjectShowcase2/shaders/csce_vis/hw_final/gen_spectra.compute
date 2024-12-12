@@ -91,7 +91,7 @@ float SpreadPower(float omega, float peakOmega) {
 float DirectionSpectrum(float theta, float omega, vec2 k) {
 	float wind_theta = atan(wind_dir.y, wind_dir.x);
 	float s = SpreadPower(omega, omega_p) + 16.0 * tanh(min(omega / omega_p, 20.0)) * swell * swell;
-	return lerp(flat_spread(k), Cosine2s(theta - wind_theta, s), spread_blend);
+	return lerp(cos2_spread(k), Cosine2s(theta - wind_theta, s), spread_blend);
 }
 
 void main() {

@@ -46,7 +46,6 @@ public class BackgroundWindow extends Window {
 	//perhaps we can modify the background later. 
 
 	//PROJECT IDEAS:
-	// - Actual FFT Water
 	// - Dynamic Skybox Shader
 	// - 3D Model Animations
 	// - Doom style level editor
