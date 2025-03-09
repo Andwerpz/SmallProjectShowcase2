@@ -3,6 +3,7 @@ package window;
 import java.awt.Color;
 import java.awt.Font;
 
+import animation.AnimationWindow;
 import csce_vis.buoyancy_test.BuoyancyTestWindow;
 import csce_vis.hw1.HW1Window;
 import csce_vis.hw2.HW2Window;
@@ -155,6 +156,7 @@ public class BackgroundWindow extends Window {
 			projectPicker.addToList("Logic Simulator");
 			projectPicker.addToList("Spectral Raytracing");
 			projectPicker.addToList("Terrain Shadow Casting");
+			projectPicker.addToList("Animation");
 			break;
 		}
 
@@ -345,6 +347,11 @@ public class BackgroundWindow extends Window {
 
 			case "Terrain Shadow Casting": {
 				AdjustableWindow window = new AdjustableWindow(new TerrainShadowCastingWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+			
+			case "Animation": {
+				AdjustableWindow window = new AdjustableWindow(new AnimationWindow(x, y, width, height, null), BackgroundWindow.this);
 				break;
 			}
 			}
