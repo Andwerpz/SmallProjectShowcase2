@@ -26,6 +26,9 @@ import org.lwjgl.assimp.AIVectorKey;
 import org.lwjgl.assimp.AIVertexWeight;
 import org.lwjgl.glfw.GLFW;
 
+import lwjglengine.animation.AnimatedModel;
+import lwjglengine.animation.AnimatedModelInstance;
+import lwjglengine.animation.AnimationHandler;
 import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
 import lwjglengine.model.Model;
@@ -57,8 +60,8 @@ public class AnimationWindow extends Window {
 	private PerspectiveScreen perspective;
 	private PlayerInputController pic;
 	
-	private Model vampire;
-	private AnimationHandler animationHandler;
+	private AnimatedModel vampire;
+	private AnimatedModelInstance vampireInst;
 
 	public AnimationWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
@@ -92,23 +95,30 @@ public class AnimationWindow extends Window {
 		this.pic.setAcceptPlayerInputs(false);
 		
 		try {
-			this.vampire = Model.loadModelFileRelative("/res/dancing_vampire/dancing_vampire.dae");
-			ModelInstance v = new ModelInstance(this.vampire, WORLD_SCENE);
+			this.vampire = AnimatedModel.loadAnimatedModelFileRelative("/res/dancing_vampire/dancing_vampire.dae");
+			
 			
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
-		File file = FileUtils.loadFileRelative("/res/dancing_vampire/dancing_vampire.dae");
-		String filepath = file.getAbsolutePath();
-		String parentFilepath = file.getParent() + "\\";
+		this.vampireInst = new AnimatedModelInstance(this.vampire, WORLD_SCENE);
+		AnimationHandler ah = this.vampireInst.getAnimationHandler();
+		ah.playAnimation(0);
+		ah.setRenderSkeleton(true);
+		ah.setDoLooping(true);
 		
-		AIScene scene = aiImportFile(filepath, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices);
-		this.animationHandler = new AnimationHandler(scene, WORLD_SCENE);
-		this.animationHandler.setDoLooping(true);
-		this.animationHandler.setRenderSkeleton(true);
-		this.animationHandler.playAnimation(0);
+		
+//		File file = FileUtils.loadFileRelative("/res/dancing_vampire/dancing_vampire.dae");
+//		String filepath = file.getAbsolutePath();
+//		String parentFilepath = file.getParent() + "\\";
+		
+//		AIScene scene = aiImportFile(filepath, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices);
+//		this.animationHandler = new AnimationHandler(scene, WORLD_SCENE);
+//		this.animationHandler.setDoLooping(true);
+//		this.animationHandler.setRenderSkeleton(true);
+//		this.animationHandler.playAnimation(0);
 		
 		this._resize();
 	}
@@ -133,7 +143,7 @@ public class AnimationWindow extends Window {
 	@Override
 	protected void _update() {
 		this.pic.update();
-		this.animationHandler.update();
+		this.vampireInst.getAnimationHandler().update();
 	}
 
 	@Override
@@ -194,11 +204,11 @@ public class AnimationWindow extends Window {
 	@Override
 	protected void _keyPressed(int key) {
 		if(key == GLFW.GLFW_KEY_Z) {
-			if(this.animationHandler.isPlayingAnimation()) {
-				this.animationHandler.stopAnimation();
+			if(this.vampireInst.getAnimationHandler().isPlayingAnimation()) {
+				this.vampireInst.getAnimationHandler().stopAnimation();
 			}
 			else {
-				this.animationHandler.playAnimation(0);
+				this.vampireInst.getAnimationHandler().playAnimation(0);
 			}
 		}
 	}
