@@ -24,6 +24,7 @@ import org.lwjgl.assimp.AIVector3D;
 import org.lwjgl.assimp.AIVector3D.Buffer;
 import org.lwjgl.assimp.AIVectorKey;
 import org.lwjgl.assimp.AIVertexWeight;
+import org.lwjgl.glfw.GLFW;
 
 import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
@@ -84,20 +85,20 @@ public class AnimationWindow extends Window {
 		Cubemap skybox = new Cubemap(skyboxSides);
 		Scene.skyboxes.put(WORLD_SCENE, skybox);
 
-		Light sun = new DirLight(new Vec3(1), new Vec3(1), 0.3f);
+		Light sun = new DirLight(new Vec3(1, -1, -1), new Vec3(1), 0.3f);
 		Light.addLight(WORLD_SCENE, sun);
 
 		this.pic = new PlayerInputController(new Vec3(0));
 		this.pic.setAcceptPlayerInputs(false);
 		
-//		try {
-//			this.vampire = Model.loadModelFileRelative("/res/dancing_vampire/dancing_vampire.dae");
-//			ModelInstance v = new ModelInstance(this.vampire, WORLD_SCENE);
-//			
-//		} catch (IOException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
+		try {
+			this.vampire = Model.loadModelFileRelative("/res/dancing_vampire/dancing_vampire.dae");
+			ModelInstance v = new ModelInstance(this.vampire, WORLD_SCENE);
+			
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		
 		File file = FileUtils.loadFileRelative("/res/dancing_vampire/dancing_vampire.dae");
 		String filepath = file.getAbsolutePath();
@@ -108,15 +109,6 @@ public class AnimationWindow extends Window {
 		this.animationHandler.setDoLooping(true);
 		this.animationHandler.setRenderSkeleton(true);
 		this.animationHandler.playAnimation(0);
-		
-//		PointerBuffer meshes = scene.mMeshes();
-//		AIMesh mesh = AIMesh.create(meshes.get(0));
-//		PointerBuffer aibones = mesh.mBones();
-//		this.bones = new Bone[aibones.limit()];
-//		for(int i = 0; i < aibones.limit(); i++) {
-//			AIBone aibone = AIBone.create(aibones.get(i));
-//			this.bones[i] = new Bone(aibone);
-//		}
 		
 		this._resize();
 	}
@@ -201,8 +193,14 @@ public class AnimationWindow extends Window {
 
 	@Override
 	protected void _keyPressed(int key) {
-		// TODO Auto-generated method stub
-		
+		if(key == GLFW.GLFW_KEY_Z) {
+			if(this.animationHandler.isPlayingAnimation()) {
+				this.animationHandler.stopAnimation();
+			}
+			else {
+				this.animationHandler.playAnimation(0);
+			}
+		}
 	}
 
 	@Override

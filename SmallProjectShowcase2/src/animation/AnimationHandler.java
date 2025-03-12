@@ -9,6 +9,7 @@ import org.lwjgl.PointerBuffer;
 import org.lwjgl.assimp.AIAnimation;
 import org.lwjgl.assimp.AIBone;
 import org.lwjgl.assimp.AIMatrix4x4;
+import org.lwjgl.assimp.AIMesh;
 import org.lwjgl.assimp.AINode;
 import org.lwjgl.assimp.AINodeAnim;
 import org.lwjgl.assimp.AIQuatKey;
@@ -37,6 +38,7 @@ public class AnimationHandler {
 	
 	private Node[] nodes;	//root is nodes[0]
 	private Mat4[] nodeTransforms;
+	private Bone[] bones;
 	private Animation[] animations;
 	
 	private boolean doLooping = false;
@@ -45,6 +47,11 @@ public class AnimationHandler {
 	private int curAnimation = -1;
 	private long prevTimeMillis;
 	private float animationTime;
+	
+	//TODO figure out how to set this variable automatically
+	//if false, will discard the default pose when playing the animation. 
+	//if true, will use the default pose as a base when applying the animation. 
+	private boolean applyAnimationToDefaultPose = false;
 	
 	//while playing an animation, these are what keep track of what keyframes to interpolate
 	private int[] posptrs, orientptrs, scaleptrs;
@@ -82,6 +89,18 @@ public class AnimationHandler {
 			this.computeNodeTransforms();
 		}
 		
+		//debug:
+		{
+			System.out.println("Name to id :");
+			for(String name : name_to_id.keySet()) {
+				System.out.println(name + " -> " + name_to_id.get(name));
+			}
+			int hip_id = 1;
+//			System.out.println("Hip node channels: ");
+//			System.out.println("poskeys");
+//			for(int i = 0; i < )
+		}
+		
 		//extract animations
 		if(aiscene.mAnimations() != null) {
 			PointerBuffer aianimations = aiscene.mAnimations();
@@ -98,12 +117,20 @@ public class AnimationHandler {
 		}
 		
 		//extract bones
-		//TODO
+		PointerBuffer aimeshes = aiscene.mMeshes();
+		for(int i = 0; i < aimeshes.limit(); i++) {
+			AIMesh aimesh = AIMesh.create(aimeshes.get(i));
+//			aimesh.
+		}
 		
 		this.is_valid = true;
 	}
 	
 	public void stopAnimation() {
+		if(!this.is_valid) {
+			System.err.println("AnimationHandler : tried to stopAnimation while invalid");
+			return;
+		}
 		this.curAnimation = -1;
 		this.computeNodeTransforms();
 	}
@@ -132,11 +159,19 @@ public class AnimationHandler {
 		this.computeNodeTransforms();
 	}
 	
+	public boolean isPlayingAnimation() {
+		return this.curAnimation != -1;
+	}
+	
 	public void setDoLooping(boolean b) {
 		this.doLooping = b;
 	}
 	
 	public void setRenderSkeleton(boolean b) {
+		if(!this.is_valid) {
+			System.err.println("AnimationHandler : tried to setRenderSkeleton while invalid");
+			return;
+		}
 		if(this.renderSkeleton == b) {
 			return;
 		}
@@ -155,6 +190,18 @@ public class AnimationHandler {
 			}
 			this.skeletonInstances = null;
 		}
+	}
+	
+	public Vec3[] getNodePositions() {
+		if(!this.is_valid) {
+			System.err.println("AnimationHandler : tried to getNodePositions while invalid");
+			return null;
+		}
+		Vec3[] ret = new Vec3[this.nodes.length];
+		for(int i = 0; i < this.nodes.length; i++) {
+			ret[i] = this.nodeTransforms[i].mul(new Vec3(0), 1);
+		}
+		return ret;
 	}
 	
 	private void generateSkeleton() {
@@ -190,7 +237,7 @@ public class AnimationHandler {
 		}
 	}
 	
-	//advances the current animation, if current animation runs out of duration, stops it. 
+	//advances the current animation by delta_seconds.
 	private void advance(float delta_seconds) {
 		if(!this.is_valid) {
 			System.err.println("AnimationHandler : Tried to advance animation while invalid");
@@ -282,7 +329,7 @@ public class AnimationHandler {
 			for(int i = 0; i < aiorientkeys.limit(); i++) {
 				AIQuatKey aiquatkey = aiorientkeys.get(i);
 				AIQuaternion aiquat = aiquatkey.mValue();
-				this.orientkeys[i] = new Pair<Float, Quaternion>((float) aiquatkey.mTime() / tps, new Quaternion(aiquat.x(), aiquat.y(), aiquat.z(), aiquat.w()));
+				this.orientkeys[i] = new Pair<Float, Quaternion>((float) aiquatkey.mTime() / tps, new Quaternion(aiquat.w(), aiquat.x(), aiquat.y(), aiquat.z()));
 			}
 			AIVectorKey.Buffer aiscalekeys = ainodeanimation.mScalingKeys();
 			this.scalekeys = new Pair[aiscalekeys.limit()];
@@ -390,13 +437,18 @@ public class AnimationHandler {
 					Vec3 v2 = na.poskeys[posptrs[this.id] + 1].second;
 					pos = MathUtils.lerp(v1, t1, v2, t2, animationTime);
 				}
-				Mat4 anim_transform = Mat4.scale(scale);
+				Mat4 anim_transform = Mat4.identity();
+				anim_transform.muli(Mat4.scale(scale));
 				anim_transform.muli(MathUtils.quaternionToRotationMat4(orient));
 				anim_transform.muli(Mat4.translate(pos));
-				transform.muli(anim_transform);
+				if(applyAnimationToDefaultPose) {
+					transform.muli(anim_transform);
+				}
+				else {
+					transform = anim_transform;
+				}
 			}
 
-			
 			//parent transform
 			if(this.parent != null) {
 				transform.muli(nodeTransforms[parent.id]);
@@ -414,10 +466,34 @@ public class AnimationHandler {
 		int node_id;
 		Bone[] children;
 		AIVertexWeight[] weights;
+		Mat4 boneSpaceTransform;	//converts a vertex from model to bone space
 		
 		public Bone(AIBone aibone, HashMap<String, Integer> name_to_id) {
 			this.node_id = name_to_id.get(aibone.mName().dataString());
-			AIVertexWeight.Buffer weights = aibone.mWeights();
+			
+			this.boneSpaceTransform = new Mat4();
+			AIMatrix4x4 aimat = aibone.mOffsetMatrix();
+			this.boneSpaceTransform.mat[0][0] = aimat.a1();
+			this.boneSpaceTransform.mat[0][1] = aimat.a2();
+			this.boneSpaceTransform.mat[0][2] = aimat.a3();
+			this.boneSpaceTransform.mat[0][3] = aimat.a4();
+			
+			this.boneSpaceTransform.mat[1][0] = aimat.b1();
+			this.boneSpaceTransform.mat[1][1] = aimat.b2();
+			this.boneSpaceTransform.mat[1][2] = aimat.b3();
+			this.boneSpaceTransform.mat[1][3] = aimat.b4();
+			
+			this.boneSpaceTransform.mat[2][0] = aimat.c1();
+			this.boneSpaceTransform.mat[2][1] = aimat.c2();
+			this.boneSpaceTransform.mat[2][2] = aimat.c3();
+			this.boneSpaceTransform.mat[2][3] = aimat.c4();
+			
+			this.boneSpaceTransform.mat[3][0] = aimat.d1();
+			this.boneSpaceTransform.mat[3][1] = aimat.d2();
+			this.boneSpaceTransform.mat[3][2] = aimat.d3();
+			this.boneSpaceTransform.mat[3][3] = aimat.d4();
+			
+			AIVertexWeight.Buffer weights = aibone.mWeights();	
 			this.weights = new AIVertexWeight[weights.limit()];
 			for(int k = 0; k < weights.limit(); k++) {
 				this.weights[k] = weights.get(k);
