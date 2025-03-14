@@ -4,6 +4,7 @@ import static org.lwjgl.assimp.Assimp.aiImportFile;
 import static org.lwjgl.assimp.Assimp.aiProcess_JoinIdenticalVertices;
 import static org.lwjgl.assimp.Assimp.aiProcess_Triangulate;
 
+import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -31,8 +32,10 @@ import lwjglengine.animation.AnimatedModelInstance;
 import lwjglengine.animation.AnimationHandler;
 import lwjglengine.graphics.Cubemap;
 import lwjglengine.graphics.Framebuffer;
+import lwjglengine.graphics.Material;
 import lwjglengine.model.Model;
 import lwjglengine.model.ModelInstance;
+import lwjglengine.model.Triangle;
 import lwjglengine.player.Camera;
 import lwjglengine.player.PlayerInputController;
 import lwjglengine.scene.DirLight;
@@ -91,13 +94,12 @@ public class AnimationWindow extends Window {
 		Light sun = new DirLight(new Vec3(1, -1, -1), new Vec3(1), 0.3f);
 		Light.addLight(WORLD_SCENE, sun);
 
-		this.pic = new PlayerInputController(new Vec3(0));
+		this.pic = new PlayerInputController(new Vec3(0, 125, 200));
 		this.pic.setAcceptPlayerInputs(false);
 		
 		try {
-			this.vampire = AnimatedModel.loadAnimatedModelFileRelative("/res/dancing_vampire/dancing_vampire.dae");
-			
-			
+//			this.vampire = AnimatedModel.loadAnimatedModelFileRelative("/res/dancing_vampire/dancing_vampire.dae");
+			this.vampire = AnimatedModel.loadAnimatedModelFileRelative("/res/eremite/eremite.dae");
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -106,19 +108,46 @@ public class AnimationWindow extends Window {
 		this.vampireInst = new AnimatedModelInstance(this.vampire, WORLD_SCENE);
 		AnimationHandler ah = this.vampireInst.getAnimationHandler();
 		ah.playAnimation(0);
-		ah.setRenderSkeleton(true);
 		ah.setDoLooping(true);
 		
-		
-//		File file = FileUtils.loadFileRelative("/res/dancing_vampire/dancing_vampire.dae");
-//		String filepath = file.getAbsolutePath();
-//		String parentFilepath = file.getParent() + "\\";
-		
-//		AIScene scene = aiImportFile(filepath, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices);
-//		this.animationHandler = new AnimationHandler(scene, WORLD_SCENE);
-//		this.animationHandler.setDoLooping(true);
-//		this.animationHandler.setRenderSkeleton(true);
-//		this.animationHandler.playAnimation(0);
+		//ground
+		{
+			float tile_size = 10;
+
+			Vec3 g0 = new Vec3(-tile_size, 0, tile_size);
+			Vec3 g1 = new Vec3(tile_size, 0, tile_size);
+			Vec3 g2 = new Vec3(tile_size, 0, -tile_size);
+			Vec3 g3 = new Vec3(-tile_size, 0, -tile_size);
+
+			Material light_mat = new Material(Color.WHITE);
+			Material dark_mat = new Material(new Vec3(0.6f));
+
+			light_mat.setSpecular(new Vec3(0));
+			dark_mat.setSpecular(new Vec3(0));
+
+			int tile_amt = 10;
+			for (int i = -tile_amt; i <= tile_amt; i++) {
+				for (int j = -tile_amt; j <= tile_amt; j++) {
+					Vec3 offset = new Vec3(i * tile_amt * 2, 0, j * tile_amt * 2);
+					Vec3 v0 = g0.add(offset);
+					Vec3 v1 = g1.add(offset);
+					Vec3 v2 = g2.add(offset);
+					Vec3 v3 = g3.add(offset);
+
+					ModelInstance t0 = Triangle.addTriangle(v0, v1, v2, WORLD_SCENE);
+					ModelInstance t1 = Triangle.addTriangle(v2, v3, v0, WORLD_SCENE);
+
+					if (Math.abs(i + j) % 2 == 0) {
+						t0.setMaterial(light_mat);
+						t1.setMaterial(light_mat);
+					}
+					else {
+						t0.setMaterial(dark_mat);
+						t1.setMaterial(dark_mat);
+					}
+				}
+			}
+		}
 		
 		this._resize();
 	}
@@ -203,13 +232,24 @@ public class AnimationWindow extends Window {
 
 	@Override
 	protected void _keyPressed(int key) {
-		if(key == GLFW.GLFW_KEY_Z) {
-			if(this.vampireInst.getAnimationHandler().isPlayingAnimation()) {
-				this.vampireInst.getAnimationHandler().stopAnimation();
+		AnimationHandler ah = this.vampireInst.getAnimationHandler();
+		switch(key) {
+		case GLFW.GLFW_KEY_Z: 
+			if(ah.isPlayingAnimation()) {
+				ah.stopAnimation();
 			}
 			else {
-				this.vampireInst.getAnimationHandler().playAnimation(0);
+				ah.playAnimation(0);
 			}
+			break;
+			
+		case GLFW.GLFW_KEY_X:
+			ah.setRenderSkeleton(!ah.getRenderSkeleton());
+			break;
+			
+		case GLFW.GLFW_KEY_C:
+			ah.setApplyAnimationToDefaultPose(!ah.getApplyAnimationToDefaultPose());
+			break;
 		}
 	}
 

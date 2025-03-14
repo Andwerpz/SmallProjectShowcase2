@@ -9,7 +9,6 @@ layout (location = 9) in vec3 colorID;
 layout (location = 10) in vec4 material_diffuse;
 layout (location = 11) in vec4 material_specular;
 layout (location = 12) in vec4 material_attr;
-layout (location = 13) in vec4 material_emissive;
 
 uniform mat4 pr_matrix;	//projection
 uniform mat4 vw_matrix;	//view
