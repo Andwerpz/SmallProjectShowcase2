@@ -1,8 +1,6 @@
 package animation;
 
-import static org.lwjgl.assimp.Assimp.aiImportFile;
-import static org.lwjgl.assimp.Assimp.aiProcess_JoinIdenticalVertices;
-import static org.lwjgl.assimp.Assimp.aiProcess_Triangulate;
+import static org.lwjgl.assimp.Assimp.*;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
@@ -35,6 +33,7 @@ import lwjglengine.graphics.Framebuffer;
 import lwjglengine.graphics.Material;
 import lwjglengine.model.Model;
 import lwjglengine.model.ModelInstance;
+import lwjglengine.model.ModelTransform;
 import lwjglengine.model.Triangle;
 import lwjglengine.player.Camera;
 import lwjglengine.player.PlayerInputController;
@@ -44,6 +43,7 @@ import lwjglengine.scene.Scene;
 import lwjglengine.screen.PerspectiveScreen;
 import lwjglengine.window.Window;
 import myutils.file.FileUtils;
+import myutils.math.Mat4;
 import myutils.math.Quaternion;
 import myutils.math.Vec3;
 import myutils.misc.Pair;
@@ -63,8 +63,8 @@ public class AnimationWindow extends Window {
 	private PerspectiveScreen perspective;
 	private PlayerInputController pic;
 	
-	private AnimatedModel vampire;
-	private AnimatedModelInstance vampireInst;
+	private AnimatedModel model;
+	private AnimatedModelInstance inst;
 
 	public AnimationWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
@@ -98,20 +98,24 @@ public class AnimationWindow extends Window {
 		this.pic.setAcceptPlayerInputs(false);
 		
 		try {
-//			this.vampire = AnimatedModel.loadAnimatedModelFileRelative("/res/dancing_vampire/dancing_vampire.dae");
-			this.vampire = AnimatedModel.loadAnimatedModelFileRelative("/res/eremite/eremite.dae");
+			this.model = AnimatedModel.loadAnimatedModelFileRelative("/res/dancing_vampire/dancing_vampire.dae");
+//			this.model = AnimatedModel.loadAnimatedModelFileRelative("/res/eremite/eremite_new.fbx");
+//			this.model = AnimatedModel.loadAnimatedModelFileRelative("/res/animation_testfiles/animation_with_skeleton.fbx");
+//			this.model = AnimatedModel.loadAnimatedModelFileRelative("/res/dragon/dragon.fbx", aiProcess_FlipWindingOrder | aiProcess_FlipWindingOrder);
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 		
-		this.vampireInst = new AnimatedModelInstance(this.vampire, WORLD_SCENE);
-		AnimationHandler ah = this.vampireInst.getAnimationHandler();
+		this.inst = new AnimatedModelInstance(this.model, WORLD_SCENE);
+//		this.inst.setModelTransform(new ModelTransform(Mat4.scale(0.1f)));
+//		this.inst.setModelTransform(new ModelTransform(Mat4.scale(1, -1, 1)));
+		AnimationHandler ah = this.inst.getAnimationHandler();
 		ah.playAnimation(0);
 		ah.setDoLooping(true);
 		
 		//ground
-		{
+		if(true) {
 			float tile_size = 10;
 
 			Vec3 g0 = new Vec3(-tile_size, 0, tile_size);
@@ -156,7 +160,7 @@ public class AnimationWindow extends Window {
 	protected void _kill() {
 		Scene.removeScene(WORLD_SCENE);
 		this.perspective.kill();
-		this.vampire.kill();
+		this.model.kill();
 	}
 
 	@Override
@@ -172,7 +176,7 @@ public class AnimationWindow extends Window {
 	@Override
 	protected void _update() {
 		this.pic.update();
-		this.vampireInst.getAnimationHandler().update();
+		this.inst.getAnimationHandler().update();
 	}
 
 	@Override
@@ -232,7 +236,7 @@ public class AnimationWindow extends Window {
 
 	@Override
 	protected void _keyPressed(int key) {
-		AnimationHandler ah = this.vampireInst.getAnimationHandler();
+		AnimationHandler ah = this.inst.getAnimationHandler();
 		switch(key) {
 		case GLFW.GLFW_KEY_Z: 
 			if(ah.isPlayingAnimation()) {
