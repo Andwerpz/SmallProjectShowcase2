@@ -1,0 +1,98 @@
+#version 430 core
+
+//Pipeline (6)
+// - rasterize gaussians in each tile
+
+layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+const float PI = 3.14159265;
+const float INV_PI = 1.0 / PI;
+
+uniform int screenWidth;
+uniform int screenHeight;
+uniform int tileSize;
+
+struct Tile {
+	int tile_id;			// should be in range [0, 65536)
+	int gaussian_depth;		// quantized depth, assume within range [0, 65536) as well
+	int gaussian_id;
+	int pad0;
+};
+
+struct GaussianInfo {
+	vec2 projected_center;
+	float alpha;
+	int is_offscreen;
+	mat2 Sigma_2D;
+	int tile_min_x;
+	int tile_min_y;
+	int tile_max_x;
+	int tile_max_y;
+	vec3 color;
+	float depth;
+};
+
+layout (binding = 2) readonly buffer tileBuffer {
+	Tile tileData[];
+};
+
+layout (binding = 5) readonly buffer tileStartBuffer {
+	int tileStartData[];
+};
+
+layout (binding = 6) writeonly buffer renderBuffer {
+	vec4 renderData[];
+};
+
+layout (binding = 7) readonly buffer gaussianInfoBuffer {
+	GaussianInfo gaussianInfoData[];
+};
+
+const int wgGaussianStorageSize = 256;
+shared GaussianInfo localGaussianData[wgGaussianStorageSize];
+
+float sample2DGaussianOpacity(mat2 covariance, vec2 v) {
+	float ret = dot(v, inverse(covariance) * v);
+	return exp((-1.0 / 2.0) * ret);
+}
+
+void main() {
+	int local_id = int(gl_LocalInvocationID.x);
+	int tile_id = int(gl_WorkGroupID.x);
+	
+	//figure out what pixel this thread corresponds to	
+	int tile_screen_width = (screenWidth + tileSize - 1) / tileSize;
+	int tile_screen_height = (screenHeight + tileSize - 1) / tileSize;
+	int px_x = (tile_id % tile_screen_width) * tileSize + local_id % tileSize;
+	int px_y = (tile_id / tile_screen_width) * tileSize + local_id / tileSize;
+	
+	//figure out where to start loading tiles
+	int tile_start = tileStartData[tile_id];
+	int tile_end = tileStartData[tile_id + 1];
+	
+	//raster all gaussians relevant to the current tile
+	vec3 color = vec3(0);
+	float throughput = 1.0;
+	for(int i = tile_start; i < tile_end; i += wgGaussianStorageSize) {
+		//load gaussians into local memory
+		if(local_id < wgGaussianStorageSize && i + local_id < tile_end) {
+			int gaussian_id = tileData[i + local_id].gaussian_id;
+			localGaussianData[local_id] = gaussianInfoData[gaussian_id];
+		}
+		barrier();
+		
+		//raster gaussians
+		for(int j = 0; j < wgGaussianStorageSize && i + j < tile_end && throughput > 0.01; j++) {
+			GaussianInfo info = localGaussianData[j];
+			float opacity = sample2DGaussianOpacity(info.Sigma_2D, vec2(px_x + 0.5, px_y + 0.5) - info.projected_center) * info.alpha;
+			color += info.color * opacity * throughput;
+			throughput *= 1.0 - opacity;
+		}
+		barrier();
+	}
+
+	//store color to texture
+	if(px_x < screenWidth && px_y < screenHeight) {
+		renderData[px_x + px_y * screenWidth] = vec4(color, 1.0);
+	}
+}

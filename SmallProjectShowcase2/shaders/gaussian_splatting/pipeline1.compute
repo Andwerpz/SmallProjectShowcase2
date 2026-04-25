@@ -1,0 +1,261 @@
+#version 430 core
+
+//Pipeline (1)
+// - figure how many tiles this gaussian is contributing to. 
+// - write that amount to the gaussian start buffer
+// - also populate GaussianInfo buffer with computed gaussian information. 
+
+layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+const float PI = 3.14159265;
+const float INV_PI = 1.0 / PI;
+
+uniform mat4 pr_matrix;
+uniform mat4 vw_matrix;
+uniform vec3 cameraPos;
+uniform bool reflectY;
+
+uniform int screenWidth;
+uniform int screenHeight;
+uniform float verticalFOV;
+uniform int tileSize;
+
+uniform int nrGaussians;
+struct Gaussian {
+	vec3 center;
+	float pad0;
+	vec4 orient;	//quaternion
+	vec3 scale;
+	float alpha;
+	
+	// 1 degree 0 coeff
+	// 3 degree 1 coeff
+	// 5 degree 2 coeff
+	// 7 degree 3 coeff
+	float r_coeff[16];
+	float g_coeff[16];
+	float b_coeff[16];
+};
+
+struct GaussianInfo {
+	vec2 projected_center;
+	float alpha;
+	int is_offscreen;
+	mat2 Sigma_2D;
+	int tile_min_x;
+	int tile_min_y;
+	int tile_max_x;
+	int tile_max_y;
+	vec3 color;
+	float depth;
+};
+
+layout (binding = 0) readonly buffer gaussianBuffer {
+	Gaussian gaussianData[];
+};
+
+layout (binding = 1) writeonly buffer gaussianStartBuffer {
+	int gaussianStartData[];
+};
+
+layout (binding = 7) writeonly buffer gaussianInfoBuffer {
+	GaussianInfo gaussianInfoData[];
+};
+
+mat3 buildMatrixFromQuaternion(vec4 q) {
+    float s = q.x;
+    float i = q.y;
+    float j = q.z;
+    float k = q.w;
+
+    //normalize 
+    float invLen = inversesqrt(s * s + i * i + j * j + k * k);
+    s *= invLen;
+    i *= invLen;
+    j *= invLen;
+    k *= invLen;
+
+    mat3 ret = mat3(
+        1.0 - 2.0 * (j * j + k * k), 2.0 * (i * j - k * s), 2.0 * (i * k + j * s),
+        2.0 * (i * j + k * s), 1.0 - 2.0 * (i * i + k * k), 2.0 * (j * k - i * s),
+        2.0 * (i * k - j * s), 2.0 * (j * k + i * s), 1.0 - 2.0 * (i * i + j * j)
+    );
+    return transpose(ret);
+}
+
+// https://huggingface.co/spaces/ashawkey/LGM/blob/1a5d02b97b979ce71bfd8a29d69458682521a9db/diff-gaussian-rasterization/cuda_rasterizer/auxiliary.h
+const float SH_C0 = 0.28209479177387814;
+const float SH_C1 = 0.4886025119029199;
+
+const float SH_C2_0 = 1.0925484305920792;
+const float SH_C2_1 = -1.0925484305920792;
+const float SH_C2_2 = 0.31539156525252005;
+const float SH_C2_3 = -1.0925484305920792;
+const float SH_C2_4 = 0.5462742152960396;
+
+const float SH_C3_0 = -0.5900435899266435;
+const float SH_C3_1 = 2.890611442640554;
+const float SH_C3_2 = -0.4570457994644658;
+const float SH_C3_3 = 0.3731763325901154;
+const float SH_C3_4 = -0.4570457994644658;
+const float SH_C3_5 = 1.445305721320277;
+const float SH_C3_6 = -0.5900435899266435;
+
+float sampleSH(float coeff[16], vec3 dir) {
+    float x = dir.x;
+    float y = dir.y;
+    float z = dir.z;
+
+    float xx = x * x;
+    float yy = y * y;
+    float zz = z * z;
+    float xy = x * y;
+    float yz = y * z;
+    float xz = x * z;
+
+    float result = 0.0;
+
+    // degree 0
+    result += SH_C0 * coeff[0];
+
+    // degree 1
+    result += -SH_C1 * y * coeff[1];
+    result += SH_C1 * z * coeff[2];
+    result += -SH_C1 * x * coeff[3];
+	
+	// degree 2
+    result += SH_C2_0 * xy * coeff[4];
+    result += SH_C2_1 * yz * coeff[5];
+    result += SH_C2_2 * (2.0 * zz - xx - yy) * coeff[6];
+    result += SH_C2_3 * xz * coeff[7];
+    result += SH_C2_4 * (xx - yy) * coeff[8];
+	
+    // degree 3
+    result += SH_C3_0 * y * (3.0 * xx - yy) * coeff[9];
+    result += SH_C3_1 * xy * z * coeff[10];
+    result += SH_C3_2 * y * (4.0 * zz - xx - yy) * coeff[11];
+    result += SH_C3_3 * z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * coeff[12];
+    result += SH_C3_4 * x * (4.0 * zz - xx - yy) * coeff[13];
+    result += SH_C3_5 * z * (xx - yy) * coeff[14];
+    result += SH_C3_6 * x * (xx - 3.0 * yy) * coeff[15];
+    
+    return result;
+}
+
+void main() {
+	int gaussian_id = int(gl_GlobalInvocationID.x);
+	if(gaussian_id >= nrGaussians) {
+		return;
+	}
+	
+	//calc projection focal length
+	float f_y = float(screenHeight) / (2.0 * tan(verticalFOV / 2.0));
+	float f_x = f_y * screenWidth / screenHeight;
+	
+	//load gaussian
+	Gaussian g = gaussianData[gaussian_id];
+	vec3 center = g.center;
+	if(reflectY) {
+		center.y *= -1;
+	}
+	vec3 view_dir = normalize(center - cameraPos);
+	if(reflectY) {
+		view_dir.y *= -1;
+	}
+	
+	//transform gaussian center into camera space
+	center = vec3(vw_matrix * vec4(center, 1.0));
+	if(center.z > -max(g.scale.x, max(g.scale.y, g.scale.z))) {				//gaussian too close or behind camera plane
+		gaussianStartData[gaussian_id] = 0;
+		gaussianInfoData[gaussian_id].is_offscreen = 1;
+		return;
+	}
+	
+	//project gaussian center onto screen
+	vec4 pr_center = pr_matrix * vec4(center, 1.0);
+	vec2 center_uv = (pr_center.xy / pr_center.w + 1.0) / 2.0;
+	center_uv.x *= screenWidth;
+	center_uv.y *= screenHeight;
+	const int margin = 50;
+	if(center_uv.x < -margin || center_uv.y < -margin || center_uv.x >= screenWidth + margin || center_uv.y >= screenHeight + margin) {	//gaussian center offscreen
+		gaussianStartData[gaussian_id] = 0;
+		gaussianInfoData[gaussian_id].is_offscreen = 1;
+		return;
+	}
+	
+	//project gaussian covariance onto screen
+	mat3 R = buildMatrixFromQuaternion(g.orient);							// covariance rotation
+	mat3 S = mat3(															// covariance scale
+		g.scale.x, 0, 0,
+		0, g.scale.y, 0,
+		0, 0, g.scale.z
+	);
+	mat3 Sigma_3D = R * S * transpose(S) * transpose(R);					// 3D covariance (world space)
+	if(reflectY) {
+		Sigma_3D[1][0] *= -1;
+		Sigma_3D[1][2] *= -1;
+		Sigma_3D[0][1] *= -1;
+		Sigma_3D[2][1] *= -1;
+	}
+	
+	mat3 W = mat3(vw_matrix);												// view matrix (no translation)		
+	mat3x2 J = mat3x2(														// projection jacobian
+		f_x / center.z, 0, 
+		0, f_y / center.z,
+		-f_x * center.x / (center.z * center.z), -f_y * center.y / (center.z * center.z)
+	);
+	mat2 Sigma_2D = J * (W * Sigma_3D * transpose(W)) * transpose(J);		// 2D covariance (screen pixel space)
+	
+	//regularize covariance
+	Sigma_2D[0][0] += 0.01;
+	Sigma_2D[1][1] += 0.01;
+	
+	//compute gaussian AABB
+	float tau = 9;
+	vec2 screen_dim = vec2(
+		sqrt(tau * Sigma_2D[0][0]),
+		sqrt(tau * Sigma_2D[1][1])
+	);
+	float min_x = center_uv.x - screen_dim.x;
+	float min_y = center_uv.y - screen_dim.y;
+	float max_x = center_uv.x + screen_dim.x;
+	float max_y = center_uv.y + screen_dim.y;
+	
+	int tile_min_x = int(floor(min_x / tileSize));
+	int tile_min_y = int(floor(min_y / tileSize));
+	int tile_max_x = int(ceil(max_x / tileSize));
+	int tile_max_y = int(ceil(max_y / tileSize));
+	
+	//clamp AABB to screen
+	int tile_screen_width = (screenWidth + tileSize - 1) / tileSize;
+	int tile_screen_height = (screenHeight + tileSize - 1) / tileSize;
+	tile_min_x = max(0, min(tile_screen_width, tile_min_x));
+	tile_min_y = max(0, min(tile_screen_height, tile_min_y));
+	tile_max_x = max(0, min(tile_screen_width, tile_max_x));
+	tile_max_y = max(0, min(tile_screen_height, tile_max_y));
+	
+	//evaluate gaussian color
+	vec3 color = vec3(
+		sampleSH(g.r_coeff, view_dir),
+		sampleSH(g.g_coeff, view_dir),
+		sampleSH(g.b_coeff, view_dir)
+	);
+	color += 0.5;
+	color = max(color, vec3(0.0));
+	
+	//populate global buffers
+	gaussianStartData[gaussian_id] = (tile_max_x - tile_min_x) * (tile_max_y - tile_min_y);	
+	
+	GaussianInfo info;
+	info.projected_center = center_uv;
+	info.alpha = g.alpha;
+	info.is_offscreen = 0;
+	info.Sigma_2D = Sigma_2D;
+	info.tile_min_x = tile_min_x;
+	info.tile_min_y = tile_min_y;
+	info.tile_max_x = tile_max_x;
+	info.tile_max_y = tile_max_y;
+	info.color = color;
+	info.depth = -center.z;
+	gaussianInfoData[gaussian_id] = info;
+}

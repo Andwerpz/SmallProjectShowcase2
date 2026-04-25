@@ -1,0 +1,74 @@
+#version 430 core
+
+//Pipeline (3)
+// - write tile-gaussian pairs into tile buffer
+
+layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+const float PI = 3.14159265;
+const float INV_PI = 1.0 / PI;
+
+uniform int screenWidth;
+uniform int screenHeight;
+uniform int tileSize;
+
+uniform int nrGaussians;
+
+struct Tile {
+	int tile_id;			// should be in range [0, 65536)
+	int gaussian_depth;		// quantized depth, assume within range [0, 65536) as well
+	int gaussian_id;
+	float pad0;
+};
+
+struct GaussianInfo {
+	vec2 projected_center;
+	float alpha;
+	int is_offscreen;
+	mat2 Sigma_2D;
+	int tile_min_x;
+	int tile_min_y;
+	int tile_max_x;
+	int tile_max_y;
+	vec3 color;
+	float depth;
+};
+
+layout (binding = 1) readonly buffer gaussianStartBuffer {
+	int gaussianStartData[];
+};
+
+layout (binding = 2) writeonly buffer tileBuffer {
+	Tile tileData[];
+};
+
+layout (binding = 7) readonly buffer gaussianInfoBuffer {
+	GaussianInfo gaussianInfoData[];
+};
+
+void main() {
+	int gaussian_id = int(gl_GlobalInvocationID.x);
+	if(gaussian_id >= nrGaussians) {
+		return;
+	}
+	
+	GaussianInfo info = gaussianInfoData[gaussian_id];
+	if(info.is_offscreen == 1) {
+		return;
+	}
+	
+	//write tile-gaussian pairs
+	int tile_screen_width = (screenWidth + tileSize - 1) / tileSize;
+	int tile_screen_height = (screenHeight + tileSize - 1) / tileSize;
+	int quantized_depth = int(info.depth * 256.0);
+	int tile_ptr = gaussianStartData[gaussian_id];
+	for(int tx = info.tile_min_x; tx < info.tile_max_x; tx++) {
+		for(int ty = info.tile_min_y; ty < info.tile_max_y; ty++) {
+			tileData[tile_ptr].tile_id = tx + ty * tile_screen_width;
+			tileData[tile_ptr].gaussian_depth = quantized_depth;
+			tileData[tile_ptr].gaussian_id = gaussian_id;
+			tileData[tile_ptr].pad0 = 0;
+			tile_ptr ++;
+		}
+	}
+}

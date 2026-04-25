@@ -41,6 +41,7 @@ import terrain_shadow_casting.TerrainShadowCastingWindow;
 import vector_art.VectorArtWindow;
 import volumetric_clouds.VolumetricCloudsWindow;
 import voxel_raytracing.VoxelRaytracingWindow;
+import gaussian_splatting.GaussianSplattingWindow;
 
 public class BackgroundWindow extends Window {
 	//for now, this window should just be to open a context menu. 
@@ -48,10 +49,7 @@ public class BackgroundWindow extends Window {
 
 	//PROJECT IDEAS:
 	// - Dynamic Skybox Shader
-	// - 3D Model Animations
 	// - Doom style level editor
-	// - Gaussian Splatting
-	//   - this one is a stretch lol, but as i'm doing research in this area, maybe??
 	// - Tile based bread board
 	// - Wave Function Collapse
 	// - 3D mesh rigid and softbody physics
@@ -157,6 +155,7 @@ public class BackgroundWindow extends Window {
 			projectPicker.addToList("Spectral Raytracing");
 			projectPicker.addToList("Terrain Shadow Casting");
 			projectPicker.addToList("Animation");
+			projectPicker.addToList("Gaussian Splatting");
 			break;
 		}
 
@@ -352,6 +351,11 @@ public class BackgroundWindow extends Window {
 			
 			case "Animation": {
 				AdjustableWindow window = new AdjustableWindow(new AnimationWindow(x, y, width, height, null), BackgroundWindow.this);
+				break;
+			}
+			
+			case "Gaussian Splatting":{
+				AdjustableWindow window = new AdjustableWindow(new GaussianSplattingWindow(x, y, width, height, null), BackgroundWindow.this);
 				break;
 			}
 			}

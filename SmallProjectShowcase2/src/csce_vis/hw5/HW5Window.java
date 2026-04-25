@@ -263,7 +263,7 @@ public class HW5Window extends Window {
 
 		//cube triangle
 		case 5: {
-			int layer_amt = 12;
+			int layer_amt = 14;
 			float cube_sz = 3;
 			float yptr = cube_sz / 2;
 			for (int i = layer_amt; i >= 1; i--) {
