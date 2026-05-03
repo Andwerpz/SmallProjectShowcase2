@@ -3,8 +3,17 @@
 //Pipeline (4)
 // - sort tile buffer
 
-//when you've run out of ideas, take a look around you to steal ideas from other people
-// https://gpuopen.com/download/Introduction_to_GPU_Radix_Sort.pdf
+//when profiling, found that sortPhase 2 actually takes up 80% of the time. 
+
+// optimizations: (in total, it was taking around 20 ms to sort 700k elements)
+// - don't load tiles from global buffer during sortPhase 1 (-2 ms)
+// - pack tile_id and gaussian_depth into 4 bytes, so sizeof(Tile) is now 8 bytes (-8 ms)
+// - compute globalHistogramPrefix once per workgroup in shared memory (-2 ms)
+// - compute thread_histogram_offset alongside per-thread histograms (-0.5 ms)
+// - read directly from global buffer during sortPhase 0 (-1.5 ms)
+// - only compute tile buckets once during sortPhase 2 by storing them while building the thread histogram (-0.2 ms)
+// - since threads only actually look at the tiles within their own ELEMENTS_PER_THREAD tile group, forego
+//   loading tiles into shared memory and just load it into thread local memory. (-0.2 ms)
 
 layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 

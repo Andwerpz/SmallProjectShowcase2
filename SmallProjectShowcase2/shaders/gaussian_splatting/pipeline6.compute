@@ -13,17 +13,17 @@ uniform int screenHeight;
 uniform int tileSize;
 
 struct Tile {
-	int tile_id;			// should be in range [0, 65536)
-	int gaussian_depth;		// quantized depth, assume within range [0, 65536) as well
+	// tile_id should be in range [0, 65536)
+	// gaussian_depth should be quantized in range [0, 65536)
+	uint sort_key;		// (tile_id << 16) | (gaussian_depth << 0)
 	int gaussian_id;
-	int pad0;
 };
 
 struct GaussianInfo {
 	vec2 projected_center;
 	float alpha;
 	int is_offscreen;
-	mat2 Sigma_2D;
+	mat2 inv_Sigma_2D;
 	int tile_min_x;
 	int tile_min_y;
 	int tile_max_x;
@@ -51,8 +51,8 @@ layout (binding = 7) readonly buffer gaussianInfoBuffer {
 const int wgGaussianStorageSize = 256;
 shared GaussianInfo localGaussianData[wgGaussianStorageSize];
 
-float sample2DGaussianOpacity(mat2 covariance, vec2 v) {
-	float ret = dot(v, inverse(covariance) * v);
+float sample2DGaussianOpacity(mat2 inv_covariance, vec2 v) {
+	float ret = dot(v, inv_covariance * v);
 	return exp((-1.0 / 2.0) * ret);
 }
 
@@ -74,6 +74,11 @@ void main() {
 	vec3 color = vec3(0);
 	float throughput = 1.0;
 	for(int i = tile_start; i < tile_end; i += wgGaussianStorageSize) {
+		//cap amount of gaussians to render
+		if(i - tile_start >= (1 << 14)) {
+			break;
+		}
+		
 		//load gaussians into local memory
 		if(local_id < wgGaussianStorageSize && i + local_id < tile_end) {
 			int gaussian_id = tileData[i + local_id].gaussian_id;
@@ -84,7 +89,9 @@ void main() {
 		//raster gaussians
 		for(int j = 0; j < wgGaussianStorageSize && i + j < tile_end && throughput > 0.01; j++) {
 			GaussianInfo info = localGaussianData[j];
-			float opacity = sample2DGaussianOpacity(info.Sigma_2D, vec2(px_x + 0.5, px_y + 0.5) - info.projected_center) * info.alpha;
+			vec2 pixel_center = vec2(px_x + 0.5, px_y + 0.5) - info.projected_center;
+			float opacity = exp((-1.0 / 2.0) * dot(pixel_center, info.inv_Sigma_2D * pixel_center)) * info.alpha;
+			// float opacity = sample2DGaussianOpacity(info.inv_Sigma_2D, vec2(px_x + 0.5, px_y + 0.5) - info.projected_center) * info.alpha;
 			color += info.color * opacity * throughput;
 			throughput *= 1.0 - opacity;
 		}

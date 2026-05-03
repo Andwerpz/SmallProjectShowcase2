@@ -15,17 +15,17 @@ uniform int tileSize;
 uniform int nrGaussians;
 
 struct Tile {
-	int tile_id;			// should be in range [0, 65536)
-	int gaussian_depth;		// quantized depth, assume within range [0, 65536) as well
+	// tile_id should be in range [0, 65536)
+	// gaussian_depth should be quantized in range [0, 65536)
+	uint sort_key;		// (tile_id << 16) | (gaussian_depth << 0)
 	int gaussian_id;
-	float pad0;
 };
 
 struct GaussianInfo {
 	vec2 projected_center;
 	float alpha;
 	int is_offscreen;
-	mat2 Sigma_2D;
+	mat2 inv_Sigma_2D;
 	int tile_min_x;
 	int tile_min_y;
 	int tile_max_x;
@@ -63,11 +63,12 @@ void main() {
 	int quantized_depth = int(info.depth * 256.0);
 	int tile_ptr = gaussianStartData[gaussian_id];
 	for(int tx = info.tile_min_x; tx < info.tile_max_x; tx++) {
-		for(int ty = info.tile_min_y; ty < info.tile_max_y; ty++) {
-			tileData[tile_ptr].tile_id = tx + ty * tile_screen_width;
-			tileData[tile_ptr].gaussian_depth = quantized_depth;
+		for(int ty = info.tile_min_y; ty < info.tile_max_y; ty++) {			
+			tileData[tile_ptr].sort_key = 
+				((tx + ty * tile_screen_width) << 16) | 
+				((quantized_depth & 0xFFFF) << 0)
+			;
 			tileData[tile_ptr].gaussian_id = gaussian_id;
-			tileData[tile_ptr].pad0 = 0;
 			tile_ptr ++;
 		}
 	}

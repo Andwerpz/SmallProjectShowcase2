@@ -13,7 +13,9 @@ const float INV_PI = 1.0 / PI;
 uniform mat4 pr_matrix;
 uniform mat4 vw_matrix;
 uniform vec3 cameraPos;
+
 uniform bool reflectY;
+uniform float renderScale;
 
 uniform int screenWidth;
 uniform int screenHeight;
@@ -41,7 +43,7 @@ struct GaussianInfo {
 	vec2 projected_center;
 	float alpha;
 	int is_offscreen;
-	mat2 Sigma_2D;
+	mat2 inv_Sigma_2D;
 	int tile_min_x;
 	int tile_min_y;
 	int tile_max_x;
@@ -154,7 +156,7 @@ void main() {
 	
 	//load gaussian
 	Gaussian g = gaussianData[gaussian_id];
-	vec3 center = g.center;
+	vec3 center = g.center * renderScale;
 	if(reflectY) {
 		center.y *= -1;
 	}
@@ -186,9 +188,9 @@ void main() {
 	//project gaussian covariance onto screen
 	mat3 R = buildMatrixFromQuaternion(g.orient);							// covariance rotation
 	mat3 S = mat3(															// covariance scale
-		g.scale.x, 0, 0,
-		0, g.scale.y, 0,
-		0, 0, g.scale.z
+		g.scale.x * renderScale, 0, 0,
+		0, g.scale.y * renderScale, 0,
+		0, 0, g.scale.z * renderScale
 	);
 	mat3 Sigma_3D = R * S * transpose(S) * transpose(R);					// 3D covariance (world space)
 	if(reflectY) {
@@ -250,7 +252,7 @@ void main() {
 	info.projected_center = center_uv;
 	info.alpha = g.alpha;
 	info.is_offscreen = 0;
-	info.Sigma_2D = Sigma_2D;
+	info.inv_Sigma_2D = inverse(Sigma_2D);
 	info.tile_min_x = tile_min_x;
 	info.tile_min_y = tile_min_y;
 	info.tile_max_x = tile_max_x;

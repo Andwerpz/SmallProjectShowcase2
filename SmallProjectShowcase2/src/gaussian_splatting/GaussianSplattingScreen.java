@@ -63,27 +63,47 @@ public class GaussianSplattingScreen extends Screen {
 	//   - use shader local storage, each thread in tile should fetch one gaussian from buffer into local memory
 	// - (7) render rasterized pixels to output buffer
 	
-	
 	// TODO
 	// - right now if too many gaussians end up in one tile, then one fragment shader has to iterate through all of them
 	//   maybe put a hard cap on how many gaussians one fragment shader can iterate across?
 	// - benchmark which phases are consuming the most time. 
-	// - look into optimizing phases (2) and (4) specifically. 
+	//   - seems like phase (4) is taking up 60-80% of the total GPU time, and phase (6) is consuming around 20%. 
 	
+/*
+colmap feature_extractor \
+  --database_path ./captures/myscene/database.db \
+  --image_path ./captures/myscene/images
+
+colmap exhaustive_matcher \
+  --database_path ./captures/myscene/database.db
+
+colmap mapper \
+  --database_path ./captures/myscene/database.db \
+  --image_path ./captures/myscene/images \
+  --output_path ./captures/myscene/sparse
+
+opensplat /path/to/project -n <itercnt> 
+*/
 	
 	private Shader splattingShader;
 	
+	static final int NR_PHASES = 7;
+	
 	static final int SIZEOF_GAUSSIAN = 240;
-	static final int SIZEOF_TILE = 16;
+	static final int SIZEOF_TILE = 8;
 	static final int SIZEOF_GAUSSIAN_INFO = 64;
 	
 	private int nrGaussians;	//number of gaussians in the gaussian buffer
 	private int nrScreenTiles;	//number of 16x16 pixel tiles on the screen
 	private int maxTiles;		//maximum amount of tiles that the tile buffers can currently handle
+	
 	private boolean reflectY = true;
+	private float renderScale = 20.0f;
 	
 	static final int TILE_SIZE = 16;
 	
+	static final int RADIX_NR_PHASES = 3;
+	static final int RADIX_NR_ITERATIONS = 8;
 	static final int RADIX_ELEMENTS_PER_THREAD = 32;
 	static final int RADIX_THREADS_PER_BLOCK = 32;
 	static final int RADIX_ELEMENTS_PER_BLOCK = RADIX_ELEMENTS_PER_THREAD * RADIX_THREADS_PER_BLOCK;
@@ -108,6 +128,15 @@ public class GaussianSplattingScreen extends Screen {
 	private Shader pipeline5;
 	private Shader pipeline6;
 	private Shader pipeline7;
+	
+	static final int TIMING_PRINT_INTERVAL = 120;
+	private boolean timingEnabled = true;
+	private int timingFrameCounter;
+	private int[] timingQueries;
+	private double[] timingPhaseMS;
+	
+	private int[][] radixTimingQueries;
+	private double[][] radixTimingMS;
 	
 	public GaussianSplattingScreen() {
 		super();
@@ -151,6 +180,35 @@ public class GaussianSplattingScreen extends Screen {
 		this.prefixBlockSSBO.setSize(BLELLOCH_BLOCK_SIZE * 4);
 		
 		this.maxTiles = 0;
+		
+		this.timingFrameCounter = 0;
+		this.timingQueries = new int[NR_PHASES];
+		this.timingPhaseMS = new double[NR_PHASES];
+		for(int i = 0; i < NR_PHASES; i++) {
+			this.timingQueries[i] = glGenQueries();
+			this.timingPhaseMS[i] = 0;
+		}
+		
+		this.radixTimingQueries = new int[RADIX_NR_ITERATIONS][RADIX_NR_PHASES];
+		this.radixTimingMS = new double[RADIX_NR_ITERATIONS][RADIX_NR_PHASES];
+		for(int i = 0; i < RADIX_NR_ITERATIONS; i++) {
+			for(int j = 0; j < RADIX_NR_PHASES; j++) {
+				this.radixTimingQueries[i][j] = glGenQueries();
+				this.radixTimingMS[i][j] = 0;
+			}
+		}
+	}
+	
+	public void setReflectY(boolean b) {
+		this.reflectY = b;
+	}
+	
+	public void setRenderScale(float f) {
+		this.renderScale = Math.max(0.05f, f);
+	}
+	
+	public void setTimingEnabled(boolean b) {
+		this.timingEnabled = b;
 	}
 	
 	public void setCameraPos(Vec3 _pos) {
@@ -218,18 +276,19 @@ public class GaussianSplattingScreen extends Screen {
 
 	@Override
 	protected void _render(Framebuffer outputBuffer) {
-		int phase_cap = 10;
-		
 		// -- PHASE 1 --
 		// - for each gaussian figure out how many tiles it intersects
 		// - write this to the gaussian start buffer
-		if(phase_cap >= 1) {
+		{
+			glBeginQuery(GL_TIME_ELAPSED, this.timingQueries[0]);
 			this.pipeline1.enable();
 			
 			this.pipeline1.setUniformMat4("pr_matrix", this.camera.getProjectionMatrix());
 			this.pipeline1.setUniformMat4("vw_matrix", this.camera.getViewMatrix());
 			this.pipeline1.setUniform3f("cameraPos", this.camera.getPos());
+			
 			this.pipeline1.setUniform1i("reflectY", this.reflectY ? 1 : 0);
+			this.pipeline1.setUniform1f("renderScale", this.renderScale);
 			
 			this.pipeline1.setUniform1i("screenWidth", this.getScreenWidth());
 			this.pipeline1.setUniform1i("screenHeight", this.getScreenHeight());
@@ -244,11 +303,13 @@ public class GaussianSplattingScreen extends Screen {
 			
 			glDispatchCompute((this.nrGaussians + 32 - 1) / 32, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+			glEndQuery(GL_TIME_ELAPSED);
 		}
 		
 		// -- PHASE 2 -- 
 		// - take exclusive prefix sum of gaussian start buffer
-		if(phase_cap >= 2) {
+		{
+			glBeginQuery(GL_TIME_ELAPSED, this.timingQueries[1]);
 			int nr_blocks = (this.nrGaussians / BLELLOCH_BLOCK_SIZE) + 1;
 			if(nr_blocks > BLELLOCH_BLOCK_SIZE) {
 				System.err.println("nrGaussians exceeds Phase 2 limit");
@@ -266,11 +327,12 @@ public class GaussianSplattingScreen extends Screen {
 				glDispatchCompute(phase == 2? 1 : nr_blocks, 1, 1);
 				glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 			}
+			glEndQuery(GL_TIME_ELAPSED);
 		}
 		
 		int total_tiles = 0;
 		int total_blocks = 0;
-		if(phase_cap >= 2) {
+		{
 			// - read back size of tile buffer
 			total_tiles = -1;
 			{
@@ -296,7 +358,8 @@ public class GaussianSplattingScreen extends Screen {
 		
 		// -- PHASE 3 -- 
 		// - write tile-gaussian pairs into tile buffer
-		if(phase_cap >= 3) {
+		{
+			glBeginQuery(GL_TIME_ELAPSED, this.timingQueries[2]);
 			this.pipeline3.enable();
 			
 			this.pipeline3.setUniform1i("screenWidth", this.getScreenWidth());
@@ -311,20 +374,21 @@ public class GaussianSplattingScreen extends Screen {
 			
 			glDispatchCompute((this.nrGaussians + 32 - 1) / 32, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+			glEndQuery(GL_TIME_ELAPSED);
 		}
 		
 		// -- PHASE 4 -- 
 		// - sort tile buffer using radix sort
 		// - every iteration, the tiles in layout 2 get permuted into the buffer in layout 3
-		if(phase_cap >= 4) {			
+		{			
 			this.pipeline4.enable();
 			
 			this.pipeline4.setUniform1i("nrGaussians", this.nrGaussians);
+			this.pipeline4.setUniform1i("nrTiles", total_tiles);
 			
-			this.gaussianStartSSBO.bindToBase(1);
 			this.blockHistogramSSBO.bindToBase(4);
 			
-			for(int iteration = 0; iteration < 8; iteration++) {
+			for(int iteration = 0; iteration < RADIX_NR_ITERATIONS; iteration++) {
 				if((iteration % 2) == 0) {
 					this.tileSSBO1.bindToBase(2);
 					this.tileSSBO2.bindToBase(3);
@@ -334,19 +398,22 @@ public class GaussianSplattingScreen extends Screen {
 					this.tileSSBO2.bindToBase(2);
 				}
 				
-				for(int phase = 0; phase < 3; phase++) {
+				for(int phase = 0; phase < RADIX_NR_PHASES; phase++) {
 					this.pipeline4.setUniform1i("sortIteration", iteration);
 					this.pipeline4.setUniform1i("sortPhase", phase);
 					
+					glBeginQuery(GL_TIME_ELAPSED, this.radixTimingQueries[iteration][phase]);
 					glDispatchCompute(total_blocks, 1, 1);
 					glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+					glEndQuery(GL_TIME_ELAPSED);
 				}
 			}
 		}
 		
 		// -- PHASE 5 --
 		// - compute per-tile start offsets within tile buffer
-		if(phase_cap >= 5){
+		{
+			glBeginQuery(GL_TIME_ELAPSED, this.timingQueries[4]);
 			this.pipeline5.enable();
 			
 			this.pipeline5.setUniform1i("nrGaussians", this.nrGaussians);
@@ -358,11 +425,13 @@ public class GaussianSplattingScreen extends Screen {
 			
 			glDispatchCompute((this.nrScreenTiles + 32 - 1) / 32, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+			glEndQuery(GL_TIME_ELAPSED);
 		}
 		
 		// -- PHASE 6 --
 		// - raster gaussians in each tile
-		if(phase_cap >= 6) {
+		{
+			glBeginQuery(GL_TIME_ELAPSED, this.timingQueries[5]);
 			this.pipeline6.enable();
 			
 			this.pipeline6.setUniform1i("screenWidth", this.getScreenWidth());
@@ -377,11 +446,13 @@ public class GaussianSplattingScreen extends Screen {
 			
 			glDispatchCompute(this.nrScreenTiles, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+			glEndQuery(GL_TIME_ELAPSED);
 		}
 		
 		// -- PHASE 7 -- 
 		// - render renderSSBO back to output buffer
-		if(phase_cap >= 7) {
+		{
+			glBeginQuery(GL_TIME_ELAPSED, this.timingQueries[6]);
 			outputBuffer.bind();
 			this.pipeline7.enable();
 			
@@ -393,6 +464,81 @@ public class GaussianSplattingScreen extends Screen {
 			glDisable(GL_DEPTH_TEST);
 			glEnable(GL_BLEND);
 			screenQuad.render();
+			glEndQuery(GL_TIME_ELAPSED);
+		}
+		
+		// print timing information
+		if(this.timingEnabled) {
+			this.timingFrameCounter ++;
+			for(int i = 0; i < RADIX_NR_ITERATIONS; i++) {
+				for(int j = 0; j < RADIX_NR_PHASES; j++) {
+					long phase_ns = glGetQueryObjectui64(this.radixTimingQueries[i][j], GL_QUERY_RESULT);
+					this.radixTimingMS[i][j] += phase_ns / 1_000_000.0;
+				}
+			}
+			for(int i = 0; i < NR_PHASES; i++) {
+				if(i != 3) {	//radix sort handled separately
+					long phase_ns = glGetQueryObjectui64(this.timingQueries[i], GL_QUERY_RESULT);
+					this.timingPhaseMS[i] += phase_ns / 1_000_000.0;
+				}
+			}
+
+			if(this.timingFrameCounter >= TIMING_PRINT_INTERVAL) {
+				System.out.println("Tile Buffer Size : " + total_tiles);
+				
+				double total_ms = 0.0;
+				for(int i = 0; i < RADIX_NR_ITERATIONS; i++) {
+					for(int j = 0; j < RADIX_NR_PHASES; j++) {
+						this.timingPhaseMS[3] += this.radixTimingMS[i][j];
+					}
+				}
+				for(int i = 0; i < NR_PHASES; i++) {
+					this.timingPhaseMS[i] /= TIMING_PRINT_INTERVAL;
+					total_ms += this.timingPhaseMS[i];
+				}
+				System.out.printf("Average total GPU time: %.4f ms%n", total_ms);
+				for(int i = 0; i < NR_PHASES; i++) {
+					double percent = total_ms == 0.0 ? 0.0 : (this.timingPhaseMS[i] / total_ms) * 100.0;
+					System.out.printf(
+						"Phase %d average GPU time: %.4f ms (%.2f%%)%n",
+						i + 1,
+						this.timingPhaseMS[i],
+						percent
+					);
+				}
+				
+				double radix_total_ms = 0;
+				for(int i = 0; i < RADIX_NR_ITERATIONS; i++) {
+					for(int j = 0; j < RADIX_NR_PHASES; j++) {
+						this.radixTimingMS[i][j] /= TIMING_PRINT_INTERVAL;
+						radix_total_ms += this.radixTimingMS[i][j];
+					}
+				}
+				System.out.printf("Average radix sort GPU time: %.4f ms%n", radix_total_ms);
+				for(int i = 0; i < RADIX_NR_PHASES; i++) {
+					double phase_ms = 0;
+					for(int j = 0; j < RADIX_NR_ITERATIONS; j++) {
+						phase_ms += this.radixTimingMS[j][i];
+					}
+					double percent = radix_total_ms == 0.0 ? 0.0 : (phase_ms / radix_total_ms) * 100.0;
+					System.out.printf(
+						"Radix phase %d average GPU time: %.4f ms (%.2f%%)%n",
+						i + 1,
+						phase_ms,
+						percent
+					);
+				}
+
+				this.timingFrameCounter = 0;
+				for(int i = 0; i < NR_PHASES; i++) {
+					this.timingPhaseMS[i] = 0;
+				}
+				for(int i = 0; i < RADIX_NR_ITERATIONS; i++) {
+					for(int j = 0; j < RADIX_NR_PHASES; j++) {
+						this.radixTimingMS[i][j] = 0;
+					}
+				}
+			}
 		}
 		
 		// basic rendering
@@ -438,6 +584,13 @@ public class GaussianSplattingScreen extends Screen {
 		this.renderSSBO.kill();
 		this.prefixBlockSSBO.kill();
 		this.gaussianInfoSSBO.kill();
+		
+		for(int i = 0; i < NR_PHASES; i++) {
+			glDeleteQueries(this.timingQueries[i]);
+		}
+		for(int i = 0; i < RADIX_NR_PHASES; i++) {
+			glDeleteQueries(this.radixTimingQueries[i]);
+		}
 	}
 
 }

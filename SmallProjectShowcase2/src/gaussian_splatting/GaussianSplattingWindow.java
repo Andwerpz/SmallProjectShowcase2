@@ -1,5 +1,9 @@
 package gaussian_splatting;
 
+import static org.lwjgl.glfw.GLFW.GLFW_KEY_L;
+import static org.lwjgl.glfw.GLFW.GLFW_KEY_R;
+import static org.lwjgl.glfw.GLFW.GLFW_KEY_S;
+import static org.lwjgl.glfw.GLFW.GLFW_KEY_T;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL12.*;
 import static org.lwjgl.opengl.GL13.*;
@@ -47,6 +51,10 @@ import lwjglengine.scene.DirLight;
 import lwjglengine.scene.Light;
 import lwjglengine.scene.Scene;
 import lwjglengine.screen.PerspectiveScreen;
+import lwjglengine.window.AdjustableWindow;
+import lwjglengine.window.FileCreatorWindow;
+import lwjglengine.window.FileSelectorWindow;
+import lwjglengine.window.FileSelectorWindow.FileSelectorCallback;
 import lwjglengine.window.ObjectEditorWindow;
 import lwjglengine.window.Window;
 import myutils.file.FileUtils;
@@ -58,7 +66,7 @@ import myutils.math.Vec2;
 import myutils.math.Vec3;
 import myutils.file.ply.PLYReader;
 
-public class GaussianSplattingWindow extends Window {
+public class GaussianSplattingWindow extends Window implements FileSelectorCallback {
 
 	//holy moly, gaussian splatting
 
@@ -67,6 +75,8 @@ public class GaussianSplattingWindow extends Window {
 	private GaussianSplattingScreen screen;
 	private PlayerInputController pic;
 
+	private Options options;
+	
 	public GaussianSplattingWindow(int xOffset, int yOffset, int width, int height, Window parentWindow) {
 		super(xOffset, yOffset, width, height, parentWindow);
 		this.init();
@@ -77,6 +87,12 @@ public class GaussianSplattingWindow extends Window {
 		this.setDeselectOnEscPressed(true);
 		this.setUnlockCursorOnEscPressed(true);
 
+		//options menu
+		{
+			this.options = new Options();
+			AdjustableWindow adj = new AdjustableWindow("Gaussian Splatting Options", new ObjectEditorWindow(this.options), this);
+		}
+		
 		this.pic = new PlayerInputController(new Vec3(0, 30, 100));
 		this.pic.setAcceptPlayerInputs(false);
 
@@ -94,11 +110,12 @@ public class GaussianSplattingWindow extends Window {
 		Scene.skyboxes.put(WORLD_SCENE, skybox);
 		
 //		Gaussian[] gaussians = this.readSplatFile("/res/gaussian_splats/copyright.ply");
-		Gaussian[] gaussians = this.readSplatFile("/res/gaussian_splats/chair.ply");
+//		Gaussian[] gaussians = this.readSplatFile("/res/gaussian_splats/chair.ply");
 //		Gaussian[] gaussians = this.readSplatFile("/res/gaussian_splats/blowtorch.ply");
 //		Gaussian[] gaussians = this.readSplatFile("/res/gaussian_splats/heart_cookie.ply");
 //		Gaussian[] gaussians = this.readSplatFile("/res/gaussian_splats/star_cookie.ply");
-//		Gaussian[] gaussians = this.readSplatFile("/res/gaussian_splats/beetle.ply");
+		Gaussian[] gaussians = this.readSplatFile("/res/gaussian_splats/beetle.ply");
+//		Gaussian[] gaussians = this.readSplatFile("/res/gaussian_splats/paper_towel.ply");
 		
 //		int N = 10;
 //		Gaussian[] gaussians = new Gaussian[N * N];
@@ -145,9 +162,13 @@ public class GaussianSplattingWindow extends Window {
 	
 	private Gaussian[] readSplatFile(String dir) {
 		File splat_file = FileUtils.loadFileRelative(dir);
+		return this.readSplatFile(splat_file);
+	}
+	
+	private Gaussian[] readSplatFile(File file) {
 		Gaussian[] gaussians = null;
 		try {
-			PLYReader ply = new PLYReader(splat_file);
+			PLYReader ply = new PLYReader(file);
 			ply.printHeader();
 			
 			PLYReader.PLYPayload payload = ply.getPayload();
@@ -289,7 +310,12 @@ public class GaussianSplattingWindow extends Window {
 	@Override
 	protected void _keyPressed(int key) {
 		switch (key) {
-
+		case GLFW_KEY_L: {
+			FileSelectorWindow fsw = new FileSelectorWindow(this);
+			fsw.setSingleEntrySelection(true);
+			AdjustableWindow adj = new AdjustableWindow("Select Gaussian Splat File", fsw, this);
+			break;
+		}
 		}
 	}
 
@@ -297,6 +323,62 @@ public class GaussianSplattingWindow extends Window {
 	protected void _keyReleased(int key) {
 		// TODO Auto-generated method stub
 
+	}
+
+	@Override
+	public void handleCallback(File[] files) {
+		if(files.length != 1) {
+			return;
+		}
+		
+		Gaussian[] gaussians = this.readSplatFile(files[0]);
+		if(gaussians != null) {
+			this.screen.setGaussians(gaussians);
+		}
+	}
+	
+	public class Options {
+		public float movementSpeedMultiplier = 1.0f;
+		public boolean reflectY = true;
+		public float renderScale = 20.0f;
+		public boolean timingEnabled = true;
+		
+		public boolean getTimingEnabled() {
+			return this.timingEnabled;
+		}
+		
+		public void setTimingEnabled(boolean timingEnabled) {
+			this.timingEnabled = timingEnabled;
+			screen.setTimingEnabled(this.timingEnabled);
+		}
+		
+		public boolean getReflectY() {
+			return reflectY;
+		}
+
+		public void setReflectY(boolean reflectY) {
+			this.reflectY = reflectY;
+			screen.setReflectY(this.reflectY);
+		}
+
+		public float getRenderScale() {
+			return renderScale;
+		}
+
+		public void setRenderScale(float renderScale) {
+			this.renderScale = renderScale;
+			screen.setRenderScale(this.renderScale);
+		}
+
+		public float getMovementSpeedMultiplier() {
+			return movementSpeedMultiplier;
+		}
+
+		public void setMovementSpeedMultiplier(float movementSpeedMultiplier) {
+			this.movementSpeedMultiplier = movementSpeedMultiplier;
+			pic.setMovementSpeedMultiplier(this.movementSpeedMultiplier);
+		}
+		
 	}
 
 }

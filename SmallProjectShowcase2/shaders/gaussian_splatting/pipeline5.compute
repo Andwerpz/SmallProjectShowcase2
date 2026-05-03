@@ -9,10 +9,10 @@ uniform int nrScreenTiles;
 uniform int nrGaussians;
 
 struct Tile {
-	int tile_id;			// should be in range [0, 65536)
-	int gaussian_depth;		// quantized depth, assume within range [0, 65536) as well
+	// tile_id should be in range [0, 65536)
+	// gaussian_depth should be quantized in range [0, 65536)
+	uint sort_key;		// (tile_id << 16) | (gaussian_depth << 0)
 	int gaussian_id;
-	int pad0;
 };
 
 layout (binding = 1) readonly buffer gaussianStartBuffer {
@@ -43,7 +43,8 @@ void main() {
 	int ans = total_tiles;
 	while(low <= high) {
 		int mid = low + (high - low) / 2;
-		if(tileData[mid].tile_id >= tile_id) {
+		int mid_tile_id = int(tileData[mid].sort_key >> 16) & 0xFFFF;
+		if(mid_tile_id >= tile_id) {
 			ans = mid;
 			high = mid - 1;
 		}

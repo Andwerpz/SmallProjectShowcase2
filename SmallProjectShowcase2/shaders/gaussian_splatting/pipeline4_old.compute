@@ -1,0 +1,221 @@
+#version 430 core
+
+//Pipeline (4)
+// - sort tile buffer
+
+// for normal radix sort, sort by increments of K bits. 
+// each sorting step needs to be stable. 
+// partition all elements into 2^K buckets according to the current bits being sorted on. 
+// - first compute for each bucket the size
+// - next compute for each element the relative position within the bucket it's going to be in
+// - finally move all elements into their respective buckets. 
+
+// then, how do we do parallel radix sort?
+// partition the entire array into B element blocks. 
+// each block will have T threads handling it. 
+// for each block, first compute how many elements within the block is inside each of the 2^K buckets. 
+// then take a prefix sum to know the block offset for each of the 2^K buckets for each block
+// finally can do a sweep through each block to move all the elements to their new locations. 
+
+// of course, the devil is in the details. For parallel radix sort, there are two phases that we must consider:
+//  the 'broad' or 'inter-block' phase, and the 'narrow' or 'intra-block' phase. 
+
+// for the broad phase, for each block we need to build a histogram of how many elements in each block are in each bucket. 
+// then we need to take a prefix sum over all the block histograms to figure out the relative offset for each 
+// block bucket pair. 
+// when doing the prefix sum, K threads from each bucket should be doing all the work, while the remaining threads will be 
+// idling until the prefix sum is finished. 
+
+// for the narrow phase, we need to compute the relative bucket offset for each element within the block. 
+// we can do this efficiently by partitioning the threads within a block into groups of 32 (a warp), and computing
+// a histogram for each warp. Then to figure out the offset within a warp, we can construct a bitmask and query it via
+// masking + popcount
+// for OpenGL compute shaders, to construct this bitmask efficiently we can use subgroupBallot or something along those lines. 
+
+// perhaps for the narrow phase, we can first permute all the elements within the block using workgroup local memory, 
+// then more easily scatter the elements into global memory. 
+// this also makes the writes to global memory more contiguous, which should be better
+
+layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+const int ELEMENTS_PER_THREAD = 32;
+const int THREADS_PER_BLOCK = int(gl_WorkGroupSize.x);
+const int K = 4;
+const int B = THREADS_PER_BLOCK * ELEMENTS_PER_THREAD;
+const int BUCKET_MASK = (1 << K) - 1;
+
+uniform int nrGaussians;
+uniform int sortIteration;
+uniform int sortPhase;
+
+struct Tile {
+	int tile_id;			// should be in range [0, 65536)
+	int gaussian_depth;		// quantized depth, assume within range [0, 65536) as well
+	int gaussian_id;
+	int pad0;
+};
+
+layout (binding = 1) readonly buffer gaussianStartBuffer {
+	int gaussianStartData[];
+};
+
+layout (binding = 2) readonly buffer tileBuffer1 {
+	Tile tileData1[];
+};
+
+layout (binding = 3) buffer tileBuffer2 {
+	Tile tileData2[];
+};
+
+layout (binding = 4) buffer blockHistogramBuffer {
+	int blockHistogramData[][1 << K];
+};
+
+shared Tile localTileData[B];
+shared int localHistogramData[THREADS_PER_BLOCK][1 << K];
+
+void main() {
+	int total_tiles = gaussianStartData[nrGaussians];
+	int total_blocks = (total_tiles + B - 1) / B;
+	int global_id = int(gl_GlobalInvocationID.x);
+	int local_id = int(gl_LocalInvocationID.x);
+	int block_id = int(gl_WorkGroupID.x);
+	
+	int L = block_id * B;
+	int R = min(total_tiles, L + B);
+	if(L >= R) {
+		//nothing to sort in block
+		return;
+	}
+	
+	//load tiles from global memory
+	for(int i = 0; i < ELEMENTS_PER_THREAD; i++) {
+		if(L + local_id * ELEMENTS_PER_THREAD + i < R) {
+			localTileData[local_id * ELEMENTS_PER_THREAD + i] = tileData1[L + local_id * ELEMENTS_PER_THREAD + i];
+			localTileData[local_id * ELEMENTS_PER_THREAD + i].pad0 = sortIteration + 1;
+		} 
+	}
+	barrier();
+	
+	if(sortPhase == 0) {
+		//compute per-thread histograms
+		for(int i = 0; i < (1 << K); i++) {
+			localHistogramData[local_id][i] = 0;
+		}
+		for(int i = 0; i < ELEMENTS_PER_THREAD; i++) {
+			if(L + local_id * ELEMENTS_PER_THREAD + i < R) {
+				int bucket;
+				if(sortIteration < 4) {
+					//compare gaussian depth
+					bucket = (localTileData[local_id * ELEMENTS_PER_THREAD + i].gaussian_depth >> (sortIteration * K)) & BUCKET_MASK;
+				}
+				else {
+					//compare tile id
+					bucket = (localTileData[local_id * ELEMENTS_PER_THREAD + i].tile_id >> ((sortIteration - 4) * K)) & BUCKET_MASK;
+				}
+				localHistogramData[local_id][bucket] ++;
+			} 
+		}
+		barrier();
+		
+		//merge into per-block histogram and write to global memory
+		if(local_id < (1 << K)) {
+			int sum = 0;
+			for(int i = 0; i < THREADS_PER_BLOCK; i++) {
+				sum += localHistogramData[i][local_id];
+			}
+			blockHistogramData[block_id][local_id] = sum;
+		}
+	}
+	else if(sortPhase == 1) {
+		//take prefix sum of per-block histograms
+		if(global_id < (1 << K)) {
+			int sum = 0;
+			for(int i = 0; i < total_blocks; i++) {
+				int cur = blockHistogramData[i][global_id];
+				blockHistogramData[i][global_id] = sum;
+				sum += cur;
+			}
+			blockHistogramData[total_blocks][global_id] = sum;
+		}
+	}
+	else if(sortPhase == 2) {
+		//compute per-thread histograms
+		for(int i = 0; i < (1 << K); i++) {
+			localHistogramData[local_id][i] = 0;
+		}
+		for(int i = 0; i < ELEMENTS_PER_THREAD; i++) {
+			if(L + local_id * ELEMENTS_PER_THREAD + i < R) {
+				int bucket;
+				if(sortIteration < 4) {
+					//compare gaussian depth
+					bucket = (localTileData[local_id * ELEMENTS_PER_THREAD + i].gaussian_depth >> (sortIteration * K)) & BUCKET_MASK;
+				}
+				else {
+					//compare tile id
+					bucket = (localTileData[local_id * ELEMENTS_PER_THREAD + i].tile_id >> ((sortIteration - 4) * K)) & BUCKET_MASK;
+				}
+				localHistogramData[local_id][bucket] ++;
+			} 
+		}
+		barrier();
+		
+		//take prefix sum of per-thread histograms
+		if(local_id < (1 << K)) {
+			int sum = 0;
+			for(int i = 0; i < THREADS_PER_BLOCK; i++) {
+				int cur = localHistogramData[i][local_id];
+				localHistogramData[i][local_id] = sum;
+				sum += cur;
+			}
+		}
+		barrier();
+		
+		//scatter to global tmp buffer
+		// - should probably compute the global_histogram_prefix as a shared structure somewhere
+		int global_histogram_prefix[(1 << K)];
+		global_histogram_prefix[0] = 0;
+		for(int i = 1; i < (1 << K); i++) {
+			global_histogram_prefix[i] = global_histogram_prefix[i - 1] + blockHistogramData[total_blocks][i - 1];
+		}
+		int thread_histogram[(1 << K)];
+		for(int i = 0; i < (1 << K); i++) {
+			thread_histogram[i] = 0;
+		}
+		for(int i = 0; i < ELEMENTS_PER_THREAD; i++) {
+			if(L + local_id * ELEMENTS_PER_THREAD + i < R) {
+				//calc bucket
+				int bucket;
+				if(sortIteration < 4) {
+					//compare gaussian depth
+					bucket = (localTileData[local_id * ELEMENTS_PER_THREAD + i].gaussian_depth >> (sortIteration * K)) & BUCKET_MASK;
+				}
+				else {
+					//compare tile id
+					bucket = (localTileData[local_id * ELEMENTS_PER_THREAD + i].tile_id >> ((sortIteration - 4) * K)) & BUCKET_MASK;
+				}
+				
+				//where to move this tile to
+				int global_ind = 
+					global_histogram_prefix[bucket] + 
+					blockHistogramData[block_id][bucket] + 
+					localHistogramData[local_id][bucket] + 
+					thread_histogram[bucket]
+				;
+				tileData2[global_ind] = localTileData[local_id * ELEMENTS_PER_THREAD + i];
+				
+				//update thread local histogram
+				thread_histogram[bucket] ++;
+			}
+		}
+	}	
+	
+}
+
+
+
+
+
+
+
+
