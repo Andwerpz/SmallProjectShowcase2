@@ -163,12 +163,6 @@ public class GaussianSplattingWindow extends Window implements FileSelectorCallb
 	}
 	
 	private void setGaussians(Gaussian[] gaussians) {
-//		Gaussian[] prefix = new Gaussian[Math.min(gaussians.length, 1024 * 1024)];
-//		for(int i = 0; i < prefix.length; i++) {
-//			prefix[i] = gaussians[i];
-//		}
-//		this.screen.setGaussians(prefix);
-		
 		this.screen.setGaussians(gaussians);
 	}
 	

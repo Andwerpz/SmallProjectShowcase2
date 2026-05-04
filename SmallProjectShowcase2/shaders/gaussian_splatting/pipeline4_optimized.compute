@@ -136,7 +136,6 @@ void main() {
 							localHistogramData[local_id * 2 + 1][i] += localHistogramData[local_id * 2 + 1 - ival][i];
 						}
 						localHistogramData[local_id * 2 + 1 - ival] = tmp;
-						
 					}
 					barrier();
 				}

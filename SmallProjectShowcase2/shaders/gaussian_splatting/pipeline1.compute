@@ -186,27 +186,109 @@ void main() {
 	}
 	
 	//project gaussian covariance onto screen
-	mat3 R = buildMatrixFromQuaternion(g.orient);							// covariance rotation
-	mat3 S = mat3(															// covariance scale
-		g.scale.x * renderScale, 0, 0,
-		0, g.scale.y * renderScale, 0,
-		0, 0, g.scale.z * renderScale
-	);
-	mat3 Sigma_3D = R * S * transpose(S) * transpose(R);					// 3D covariance (world space)
-	if(reflectY) {
-		Sigma_3D[1][0] *= -1;
-		Sigma_3D[1][2] *= -1;
-		Sigma_3D[0][1] *= -1;
-		Sigma_3D[2][1] *= -1;
+	mat2 Sigma_2D;
+	if(true) {
+		mat3 R = buildMatrixFromQuaternion(g.orient);							// covariance rotation
+		vec3 sv = (g.scale * g.scale) * (renderScale * renderScale);
+		mat3 S2 = mat3(															// covariance scale
+			sv.x, 0, 0,
+			0, sv.y, 0,
+			0, 0, sv.z
+		);
+		mat3 Sigma_3D = R * S2 * transpose(R);									// 3D covariance (world space)
+		if(reflectY) {
+			Sigma_3D[1][0] *= -1;
+			Sigma_3D[1][2] *= -1;
+			Sigma_3D[0][1] *= -1;
+			Sigma_3D[2][1] *= -1;
+		}
+		
+		mat3 W = mat3(vw_matrix);												// view matrix (no translation)		
+		float invz = 1.0 / center.z;
+		float invz2 = invz * invz;
+		mat3x2 J = mat3x2(														// projection jacobian
+			f_x * invz, 0, 
+			0, f_y * invz,
+			-f_x * center.x * invz2, -f_y * center.y * invz2
+		);
+		Sigma_2D = J * (W * Sigma_3D * transpose(W)) * transpose(J);			// 2D covariance (screen pixel space)
 	}
-	
-	mat3 W = mat3(vw_matrix);												// view matrix (no translation)		
-	mat3x2 J = mat3x2(														// projection jacobian
-		f_x / center.z, 0, 
-		0, f_y / center.z,
-		-f_x * center.x / (center.z * center.z), -f_y * center.y / (center.z * center.z)
-	);
-	mat2 Sigma_2D = J * (W * Sigma_3D * transpose(W)) * transpose(J);		// 2D covariance (screen pixel space)
+	else if(false) {
+		mat3 R = buildMatrixFromQuaternion(g.orient);
+		if(reflectY) {
+			R[0][1] *= -1;
+			R[1][1] *= -1;
+			R[2][1] *= -1;
+		}
+		mat3 A = mat3(vw_matrix) * R;
+		
+		vec3 sx = A[0] * (g.scale.x * renderScale);
+		vec3 sy = A[1] * (g.scale.y * renderScale);
+		vec3 sz = A[2] * (g.scale.z * renderScale);
+		
+		float invz = 1.0 / center.z;
+		float invz2 = invz * invz;
+		mat3x2 J = mat3x2(														
+			f_x * invz, 0, 
+			0, f_y * invz,
+			-f_x * center.x * invz2, -f_y * center.y * invz2
+		);
+		
+		vec2 px = J * sx;
+		vec2 py = J * sy;
+		vec2 pz = J * sz;
+		
+		Sigma_2D =
+		    outerProduct(px, px) +
+		    outerProduct(py, py) +
+		    outerProduct(pz, pz)
+		;
+	}
+	else {
+		mat3 R = buildMatrixFromQuaternion(g.orient);
+		if(reflectY) {
+			R[0][1] *= -1;
+			R[1][1] *= -1;
+			R[2][1] *= -1;
+		}
+		mat3 A = mat3(vw_matrix) * R;
+		
+		vec3 ax = A[0] * (g.scale.x * renderScale);
+		vec3 ay = A[1] * (g.scale.y * renderScale);
+		vec3 az = A[2] * (g.scale.z * renderScale);
+		
+		float inv_z = 1.0 / center.z;
+		float inv_z2 = inv_z * inv_z;
+		
+		float jx_x = f_x * inv_z;
+		float jy_y = f_y * inv_z;
+		float jz_x = -f_x * center.x * inv_z2;
+		float jz_y = -f_y * center.y * inv_z2;
+		
+		vec2 px = vec2(
+		    ax.x * jx_x + ax.z * jz_x,
+		    ax.y * jy_y + ax.z * jz_y
+		);
+		
+		vec2 py = vec2(
+		    ay.x * jx_x + ay.z * jz_x,
+		    ay.y * jy_y + ay.z * jz_y
+		);
+		
+		vec2 pz = vec2(
+		    az.x * jx_x + az.z * jz_x,
+		    az.y * jy_y + az.z * jz_y
+		);
+		
+		float s00 = px.x * px.x + py.x * py.x + pz.x * pz.x;
+		float s01 = px.x * px.y + py.x * py.y + pz.x * pz.y;
+		float s11 = px.y * px.y + py.y * py.y + pz.y * pz.y;
+		
+		Sigma_2D = mat2(
+		    s00, s01,
+		    s01, s11
+		);
+	}
 	
 	//regularize covariance
 	Sigma_2D[0][0] += 0.01;

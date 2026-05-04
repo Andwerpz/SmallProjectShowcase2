@@ -37,6 +37,9 @@ public class GaussianSplattingScreen extends Screen {
 	//SH approximation of global illumination
 	// https://www.cse.chalmers.se/~uffe/xjobb/Readings/GlobalIllumination/Spherical%20Harmonic%20Lighting%20-%20the%20gritty%20details.pdf
 	
+	//Introduction to GPU Radix Sort
+	// https://gpuopen.com/download/Introduction_to_GPU_Radix_Sort.pdf
+	
 	//gaussian rendering pipeline. screen partitioned into 16x16 pixel tiles. 
 	//buffers :
 	// - gaussian buffer : raw gaussians
@@ -612,6 +615,7 @@ opensplat /path/to/project -n <itercnt>
 		this.renderSSBO.kill();
 		this.prefixBlockSSBO.kill();
 		this.gaussianInfoSSBO.kill();
+		this.blockHistogramPrefixSSBO.kill();
 		
 		for(int i = 0; i < NR_PHASES; i++) {
 			glDeleteQueries(this.timingQueries[i]);

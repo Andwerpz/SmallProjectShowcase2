@@ -131,20 +131,11 @@ void main() {
 				int tmp[1 << K];
 				for(int ival = (PREFIX_SCAN_BLOCK_SIZE >> 1); ival >= 1; ival >>= 1) {
 					if((local_id & (ival - 1)) == (ival - 1)) {
-						/*
-						for(int i = 0; i < (1 << K); i++) {
-							int tmp = localHistogramData[local_id * 2 + 1][i];
-							localHistogramData[local_id * 2 + 1][i] += localHistogramData[local_id * 2 + 1 - ival][i];
-							localHistogramData[local_id * 2 + 1 - ival][i] = tmp;
-						}
-						*/
-						
 						tmp = localHistogramData[local_id * 2 + 1];
 						for(int i = 0; i < (1 << K); i++) {
 							localHistogramData[local_id * 2 + 1][i] += localHistogramData[local_id * 2 + 1 - ival][i];
 						}
 						localHistogramData[local_id * 2 + 1 - ival] = tmp;
-						
 					}
 					barrier();
 				}
