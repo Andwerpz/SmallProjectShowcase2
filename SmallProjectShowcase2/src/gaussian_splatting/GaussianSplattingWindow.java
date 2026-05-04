@@ -155,9 +155,21 @@ public class GaussianSplattingWindow extends Window implements FileSelectorCallb
 //		    }
 //		}
 		
-		this.screen.setGaussians(gaussians);
+
+		this.setGaussians(gaussians);
+		
 
 		this._resize();
+	}
+	
+	private void setGaussians(Gaussian[] gaussians) {
+//		Gaussian[] prefix = new Gaussian[Math.min(gaussians.length, 1024 * 1024)];
+//		for(int i = 0; i < prefix.length; i++) {
+//			prefix[i] = gaussians[i];
+//		}
+//		this.screen.setGaussians(prefix);
+		
+		this.screen.setGaussians(gaussians);
 	}
 	
 	private Gaussian[] readSplatFile(String dir) {
@@ -333,7 +345,7 @@ public class GaussianSplattingWindow extends Window implements FileSelectorCallb
 		
 		Gaussian[] gaussians = this.readSplatFile(files[0]);
 		if(gaussians != null) {
-			this.screen.setGaussians(gaussians);
+			this.setGaussians(gaussians);
 		}
 	}
 	

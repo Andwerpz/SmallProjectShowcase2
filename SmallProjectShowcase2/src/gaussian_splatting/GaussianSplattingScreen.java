@@ -66,8 +66,9 @@ public class GaussianSplattingScreen extends Screen {
 	// TODO
 	// - right now if too many gaussians end up in one tile, then one fragment shader has to iterate through all of them
 	//   maybe put a hard cap on how many gaussians one fragment shader can iterate across?
-	// - benchmark which phases are consuming the most time. 
-	//   - seems like phase (4) is taking up 60-80% of the total GPU time, and phase (6) is consuming around 20%. 
+	//   - placed a hard cap, but it leads to some nasty artifacts when rendering scenes with lots of gaussians. 
+	// - ok, optimized phase (4). Now, phases (1), (4), (6) are taking roughly equal amounts of time for large scenes. 
+	//   perhaps there is a way to optimize the math done in phase (1)
 	
 /*
 colmap feature_extractor \
@@ -104,10 +105,11 @@ opensplat /path/to/project -n <itercnt>
 	
 	static final int RADIX_NR_PHASES = 3;
 	static final int RADIX_NR_ITERATIONS = 8;
-	static final int RADIX_ELEMENTS_PER_THREAD = 32;
+	static final int RADIX_ELEMENTS_PER_THREAD = 8;
 	static final int RADIX_THREADS_PER_BLOCK = 32;
 	static final int RADIX_ELEMENTS_PER_BLOCK = RADIX_ELEMENTS_PER_THREAD * RADIX_THREADS_PER_BLOCK;
 	static final int RADIX_K = 4;
+	static final int RADIX_PREFIX_SCAN_ELEMENTS_PER_BLOCK = 64;
 	
 	static final int BLELLOCH_BLOCK_SIZE = 1 << 10;
 	
@@ -120,6 +122,7 @@ opensplat /path/to/project -n <itercnt>
 	private ShaderStorageBuffer renderSSBO;
 	private ShaderStorageBuffer prefixBlockSSBO;
 	private ShaderStorageBuffer gaussianInfoSSBO;
+	private ShaderStorageBuffer blockHistogramPrefixSSBO;
 	
 	private Shader pipeline1;
 	private Shader pipeline2;
@@ -169,6 +172,8 @@ opensplat /path/to/project -n <itercnt>
 		this.prefixBlockSSBO.setUsage(GL_DYNAMIC_DRAW);
 		this.gaussianInfoSSBO = new ShaderStorageBuffer();
 		this.gaussianInfoSSBO.setUsage(GL_DYNAMIC_DRAW);
+		this.blockHistogramPrefixSSBO = new ShaderStorageBuffer();
+		this.blockHistogramPrefixSSBO.setUsage(GL_DYNAMIC_DRAW);
 		
 		this.nrScreenTiles = 
 			((this.getScreenWidth() + TILE_SIZE - 1) / TILE_SIZE) * 
@@ -176,8 +181,6 @@ opensplat /path/to/project -n <itercnt>
 		;
 		this.tileStartSSBO.setSize((this.nrScreenTiles + 1) * 4);
 		this.renderSSBO.setSize(this.getScreenWidth() * this.getScreenHeight() * 4 * 4);
-		
-		this.prefixBlockSSBO.setSize(BLELLOCH_BLOCK_SIZE * 4);
 		
 		this.maxTiles = 0;
 		
@@ -197,6 +200,12 @@ opensplat /path/to/project -n <itercnt>
 				this.radixTimingMS[i][j] = 0;
 			}
 		}
+		
+		int maxBlockSize = glGetInteger(GL_MAX_SHADER_STORAGE_BLOCK_SIZE);
+		int maxBindings  = glGetInteger(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS);
+
+		System.out.println("Max SSBO block size: " + maxBlockSize + " bytes");
+		System.out.println("Max SSBO bindings: " + maxBindings);
 	}
 	
 	public void setReflectY(boolean b) {
@@ -246,7 +255,8 @@ opensplat /path/to/project -n <itercnt>
 		
 		this.nrGaussians = gaussians.length;
 		this.gaussianSSBO.setData(data);
-		this.gaussianStartSSBO.setSize((gaussians.length + 1) * 4);
+		this.gaussianStartSSBO.setSize((gaussians.length + 1 + BLELLOCH_BLOCK_SIZE) * 4);
+		this.prefixBlockSSBO.setSize((gaussians.length + 1 + BLELLOCH_BLOCK_SIZE) * 4);
 		this.gaussianInfoSSBO.setSize(SIZEOF_GAUSSIAN_INFO * this.nrGaussians);
 	}
 	
@@ -311,12 +321,10 @@ opensplat /path/to/project -n <itercnt>
 		{
 			glBeginQuery(GL_TIME_ELAPSED, this.timingQueries[1]);
 			int nr_blocks = (this.nrGaussians / BLELLOCH_BLOCK_SIZE) + 1;
-			if(nr_blocks > BLELLOCH_BLOCK_SIZE) {
-				System.err.println("nrGaussians exceeds Phase 2 limit");
-				System.exit(0);
-			}
-			
+
 			this.pipeline2.enable();
+			
+			this.pipeline2.setUniform1i("nrBlocks", nr_blocks);
 
 			this.gaussianStartSSBO.bindToBase(1);
 			this.prefixBlockSSBO.bindToBase(2);
@@ -331,7 +339,7 @@ opensplat /path/to/project -n <itercnt>
 		}
 		
 		int total_tiles = 0;
-		int total_blocks = 0;
+		int radix_blocks = 0;
 		{
 			// - read back size of tile buffer
 			total_tiles = -1;
@@ -340,22 +348,26 @@ opensplat /path/to/project -n <itercnt>
 				this.gaussianStartSSBO.getSubData(buf, this.nrGaussians * 4);
 				total_tiles = buf[0];
 			}
-			total_blocks = (total_tiles + RADIX_ELEMENTS_PER_BLOCK - 1) / RADIX_ELEMENTS_PER_BLOCK;
+			radix_blocks = (total_tiles + RADIX_ELEMENTS_PER_BLOCK - 1) / RADIX_ELEMENTS_PER_BLOCK;
 			
 			// - resize tile buffers if needed
 			if(total_tiles > this.maxTiles) {
 				if(this.maxTiles == 0) this.maxTiles = 1;
 				while(this.maxTiles < total_tiles) this.maxTiles *= 2;
 				
-				int max_blocks = (this.maxTiles + RADIX_ELEMENTS_PER_BLOCK - 1) / RADIX_ELEMENTS_PER_BLOCK;
+				int max_super_blocks = 
+						(this.maxTiles + RADIX_PREFIX_SCAN_ELEMENTS_PER_BLOCK * RADIX_ELEMENTS_PER_BLOCK) / 
+						(RADIX_PREFIX_SCAN_ELEMENTS_PER_BLOCK * RADIX_ELEMENTS_PER_BLOCK);
+				max_super_blocks += 10;
+				int max_blocks = max_super_blocks * RADIX_PREFIX_SCAN_ELEMENTS_PER_BLOCK;
 				
 				this.tileSSBO1.setSize(this.maxTiles * SIZEOF_TILE);
 				this.tileSSBO2.setSize(this.maxTiles * SIZEOF_TILE);
-				this.blockHistogramSSBO.setSize((max_blocks + 1) * 4 * (1 << RADIX_K));
+				this.blockHistogramSSBO.setSize(max_blocks * 4 * (1 << RADIX_K));
+				this.blockHistogramPrefixSSBO.setSize(max_super_blocks * 4 * (1 << RADIX_K));
 			}
 		}
 
-		
 		// -- PHASE 3 -- 
 		// - write tile-gaussian pairs into tile buffer
 		{
@@ -387,6 +399,9 @@ opensplat /path/to/project -n <itercnt>
 			this.pipeline4.setUniform1i("nrTiles", total_tiles);
 			
 			this.blockHistogramSSBO.bindToBase(4);
+			this.blockHistogramPrefixSSBO.bindToBase(5);
+			
+			int prefix_sweep_workgroups = radix_blocks / RADIX_PREFIX_SCAN_ELEMENTS_PER_BLOCK + 1;
 			
 			for(int iteration = 0; iteration < RADIX_NR_ITERATIONS; iteration++) {
 				if((iteration % 2) == 0) {
@@ -398,15 +413,27 @@ opensplat /path/to/project -n <itercnt>
 					this.tileSSBO2.bindToBase(2);
 				}
 				
-				for(int phase = 0; phase < RADIX_NR_PHASES; phase++) {
-					this.pipeline4.setUniform1i("sortIteration", iteration);
-					this.pipeline4.setUniform1i("sortPhase", phase);
-					
-					glBeginQuery(GL_TIME_ELAPSED, this.radixTimingQueries[iteration][phase]);
-					glDispatchCompute(total_blocks, 1, 1);
+				this.pipeline4.setUniform1i("sortIteration", iteration);
+				this.pipeline4.setUniform1i("sortPhase", 0);
+				glBeginQuery(GL_TIME_ELAPSED, this.radixTimingQueries[iteration][0]);
+				glDispatchCompute(radix_blocks, 1, 1);
+				glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+				glEndQuery(GL_TIME_ELAPSED);
+				
+				this.pipeline4.setUniform1i("sortPhase", 1);
+				glBeginQuery(GL_TIME_ELAPSED, this.radixTimingQueries[iteration][1]);
+				for(int sweep_phase = 0; sweep_phase < 3; sweep_phase++) {
+					this.pipeline4.setUniform1i("sweepPhase", sweep_phase);	
+					glDispatchCompute(sweep_phase == 1? 1 : prefix_sweep_workgroups, 1, 1);
 					glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-					glEndQuery(GL_TIME_ELAPSED);
 				}
+				glEndQuery(GL_TIME_ELAPSED);
+
+				this.pipeline4.setUniform1i("sortPhase", 2);
+				glBeginQuery(GL_TIME_ELAPSED, this.radixTimingQueries[iteration][2]);
+				glDispatchCompute(radix_blocks, 1, 1);
+				glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+				glEndQuery(GL_TIME_ELAPSED);
 			}
 		}
 		
@@ -485,6 +512,7 @@ opensplat /path/to/project -n <itercnt>
 
 			if(this.timingFrameCounter >= TIMING_PRINT_INTERVAL) {
 				System.out.println("Tile Buffer Size : " + total_tiles);
+				System.out.println("Radix Sort Blocks : " + radix_blocks);
 				
 				double total_ms = 0.0;
 				for(int i = 0; i < RADIX_NR_ITERATIONS; i++) {

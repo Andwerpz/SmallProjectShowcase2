@@ -237,11 +237,57 @@ void main() {
 	tile_max_y = max(0, min(tile_screen_height, tile_max_y));
 	
 	//evaluate gaussian color
-	vec3 color = vec3(
-		sampleSH(g.r_coeff, view_dir),
-		sampleSH(g.g_coeff, view_dir),
-		sampleSH(g.b_coeff, view_dir)
-	);
+	vec3 color = vec3(0);
+	if(true) {
+	    float x = view_dir.x;
+	    float y = view_dir.y;
+	    float z = view_dir.z;
+	    float xx = x * x;
+	    float yy = y * y;
+	    float zz = z * z;
+	    float xy = x * y;
+	    float yz = y * z;
+	    float xz = x * z;
+		
+		float SH_coeff[16];
+		
+	    // degree 0
+	   	SH_coeff[0] = SH_C0;
+
+	    // degree 1
+	    SH_coeff[1] = -SH_C1 * y;
+	    SH_coeff[2] = SH_C1 * z;
+	    SH_coeff[3] = -SH_C1 * x;
+		
+		// degree 2
+	    SH_coeff[4] = SH_C2_0 * xy;
+	    SH_coeff[5] = SH_C2_1 * yz;
+	    SH_coeff[6] = SH_C2_2 * (2.0 * zz - xx - yy);
+	    SH_coeff[7] = SH_C2_3 * xz;
+	    SH_coeff[8] = SH_C2_4 * (xx - yy);
+		
+	    // degree 3
+	    SH_coeff[9]  = SH_C3_0 * y * (3.0 * xx - yy);
+	    SH_coeff[10] = SH_C3_1 * xy * z;
+	    SH_coeff[11] = SH_C3_2 * y * (4.0 * zz - xx - yy);
+	    SH_coeff[12] = SH_C3_3 * z * (2.0 * zz - 3.0 * xx - 3.0 * yy);
+	    SH_coeff[13] = SH_C3_4 * x * (4.0 * zz - xx - yy);
+	    SH_coeff[14] = SH_C3_5 * z * (xx - yy);
+	    SH_coeff[15] = SH_C3_6 * x * (xx - 3.0 * yy);
+	    
+	    for(int i = 0; i < 16; i++) {
+			color.r += SH_coeff[i] * g.r_coeff[i];
+			color.g += SH_coeff[i] * g.g_coeff[i];
+			color.b += SH_coeff[i] * g.b_coeff[i];
+		}
+	}
+	else {
+		color = vec3(
+			sampleSH(g.r_coeff, view_dir),
+			sampleSH(g.g_coeff, view_dir),
+			sampleSH(g.b_coeff, view_dir)
+		);
+	}
 	color += 0.5;
 	color = max(color, vec3(0.0));
 	

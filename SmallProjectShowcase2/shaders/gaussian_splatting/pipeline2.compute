@@ -24,6 +24,7 @@ layout (local_size_x = 512, local_size_y = 1, local_size_z = 1) in;
 const int SWEEP_ITERS = 10;
 const int BLOCK_SIZE = 1 << 10;	// 1024
 
+uniform int nrBlocks;
 uniform int scanPhase;
 
 layout (binding = 1) buffer mainBuffer {
@@ -35,6 +36,7 @@ layout (binding = 2) buffer blockBuffer {
 };
 
 shared int localData[BLOCK_SIZE];
+shared int totalSum;
 
 void main() {
 	int local_id = int(gl_LocalInvocationID.x);
@@ -80,6 +82,57 @@ void main() {
 		}
 	}
 	else if(scanPhase == 2) {	//compute block prefix sums
+		//do an upsweep/downsweep on each 1024 block chunk while maintaining total prefix sums
+		
+		if(local_id == 0) {
+			totalSum = 0;
+		}
+		barrier();
+		
+		for(int base = 0; base < nrBlocks; base += BLOCK_SIZE) {
+			//load elements into shared memory
+			localData[local_id * 2 + 0] = blockData[base + local_id * 2 + 0];
+			localData[local_id * 2 + 1] = blockData[base + local_id * 2 + 1];
+			barrier();
+			
+			//upsweep
+			for(int ival = 1; ival < BLOCK_SIZE; ival <<= 1) {
+				if((local_id & (ival - 1)) == (ival - 1)) {
+					localData[local_id * 2 + 1] += localData[local_id * 2 + 1 - ival];
+				}
+				barrier();
+			}
+			
+			//downsweep
+			int sum = 0;
+			if(local_id == 0) {
+				sum = localData[BLOCK_SIZE - 1];
+				localData[BLOCK_SIZE - 1] = 0;
+			}
+			barrier();
+			
+			for(int ival = (BLOCK_SIZE >> 1); ival >= 1; ival >>= 1) {
+				if((local_id & (ival - 1)) == (ival - 1)) {
+					int tmp = localData[local_id * 2 + 1];
+					localData[local_id * 2 + 1] += localData[local_id * 2 + 1 - ival];
+					localData[local_id * 2 + 1 - ival] = tmp;
+				}
+				barrier();
+			}
+			
+			//write elements back to global memory
+			blockData[base + local_id * 2 + 0] = localData[local_id * 2 + 0] + totalSum;
+			blockData[base + local_id * 2 + 1] = localData[local_id * 2 + 1] + totalSum;
+			barrier();
+			
+			//update total prefix sum
+			if(local_id == 0) {
+				totalSum += sum;
+			}
+			barrier();
+		}
+		
+		/*
 		//load elements into shared memory
 		localData[local_id * 2 + 0] = blockData[local_id * 2 + 0];
 		localData[local_id * 2 + 1] = blockData[local_id * 2 + 1];
@@ -111,6 +164,7 @@ void main() {
 		//write elements back to global memory
 		blockData[local_id * 2 + 0] = localData[local_id * 2 + 0];
 		blockData[local_id * 2 + 1] = localData[local_id * 2 + 1];
+		*/
 	}
 	else if(scanPhase == 3) {	//add block prefix sums to all elements
 		mainData[block_id * BLOCK_SIZE + local_id * 2 + 0] += blockData[block_id];

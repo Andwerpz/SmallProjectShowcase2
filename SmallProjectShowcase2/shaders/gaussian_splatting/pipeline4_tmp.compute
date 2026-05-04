@@ -1,0 +1,296 @@
+#version 430 core
+
+//Pipeline (4)
+// - sort tile buffer
+
+//when you've run out of ideas, take a look around you to steal ideas from other people
+// https://gpuopen.com/download/Introduction_to_GPU_Radix_Sort.pdf
+
+//according to the paper, global DRAM is not very well suited to scattered writes
+//sorting each block locally before writing will make the writes more coherent. 
+//the issue is making the local sorting fast enough so that it's actually faster than just doing scattered global writes. 
+
+//first, we'll have the number of threads for each block be equal to gl_SubgroupSize
+//for NVIDIA, it's more commonly referred to as a 'warp'. 
+//we'll also keep K = 4. 
+
+//locally sorting implies doing radix sort on the local tile data. 
+//we'll do 2-bit radix sorts. each pass requires generating a histogram with 4 buckets. 
+//we can actually efficiently generate such a histogram by bitpacking these 4 bucket counters into a 32 bit integer, 
+// so 8 bits per counter. 
+//then we can do a parallel prefix scan to generate the full histogram. 
+//this decision also fixes the block size to 2^8 = 256, so for each thread in the workgroup we'll assign 8 elements. 
+
+//also note that our 8 bit counters won't actually overflow even if all elements in a block are in the same bucket. 
+//this is because we should be computing an exclusive prefix sum, so counts shouldn't go above 255. 
+
+layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
+
+const int ELEMENTS_PER_THREAD = 8;
+const int THREADS_PER_BLOCK = int(gl_WorkGroupSize.x);
+const int K = 4;
+const int B = THREADS_PER_BLOCK * ELEMENTS_PER_THREAD;
+const int BUCKET_MASK = (1 << K) - 1;
+
+uniform int nrGaussians;
+uniform int nrTiles;
+uniform int sortIteration;
+uniform int sortPhase;
+
+struct Tile {
+	// tile_id should be in range [0, 65536)
+	// gaussian_depth should be quantized in range [0, 65536)
+	uint sort_key;		// (tile_id << 16) | (gaussian_depth << 0)
+	int gaussian_id;
+};
+
+layout (binding = 2) readonly restrict buffer tileBuffer1 {
+	Tile tileData1[];
+};
+
+layout (binding = 3) writeonly restrict buffer tileBuffer2 {
+	Tile tileData2[];
+};
+
+layout (binding = 4) restrict buffer blockHistogramBuffer {
+	int blockHistogramData[][1 << K];
+};
+
+shared int localHistogramData[THREADS_PER_BLOCK][1 << K];
+shared int globalHistogramPrefix[1 << K];
+
+shared Tile localTileData1[B];
+shared Tile localTileData2[B];
+shared uint localRadixHistogram[THREADS_PER_BLOCK];
+shared uint localRadixBucketBase[4];
+
+void main() {
+	int total_tiles = nrTiles;
+	int total_blocks = (total_tiles + B - 1) / B;
+	int global_id = int(gl_GlobalInvocationID.x);
+	int local_id = int(gl_LocalInvocationID.x);
+	int block_id = int(gl_WorkGroupID.x);
+	
+	int L = block_id * B;
+	int R = min(total_tiles, L + B);
+	if(L >= R) {
+		//nothing to sort in block
+		return;
+	}
+	
+	if(sortPhase == 0) {		
+		//compute per-thread histograms
+		for(int i = 0; i < (1 << K); i++) {
+			localHistogramData[local_id][i] = 0;
+		}
+		for(int i = 0; i < ELEMENTS_PER_THREAD; i++) {
+			if(L + local_id * ELEMENTS_PER_THREAD + i < R) {
+				uint bucket = (tileData1[L + local_id * ELEMENTS_PER_THREAD + i].sort_key >> (sortIteration * K)) & BUCKET_MASK;
+				localHistogramData[local_id][bucket] ++;
+			} 
+		}
+		barrier();
+		
+		//merge into per-block histogram and write to global memory
+		if(local_id < (1 << K)) {
+			int sum = 0;
+			for(int i = 0; i < THREADS_PER_BLOCK; i++) {
+				sum += localHistogramData[i][local_id];
+			}
+			blockHistogramData[block_id][local_id] = sum;
+		}
+	}
+	else if(sortPhase == 1) {
+		//take prefix sum of per-block histograms
+		// - TODO replace this with an actual prefix scan
+		if(global_id < (1 << K)) {
+			int sum = 0;
+			for(int i = 0; i < total_blocks; i++) {
+				int cur = blockHistogramData[i][global_id];
+				blockHistogramData[i][global_id] = sum;
+				sum += cur;
+			}
+			blockHistogramData[total_blocks][global_id] = sum;
+		}
+	}
+	else if(sortPhase == 2) {
+		//load tiles from global memory
+		for(int i = 0; i < ELEMENTS_PER_THREAD; i++) {
+			if(L + local_id * ELEMENTS_PER_THREAD + i < R) {
+				localTileData1[local_id * ELEMENTS_PER_THREAD + i] = tileData1[L + local_id * ELEMENTS_PER_THREAD + i];
+			} 
+		}
+		barrier();
+		
+		/*
+		//execute two 2-bit radix sorts on local memory
+		{	//first sort
+			//local counter
+			uint c[4] = {0, 0, 0, 0};
+			for(int i = 0; i < ELEMENTS_PER_THREAD; i++) {
+				if(L + local_id * ELEMENTS_PER_THREAD + i < R) {
+					uint bucket = (localTileData1[local_id * ELEMENTS_PER_THREAD + i].sort_key >> (sortIteration * K)) & 0x3;
+					c[bucket] ++;
+				}
+			}
+			localRadixHistogram[local_id] = (c[0] << 0) | (c[1] << 8) | (c[2] << 16) | (c[3] << 24);
+			barrier();
+			
+			//prefix scan
+			// - TODO make this better
+			if(local_id == 0) {
+				uint sum = 0;
+				for(int i = 0; i < THREADS_PER_BLOCK; i++) {
+					uint cur = localRadixHistogram[i];
+					localRadixHistogram[i] = sum;
+					sum += cur;
+				}
+				
+				uint total0 = (sum >> 0)  & 0xff;
+				uint total1 = (sum >> 8)  & 0xff;
+				uint total2 = (sum >> 16) & 0xff;
+				uint total3 = (sum >> 24) & 0xff;
+			
+				localRadixBucketBase[0] = 0;
+				localRadixBucketBase[1] = total0;
+				localRadixBucketBase[2] = total0 + total1;
+				localRadixBucketBase[3] = total0 + total1 + total2;
+			}
+			barrier();
+			
+			//local scatter
+			uint cur_hist = localRadixHistogram[local_id];
+			c[0] = (cur_hist >> 0)  & 0xff;
+			c[1] = (cur_hist >> 8)  & 0xff;
+			c[2] = (cur_hist >> 16) & 0xff;
+			c[3] = (cur_hist >> 24) & 0xff;
+			for(int i = 0; i < ELEMENTS_PER_THREAD; i++) {
+				if(L + local_id * ELEMENTS_PER_THREAD + i < R) {
+					uint bucket = (localTileData1[local_id * ELEMENTS_PER_THREAD + i].sort_key >> (sortIteration * K)) & 0x3;
+					
+					//scatter to other buffer
+					localTileData2[localRadixBucketBase[bucket] + c[bucket]] = localTileData1[local_id * ELEMENTS_PER_THREAD + i];
+					
+					//update histogram count
+					c[bucket] ++;
+				}
+			}
+			barrier();
+		}
+		
+		{	//second sort
+			//local counter
+			uint c[4] = {0, 0, 0, 0};
+			for(int i = 0; i < ELEMENTS_PER_THREAD; i++) {
+				if(L + local_id * ELEMENTS_PER_THREAD + i < R) {
+					uint bucket = (localTileData2[local_id * ELEMENTS_PER_THREAD + i].sort_key >> (sortIteration * K + 2)) & 0x3;
+					c[bucket] ++;
+				}
+			}
+			localRadixHistogram[local_id] = (c[0] << 0) | (c[1] << 8) | (c[2] << 16) | (c[3] << 24);
+			barrier();
+			
+			//prefix scan
+			// - TODO make this better
+			if(local_id == 0) {
+				uint sum = 0;
+				for(int i = 0; i < THREADS_PER_BLOCK; i++) {
+					uint cur = localRadixHistogram[i];
+					localRadixHistogram[i] = sum;
+					sum += cur;
+				}
+				
+				uint total0 = (sum >> 0)  & 0xff;
+				uint total1 = (sum >> 8)  & 0xff;
+				uint total2 = (sum >> 16) & 0xff;
+				uint total3 = (sum >> 24) & 0xff;
+			
+				localRadixBucketBase[0] = 0;
+				localRadixBucketBase[1] = total0;
+				localRadixBucketBase[2] = total0 + total1;
+				localRadixBucketBase[3] = total0 + total1 + total2;
+			}
+			barrier();
+			
+			//local scatter
+			uint cur_hist = localRadixHistogram[local_id];
+			c[0] = (cur_hist >> 0)  & 0xff;
+			c[1] = (cur_hist >> 8)  & 0xff;
+			c[2] = (cur_hist >> 16) & 0xff;
+			c[3] = (cur_hist >> 24) & 0xff;
+			for(int i = 0; i < ELEMENTS_PER_THREAD; i++) {
+				if(L + local_id * ELEMENTS_PER_THREAD + i < R) {
+					uint bucket = (localTileData2[local_id * ELEMENTS_PER_THREAD + i].sort_key >> (sortIteration * K + 2)) & 0x3;
+					
+					//scatter to other buffer
+					localTileData1[localRadixBucketBase[bucket] + c[bucket]] = localTileData2[local_id * ELEMENTS_PER_THREAD + i];
+					
+					//update histogram count
+					c[bucket] ++;
+				}
+			}
+			barrier();
+		}
+		*/
+		
+		//compute per-thread histograms
+		// - also compute thread local element histogram offsets for when we do the actual scatter
+		uint thread_histogram_info[ELEMENTS_PER_THREAD];		// (offset << K) | (bucket << 0)
+		for(int i = 0; i < (1 << K); i++) {
+			localHistogramData[local_id][i] = 0;
+		}
+		for(int i = 0; i < ELEMENTS_PER_THREAD; i++) {
+			if(L + local_id * ELEMENTS_PER_THREAD + i < R) {
+				uint bucket = (localTileData1[local_id * ELEMENTS_PER_THREAD + i].sort_key >> (sortIteration * K)) & BUCKET_MASK;
+				thread_histogram_info[i] = (uint(localHistogramData[local_id][bucket]) << K) | (bucket << 0);
+				localHistogramData[local_id][bucket] ++;
+			} 
+		}
+		barrier();
+		
+		//do some prefix sums
+		// - take prefix sum of per-thread histograms
+		// - take prefix sum of global bucket totals
+		if(local_id < (1 << K)) {
+			int sum = 0;
+			for(int i = 0; i < THREADS_PER_BLOCK; i++) {
+				int cur = localHistogramData[i][local_id];
+				localHistogramData[i][local_id] = sum;
+				sum += cur;
+			}
+		}
+		else if(local_id == (1 << K)) {
+			globalHistogramPrefix[0] = 0;
+			for(int i = 1; i < (1 << K); i++) {
+				globalHistogramPrefix[i] = globalHistogramPrefix[i - 1] + blockHistogramData[total_blocks][i - 1];
+			}
+		}
+		barrier();
+		
+		//scatter to global memory
+		for(int i = 0; i < ELEMENTS_PER_THREAD; i++) {
+			if(L + local_id * ELEMENTS_PER_THREAD + i < R) {
+				//calc bucket
+				uint bucket = thread_histogram_info[i] & BUCKET_MASK;
+				
+				//where to move this tile to
+				int global_ind = 
+					globalHistogramPrefix[bucket] + 
+					blockHistogramData[block_id][bucket] + 
+					localHistogramData[local_id][bucket] + 
+					int(thread_histogram_info[i] >> K)
+				;
+				tileData2[global_ind] = localTileData1[local_id * ELEMENTS_PER_THREAD + i];
+			}
+		}
+	}	
+	
+}
+
+
+
+
+
+
+
+
