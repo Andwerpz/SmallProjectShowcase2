@@ -72,9 +72,48 @@ public class HW3Aquarium extends Window {
 
 	private boolean printUpdateTimes = false;
 	private boolean printRenderTimes = false;
+	
+	private int timingQueryPhase1;
+	private int timingQueryPhase21;
+	private int timingQueryPhase22;
+	private int timingQueryPhase3;
+	private int timingQueryPhase4;
+	
+	class TimingInfo {
+		double phase_1;
+		double phase_21;
+		double phase_22;
+		double phase_3;
+		double phase_4;
+		
+		void inc(TimingInfo x) {
+			this.phase_1 += x.phase_1;
+			this.phase_21 += x.phase_21;
+			this.phase_22 += x.phase_22;
+			this.phase_3 += x.phase_3;
+			this.phase_4 += x.phase_4;
+		}
+		
+		void div(double f) {
+			this.phase_1 /= f;
+			this.phase_21 /= f;
+			this.phase_22 /= f;
+			this.phase_3 /= f;
+			this.phase_4 /= f;
+		}
+		
+		void print() {
+			System.out.println("== Update Timing Info ==");
+			System.out.println("phase 1   : " + this.phase_1);
+			System.out.println("phase 2.1 : " + this.phase_21);
+			System.out.println("phase 2.2 : " + this.phase_22);
+			System.out.println("phase 3   : " + this.phase_3);
+			System.out.println("phase 4   : " + this.phase_4);
+		}
+	}
 
-	private int timeAvgAmt = 100;
-	private Stack<Float> updateTimes = new Stack<>();
+	private int timeAvgAmt = 1000;
+	private Stack<TimingInfo> updateTimes = new Stack<>();
 	private Stack<Float> renderTimes = new Stack<>();
 
 	private static final int NR_PARTICLES_LOG2 = 15; //must be \geq 10 due to bitonic sort
@@ -139,13 +178,10 @@ public class HW3Aquarium extends Window {
 		public void writeToBuffer(int[] buffer, int offset) {
 			buffer[offset + 0] = Float.floatToIntBits(pos.x);
 			buffer[offset + 1] = Float.floatToIntBits(pos.y);
-
 			buffer[offset + 2] = Float.floatToIntBits(pred_pos.x);
 			buffer[offset + 3] = Float.floatToIntBits(pred_pos.y);
-
 			buffer[offset + 4] = Float.floatToIntBits(vel.x);
 			buffer[offset + 5] = Float.floatToIntBits(vel.y);
-
 			buffer[offset + 6] = hash;
 		}
 	}
@@ -185,7 +221,6 @@ public class HW3Aquarium extends Window {
 		public void writeToBuffer(int[] buffer, int offset) {
 			buffer[offset + 0] = Float.floatToIntBits(this.offset.x / renderScale);
 			buffer[offset + 1] = Float.floatToIntBits(this.offset.y / renderScale);
-
 			buffer[offset + 2] = Float.floatToIntBits(this.dimensions.x / renderScale);
 			buffer[offset + 3] = Float.floatToIntBits(this.dimensions.y / renderScale);
 		}
@@ -367,6 +402,13 @@ public class HW3Aquarium extends Window {
 		this.uiScreen = new UIScreen();
 
 		this._resize();
+		
+		// timing queries
+		this.timingQueryPhase1 = glGenQueries();
+		this.timingQueryPhase21 = glGenQueries();
+		this.timingQueryPhase22 = glGenQueries();
+		this.timingQueryPhase3 = glGenQueries();
+		this.timingQueryPhase4 = glGenQueries();
 	}
 
 	@Override
@@ -518,9 +560,13 @@ public class HW3Aquarium extends Window {
 	}
 
 	private void waterUpdate(float dt) {
+		TimingInfo timing_info = new TimingInfo();
+		
 		// -- PHASE 1 --
 		//update position due to velocity, compute hashes
 		{
+			glBeginQuery(GL_TIME_ELAPSED, this.timingQueryPhase1);
+			
 			this.waterCompute1.enable();
 			this.waterCompute1.setUniform1f("dt", dt);
 
@@ -538,6 +584,9 @@ public class HW3Aquarium extends Window {
 
 			glDispatchCompute(NR_PARTICLES / 32, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+			
+			glEndQuery(GL_TIME_ELAPSED);
+			timing_info.phase_1 = glGetQueryObjectui64(this.timingQueryPhase1, GL_QUERY_RESULT);
 		}
 
 		// -- PHASE 2.1 -- 
@@ -549,6 +598,7 @@ public class HW3Aquarium extends Window {
 		// - 8 bytes per element means 4096 in local sorting stage. 4 bytes per element is not feasible, as that limits us to (2 << 16)
 		//   particles (if we split the bytes equally between hash and index). 
 		{
+			glBeginQuery(GL_TIME_ELAPSED, this.timingQueryPhase21);
 			this.waterCompute21.enable();
 
 			this.particleBuffer.bindToBase(0);
@@ -578,12 +628,15 @@ public class HW3Aquarium extends Window {
 				glDispatchCompute(NR_PARTICLES / 1024, 1, 1);
 				glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 			}
+			glEndQuery(GL_TIME_ELAPSED);
+			timing_info.phase_21 = glGetQueryObjectui64(this.timingQueryPhase21, GL_QUERY_RESULT);
 		}
 
 		// -- PHASE 2.2 -- 
 		//generate hash lookup tables. For each hash, will save index at which particles belonging to that hash start
 		//since hashes are sorted, can just see if current hash is unequal to previous hash.
 		{
+			glBeginQuery(GL_TIME_ELAPSED, this.timingQueryPhase22);
 			this.waterCompute22.enable();
 
 			this.particleBuffer.bindToBase(0);
@@ -591,11 +644,14 @@ public class HW3Aquarium extends Window {
 
 			glDispatchCompute(NR_PARTICLES / 32, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+			glEndQuery(GL_TIME_ELAPSED);
+			timing_info.phase_22 = glGetQueryObjectui64(this.timingQueryPhase22, GL_QUERY_RESULT);
 		}
 
 		// -- PHASE 3 --
 		//compute density and viscosity forces per particle
 		{
+			glBeginQuery(GL_TIME_ELAPSED, this.timingQueryPhase3);
 			this.waterCompute3.enable();
 
 			this.particleBuffer.bindToBase(0);
@@ -621,11 +677,14 @@ public class HW3Aquarium extends Window {
 
 			glDispatchCompute(NR_PARTICLES / spatialWorkgroupSz, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+			glEndQuery(GL_TIME_ELAPSED);
+			timing_info.phase_3 = glGetQueryObjectui64(this.timingQueryPhase3, GL_QUERY_RESULT);
 		}
 
 		// -- PHASE 4 --
 		//compute pressure forces. apply all forces to particles
 		{
+			glBeginQuery(GL_TIME_ELAPSED, this.timingQueryPhase4);
 			this.waterCompute4.enable();
 
 			this.particleBuffer.bindToBase(0);
@@ -660,7 +719,11 @@ public class HW3Aquarium extends Window {
 
 			glDispatchCompute(NR_PARTICLES / spatialWorkgroupSz, 1, 1);
 			glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+			glEndQuery(GL_TIME_ELAPSED);
+			timing_info.phase_4 = glGetQueryObjectui64(this.timingQueryPhase4, GL_QUERY_RESULT);
 		}
+		
+		this.updateTimes.push(timing_info);
 	}
 
 	@Override
@@ -674,28 +737,17 @@ public class HW3Aquarium extends Window {
 
 		while (this.timeDebt > dt) {
 			this.timeDebt -= dt;
-
-			int time_query = -1;
-			if (this.printUpdateTimes) {
-				time_query = glGenQueries();
-				glBeginQuery(GL_TIME_ELAPSED, time_query);
-			}
-
 			this.waterUpdate(dt);
 
 			if (this.printUpdateTimes) {
-				glEndQuery(GL_TIME_ELAPSED);
-				int[] time_elapsed_res = new int[1];
-				glGetQueryObjectuiv(time_query, GL_QUERY_RESULT, time_elapsed_res);
-				this.updateTimes.push((float) (time_elapsed_res[0] / 1000000.0));
-
 				if (this.updateTimes.size() == this.timeAvgAmt) {
-					float avg = 0;
-					while (this.updateTimes.size() != 0) {
-						avg += this.updateTimes.pop();
+					TimingInfo avg = new TimingInfo();
+					while(this.updateTimes.size() != 0) {
+						TimingInfo next = this.updateTimes.pop();
+						avg.inc(next);
 					}
-					avg /= this.timeAvgAmt;
-					System.out.println("Average last " + this.timeAvgAmt + " update times : " + avg);
+					avg.div(this.timeAvgAmt);
+					avg.print();
 				}
 			}
 		}

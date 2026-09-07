@@ -17,6 +17,8 @@ import static org.lwjgl.opengl.GL30.*;
 import static org.lwjgl.opengl.GL31.*;
 import static org.lwjgl.opengl.GL33.*;
 
+import static org.lwjgl.opengl.KHRShaderSubgroup.*;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -207,8 +209,16 @@ opensplat /path/to/project -n <itercnt>
 		int maxBlockSize = glGetInteger(GL_MAX_SHADER_STORAGE_BLOCK_SIZE);
 		int maxBindings  = glGetInteger(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS);
 
-		System.out.println("Max SSBO block size: " + maxBlockSize + " bytes");
-		System.out.println("Max SSBO bindings: " + maxBindings);
+		System.out.println("Max SSBO block size : " + maxBlockSize + " bytes");
+		System.out.println("Max SSBO bindings : " + maxBindings);
+		
+		int subgroupSize = glGetInteger(GL_SUBGROUP_SIZE_KHR);
+		System.out.println("Subgroup Size : " + subgroupSize);
+		
+		if(subgroupSize != 32) {
+			System.err.println("Expect subgroup size to be 32");
+			System.exit(1);
+		}
 	}
 	
 	public void setReflectY(boolean b) {
